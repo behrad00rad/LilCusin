@@ -1,32 +1,26 @@
 """All user-facing bot text; future translations belong here."""
 
 START = (
-    "Hi! This bot will learn your music taste from songs you submit. "
-    "Send a Telegram audio message or text as Artist - Song title. "
-    "I’ll look for a match, ask you to confirm when needed, then ask how you feel about it. "
-    "Rate at least one song, then choose For You or More Like This."
+    "🎵 Welcome to Lil Cousin\n\n"
+    "Send a song, tell me how you feel about it, and discover your next favourite.\n\n"
+    "Forward an audio file or type Artist - Song title to begin."
 )
 HELP = (
-    "Use /recommend for your taste or More Like This for one song. "
-    "Send an audio message (forwarded audio works too) or Artist - Song title. "
-    "Choose a match or None of these, then rate it. Submitting does not rate a song. "
-    "Reply directly to a correction prompt with Artist - Song title. "
-    "Use /profile for your rating counts, /privacy for stored data, /forgetme to remove your data, "
-    "and /cancel to end open flows. Please use a private chat."
+    "🎵 Send or forward a song, then choose Love, Like, Neutral or Dislike.\n\n"
+    "✨ Recommendations finds songs for you. More Like This starts from one song.\n"
+    "🧠 My Taste shows what I’ve learned.\n\n"
+    "Need to correct a match? Reply to the correction prompt with Artist - Song title. "
+    "Use /cancel to stop, /privacy to review stored data, or /forgetme to remove it."
 )
 
 INVALID_TEXT = "Use this format: Artist - Song title"
 UNSUPPORTED = "Send a Telegram audio message or text as Artist - Song title."
 NO_USER = "Please submit songs from your personal Telegram account."
 SAVE_FAILED = "Could not save your submission. Please try again."
-PENDING = "Received. Looking for a matching song…"
+PENDING = "🔎 Finding your song…"
 UNKNOWN = "Not provided"
-TEXT_RECEIVED = "Artist: {artist}\nTitle: {title}\n\n" + PENDING
-AUDIO_RECEIVED = (
-    "Telegram audio metadata:\nArtist: {artist}\nTitle: {title}\n"
-    "Duration (seconds): {duration}\nFilename: {filename}\n"
-    "MIME type: {mime_type}\nFile size (bytes): {file_size}\n\n" + PENDING
-)
+TEXT_RECEIVED = "{artist} — {title}\n\n" + PENDING
+AUDIO_RECEIVED = TEXT_RECEIVED
 
 
 def audio_received(audio) -> str:
@@ -46,18 +40,18 @@ def text_received(artist: str, title: str) -> str:
 
 
 PRIVATE_ONLY = "Please send songs and use these buttons in a private chat with me."
-CHOOSE = "Which song did you mean? These are possible matches."
+CHOOSE = "🎵 I found a few possible matches. Which one is yours?"
 NONE = "None of these"
-CORRECTION = "Reply directly to this message with Artist - Song title, or use /cancel. Identification expires 30 minutes after it starts."
+CORRECTION = "Reply here with Artist - Song title, or use /cancel to stop."
 MISSING = "The audio needs an artist and title. " + CORRECTION
 NOT_FOUND = "No suitable match found. " + CORRECTION
 PROVIDER_FAILED = "Music metadata is temporarily unavailable. You can retry with a correction. " + CORRECTION
 LIMIT = "The three search attempts are used up. Your submission is saved. Send a new submission to try again."
-STALE = "This action is expired, cancelled, or unavailable for your account. Send a new submission to try again."
+STALE = "This button is no longer available. Send a song or open the menu to start again."
 CANCELLED = "Open identification flows cancelled. Your saved submissions and ratings are kept."
 WORKING = "Done."
 RATING_QUESTION = "How do you feel about this song?"
-RATING_SAVED = "Rating saved."
+RATING_SAVED = "✓ Saved — thanks for teaching me your taste."
 RATING_LABELS = {"love": "❤️ Love", "like": "👍 Like", "neutral": "😐 Neutral", "dislike": "👎 Dislike"}
 FLOW_FAILED = "Could not complete that action. Your saved submission is kept. Please try again."
 

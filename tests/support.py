@@ -1,7 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 from aiogram import Dispatcher
 
@@ -20,6 +20,9 @@ dispatcher.include_router(router)
 
 class ServiceTestCase(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
+        deletion = patch('aiogram.types.Message.delete', new_callable=AsyncMock)
+        self.deleted_messages = deletion.start()
+        self.addCleanup(deletion.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.database = Database(Path(self.temp.name) / "test.sqlite3")
         await self.database.initialize()

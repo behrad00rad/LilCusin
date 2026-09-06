@@ -13,7 +13,7 @@ from .workflow import FlowError, Workflow
 from .enrichment import Enrichment
 from .interactions import parse_callback, present, rating_keyboard
 from . import chat_handlers
-from .chat_ui import main_menu
+from .chat_ui import dismiss, main_menu
 
 router = Router()
 logger = logging.getLogger("music_bot")
@@ -81,9 +81,12 @@ async def audio_submission(message: Message, submissions: SubmissionService,
         logger.error("Could not persist audio submission.")
         await message.answer(messages.SAVE_FAILED)
         return
-    await message.answer(messages.audio_received(metadata))
-    result = await workflow.start(saved.id, user.telegram_user_id)
-    await present(message, result, user.telegram_user_id, workflow, enrichment, chat_service)
+    pending = await message.answer(messages.audio_received(metadata))
+    try:
+        result = await workflow.start(saved.id, user.telegram_user_id)
+        await present(message, result, user.telegram_user_id, workflow, enrichment, chat_service)
+    finally:
+        await dismiss(pending)
 
 
 @router.message(F.text, ~F.text.lstrip().startswith("/"))
@@ -100,6 +103,7 @@ async def text_submission(message: Message, submissions: SubmissionService,
         if message.reply_to_message is not None:
             result = await workflow.correct(user.telegram_user_id, message.reply_to_message.message_id, message.text)
             await present(message, result, user.telegram_user_id, workflow, enrichment, chat_service)
+            await dismiss(message.reply_to_message)
             return
         saved = await submissions.submit_text(user, message.text)
     except InvalidSubmission:
@@ -112,9 +116,12 @@ async def text_submission(message: Message, submissions: SubmissionService,
         logger.error("Could not persist text submission.")
         await message.answer(messages.SAVE_FAILED)
         return
-    await message.answer(messages.text_received(saved.parsed_artist, saved.parsed_title))
-    result = await workflow.start(saved.id, user.telegram_user_id)
-    await present(message, result, user.telegram_user_id, workflow, enrichment, chat_service)
+    pending = await message.answer(messages.text_received(saved.parsed_artist, saved.parsed_title))
+    try:
+        result = await workflow.start(saved.id, user.telegram_user_id)
+        await present(message, result, user.telegram_user_id, workflow, enrichment, chat_service)
+    finally:
+        await dismiss(pending)
 
 
 @router.message(~F.text)
@@ -157,11 +164,8 @@ async def callback(query: CallbackQuery, workflow: Workflow, enrichment: Enrichm
                 except TelegramBadRequest:
                     pass  # Repeated ratings can leave the keyboard unchanged.
         else:
-            try:
-                await query.message.edit_reply_markup(reply_markup=None)
-            except TelegramBadRequest:
-                pass
             await present(query.message, result, query.from_user.id, workflow, enrichment, chat_service)
+            await dismiss(query.message)
     except FlowError as error:
         acknowledgement = messages.FLOW_FAILED if str(error) == "failure" else messages.STALE
     except Exception:

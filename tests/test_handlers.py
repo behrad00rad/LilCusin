@@ -51,7 +51,7 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
         await self.send(text="گوگوش — Song")
         self.service.submit_text.assert_awaited_once()
         self.assertIn("گوگوش", self.answer.call_args.args[0])
-        self.assertIn("Received", self.answer.call_args.args[0])
+        self.assertIn(messages.PENDING, self.answer.call_args.args[0])
 
     async def test_bad_text_explains_format(self):
         self.service.submit_text.side_effect = InvalidSubmission()

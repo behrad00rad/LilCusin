@@ -16,6 +16,19 @@ EXACT = TrackCandidate("Song", "Artist", "lastfm", album="Album", duration=120,
 
 
 class IdentificationTests(ServiceTestCase):
+    async def test_cure_typography_aliases_auto_confirm_but_recording_conflicts_do_not(self):
+        original = TrackCandidate("Boys Don't Cry", 'The Cure', 'lastfm', external_ids={
+            'musicbrainz': 'recording-one',
+            'lastfm': 'https://www.last.fm/music/The+Cure/_/Boys+Don%27t+Cry'})
+        alias = replace(original, title='Boys Don’t Cry', external_ids={
+            'lastfm': 'https://www.last.fm/music/The+Cure/_/Boys+Don%E2%80%99t+Cry'})
+        self.providers.call.return_value = [original, alias]
+        result = await self.workflow.start((await self.text('The Cure', "Boys Don't Cry")).id, 123)
+        self.assertEqual(result.kind, 'confirmed')
+        self.assertEqual(self.providers.call.await_count, 1)
+        conflict = replace(alias, external_ids={**alias.external_ids, 'musicbrainz': 'recording-two'})
+        self.assertFalse(strong_match('The Cure', "Boys Don't Cry", deduplicate([original, conflict])))
+
     async def text(self, artist="Artist", title="Song"):
         return await self.submissions.submit_text(self.user, f"{artist} - {title}")
 

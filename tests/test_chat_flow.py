@@ -221,5 +221,23 @@ class ChatFlowTests(ServiceTestCase):
         self.assertIn(M.RATING_QUESTION, self.outgoing[-1][1])
         self.assertFalse(any(text == M.CHOOSE for _, text, _ in self.outgoing))
         self.assertEqual(self.providers.call.await_count, 1)
+        self.deleted_messages.assert_awaited_once()
         await self.click(self.outgoing[-1])
         self.assertEqual(self.ack.call_args.args[0], M.RATING_SAVED)
+
+    async def test_candidate_prompt_is_deleted_after_selection(self):
+        from dataclasses import replace
+        from tests.test_workflow import EXACT
+        self.providers.call.return_value = [replace(EXACT, title='Song remix', external_ids={})]
+        await self.feed(message=self.message(text='Artist - Song'))
+        self.assertEqual(self.outgoing[-1][1], M.CHOOSE)
+        self.deleted_messages.assert_awaited_once()  # Lookup status.
+        await self.click(self.outgoing[-1])
+        self.assertIn(M.RATING_QUESTION, self.outgoing[-1][1])
+        self.assertEqual(self.deleted_messages.await_count, 2)  # Selection prompt too.
+
+    async def test_recommendation_has_handoff_but_no_catalogue_button(self):
+        await self.feed(message=self.message(text='/recommend'))
+        _, text, options = self.outgoing[-1]
+        self.assertIn('https://t.me/musicbehbot?text=', text)
+        self.assertFalse(any(button.text == M.CATALOGUE for row in options['reply_markup'].inline_keyboard for button in row))

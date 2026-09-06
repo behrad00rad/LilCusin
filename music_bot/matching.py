@@ -6,6 +6,7 @@ import re
 import unicodedata
 from dataclasses import asdict, replace
 from difflib import SequenceMatcher
+from urllib.parse import unquote_plus, urlsplit
 
 from .providers.common import Release, Tag, TrackCandidate
 
@@ -32,6 +33,29 @@ def comparison_text(value: str) -> str:
     return " ".join(value.split())
 
 
+def match_text(value: str) -> str:
+    # Apostrophes vary between tags and catalogue spellings (Don't / Dont).
+    # Keep this comparison-only; persisted identity keys remain unchanged.
+    value = re.sub(r"[’'ʼ`]+", '', value)
+    value = re.sub(r'\b\d{4}\s+(?=remaster)', '', value, flags=re.IGNORECASE)
+    return comparison_text(value)
+
+
+def identifier_key(provider: str, value: str):
+    """Last.fm song URLs can differ only in typography or URL encoding."""
+    if provider == 'lastfm':
+        try:
+            url = urlsplit(value)
+            parts = url.path.strip('/').split('/')
+            if (url.scheme in {'http', 'https'} and url.hostname in {'last.fm', 'www.last.fm'}
+                    and not url.username and not url.password and not url.query and not url.fragment
+                    and len(parts) == 4 and parts[0] == 'music' and parts[2] == '_'):
+                return ('lastfm_song', match_text(unquote_plus(parts[1])), match_text(unquote_plus(parts[3])))
+        except ValueError:
+            pass
+    return value
+
+
 def identity_key(artist: str, title: str) -> str:
     return hashlib.sha256(json.dumps(
         [comparison_text(artist), comparison_text(title)], ensure_ascii=False,
@@ -51,11 +75,11 @@ def decode_track(data: dict) -> TrackCandidate:
 
 def similarities(artist: str, title: str, candidate: TrackCandidate) -> tuple[float, float]:
     direct = tuple(
-        SequenceMatcher(None, comparison_text(left), comparison_text(right or "")).ratio()
+        SequenceMatcher(None, match_text(left), match_text(right or "")).ratio()
         for left, right in ((artist, candidate.artist), (title, candidate.title))
     )
     swapped = tuple(
-        SequenceMatcher(None, comparison_text(left), comparison_text(right or "")).ratio()
+        SequenceMatcher(None, match_text(left), match_text(right or "")).ratio()
         for left, right in ((title, candidate.artist), (artist, candidate.title))
     )
     return swapped if sum(swapped) > sum(direct) else direct
@@ -75,10 +99,10 @@ def deduplicate(candidates: list[TrackCandidate]) -> list[TrackCandidate]:
         for index, existing in enumerate(result):
             same_id = any(existing.external_ids.get(p) == value for p, value in candidate.external_ids.items())
             conflicting_id = any(
-                p in existing.external_ids and existing.external_ids[p] != value
+                p in existing.external_ids and identifier_key(p, existing.external_ids[p]) != identifier_key(p, value)
                 for p, value in candidate.external_ids.items() if p in {"musicbrainz", "lastfm"}
             )
-            same_name = identity_key(existing.artist, existing.title) == identity_key(candidate.artist, candidate.title)
+            same_name = (match_text(existing.artist), match_text(existing.title)) == (match_text(candidate.artist), match_text(candidate.title))
             if not conflicting_id and (same_id or same_name):
                 result[index] = replace(
                     existing, external_ids={**candidate.external_ids, **existing.external_ids},
@@ -98,14 +122,17 @@ def match_decision(artist: str, title: str, candidates: list[TrackCandidate]) ->
         return False, "no_candidate", (0, 0, 0, 0)
     best = candidates[0]
     a, t = similarities(artist, title, best)
-    if not all(comparison_text(value or '') for value in (artist, title, best.artist, best.title)):
+    # For non-exact matches, validate that metadata is not incomplete.
+    # Exact matches bypass this check to avoid false rejections from normalization differences.
+    if not (a == 1 and t == 1) and not all(comparison_text(value or '') for value in (artist, title, best.artist, best.title)):
         return False, "incomplete_metadata", (a, t, 0, 0)
     score = confidence(artist, title, best)
     margin = score - confidence(artist, title, candidates[1]) if len(candidates) > 1 else 1
     same_identity = [candidate for candidate in candidates[1:]
-                     if identity_key(best.artist, best.title) == identity_key(candidate.artist or "", candidate.title or "")]
+                     if (match_text(best.artist), match_text(best.title)) ==
+                     (match_text(candidate.artist or ''), match_text(candidate.title or ''))]
     conflict = any(best.external_ids.get(provider) and candidate.external_ids.get(provider)
-                   and candidate.external_ids[provider] != best.external_ids[provider]
+                   and identifier_key(provider, candidate.external_ids[provider]) != identifier_key(provider, best.external_ids[provider])
                    for candidate in same_identity for provider in ("musicbrainz", "lastfm"))
     metrics = (a, t, score, margin)
     if conflict:

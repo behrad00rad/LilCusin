@@ -102,8 +102,6 @@ def list_content(rows, token, seed_track=None):
         lines.append(entry)
         actions = [button(token, 'rate', M.RATE_NUMBER.format(number=index + 1), index),
                    button(token, 'more', M.SIMILAR_NUMBER.format(number=index + 1), index)]
-        if link := catalogue(row):
-            actions.append(Button(text=M.CATALOGUE, url=link))
         if art := safe_url(row.artwork_url, artwork=True):
             actions.append(Button(text=M.ARTWORK, url=art))
         keyboard.append(actions)
