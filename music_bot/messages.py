@@ -107,8 +107,10 @@ REC_SELECTED_REASONS = {
 }
 
 MENU_SEND = '🎵 Send a song'
-MENU_FOR_YOU = '✨ For You'
-MENU_PROFILE = '👤 My Music Profile'
+MENU_FOR_YOU = '✨ Recommendations'
+MENU_PROFILE = '🧠 My Taste'
+MENU_CHANNELS = '📻 Playlist Channels'
+MENU_SETTINGS = '⚙️ Settings'
 MENU_HELP = 'ℹ️ Help'
 MORE_LIKE = '✨ More Like This'
 AFTER_FOR_YOU = '🎧 For You'
@@ -131,6 +133,12 @@ NO_RECOMMENDATIONS = 'No fresh matches are available right now. Try For You, rat
 BUSY = 'Please wait for the current action to finish, then try again.'
 MENU_PROMPT = 'What would you like to do?'
 PROFILE_TEXT = 'Your music profile\n❤️ Loved: {love}\n👍 Liked: {like}\n😐 Neutral: {neutral}\n👎 Disliked: {dislike}\nRecommendations shown: {shown}'
+TASTE_TITLE = '🧠 My Taste'
+TASTE_EMPTY = 'I need a few ratings or playlist signals before I can describe your taste.'
+TASTE_TEXT = ('🧠 My Taste\n\nTop artists: {artists}\nTags: {tags}\n'
+              'Ratings: ❤️ {love}  👍 {like}  😐 {neutral}  👎 {dislike}\n'
+              'Songs: {songs} · Signals: {signals}\nPlaylist channels: {channels}\n\n{explanation}')
+TASTE_EXPLANATION = 'Ratings are explicit preferences; playlist activity is an inferred signal. I will refine this as you teach me.'
 PRIVACY = (
     'I store your Telegram user ID and basic profile fields, song submissions, explicit ratings, '
     'recommendation history, and extracted music metadata/audio features. Short-lived button state '
@@ -147,7 +155,7 @@ FORGET_DONE = 'Your personal data has been removed. Shared song metadata is kept
 FORGET_CANCELLED = 'Cancelled. Your data is kept.'
 COMMAND_DESCRIPTIONS = {
     'start': 'Open the main menu', 'recommend': 'Get For You recommendations',
-    'profile': 'View your music profile', 'help': 'How to use this bot',
+    'profile': 'View your music profile', 'taste': 'View My Taste', 'help': 'How to use this bot',
     'privacy': 'See what data is stored', 'forgetme': 'Remove your personal data',
     'cancel': 'Cancel open flows and controls',
 }

@@ -7,7 +7,7 @@ from uuid import uuid4
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.dialects.sqlite import insert
 
-from .models import AudioAnalysis, ChannelConnectionCode, ChannelPost, ChatControl, IdentificationFlow, PlaylistChannel, Rating, RecommendationHistory, SongSubmission, Track, User, UserTrackSignal, utc_now
+from .models import AudioAnalysis, ChannelConnectionCode, ChannelPost, ChatControl, IdentificationFlow, PlaylistChannel, Rating, RecommendationHistory, SongSubmission, Track, TrackTag, User, UserTrackSignal, utc_now
 from .workflow import FlowError, owned_submission, save_rating
 
 CONTROL_TTL = timedelta(minutes=30)
@@ -117,6 +117,24 @@ class ChatService:
             shown = await session.scalar(select(func.count()).select_from(RecommendationHistory).where(
                 RecommendationHistory.user_id == internal))
             return counts, shown
+
+    async def taste_summary(self, user_id):
+        async with self.database.sessions() as session:
+            internal = await session.scalar(select(User.id).where(User.telegram_user_id == user_id))
+            if internal is None:
+                return None
+            counts = dict((await session.execute(select(Rating.value, func.count()).where(
+                Rating.user_id == internal).group_by(Rating.value))).all())
+            songs = await session.scalar(select(func.count(SongSubmission.id)).where(
+                SongSubmission.user_id == internal, SongSubmission.identification_status == 'confirmed'))
+            signals = await session.scalar(select(func.count(UserTrackSignal.id)).where(UserTrackSignal.user_id == internal))
+            channels = await session.scalar(select(func.count(PlaylistChannel.id)).where(PlaylistChannel.user_id == internal))
+            artists = (await session.scalars(select(Track.artist).join(Rating, Rating.track_id == Track.id)
+                .where(Rating.user_id == internal).group_by(Track.artist).order_by(func.count().desc()).limit(5))).all()
+            tags = (await session.scalars(select(TrackTag.name).join(Track, Track.id == TrackTag.track_id)
+                .join(Rating, Rating.track_id == Track.id).where(Rating.user_id == internal)
+                .group_by(TrackTag.name).order_by(func.count().desc()).limit(5))).all()
+            return counts, songs or 0, signals or 0, channels or 0, artists, tags
 
     async def cancel_controls(self, user_id):
         async with self.database.write() as session:

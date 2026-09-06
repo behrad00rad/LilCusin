@@ -15,7 +15,8 @@ from .config import normalized_lil_bro_username
 def main_menu():
     return ReplyKeyboardMarkup(keyboard=[
         [KeyboardButton(text=M.MENU_SEND), KeyboardButton(text=M.MENU_FOR_YOU)],
-        [KeyboardButton(text=M.MENU_PROFILE), KeyboardButton(text=M.MENU_HELP)],
+        [KeyboardButton(text=M.MENU_PROFILE), KeyboardButton(text=M.MENU_CHANNELS)],
+        [KeyboardButton(text=M.MENU_SETTINGS), KeyboardButton(text=M.MENU_HELP)],
     ], resize_keyboard=True)
 
 

@@ -22,13 +22,22 @@ async def command(message, chat_service, audio_analysis=None):
         await message.answer(M.PRIVATE_ONLY)
         return
     user = message.from_user
-    action = {M.MENU_SEND: 'send', M.MENU_FOR_YOU: 'recommend', M.MENU_PROFILE: 'profile', M.MENU_HELP: 'help'}.get(message.text)
+    action = {M.MENU_SEND: 'send', M.MENU_FOR_YOU: 'recommend', M.MENU_PROFILE: 'taste', M.MENU_HELP: 'help'}.get(message.text)
     if action is None:
         action = message.text.split()[0].split('@')[0].lstrip('/')
-    if action in {'recommend', 'forgetme'}:
+    if action in {'recommend', 'taste', 'forgetme'}:
         await chat_service.ensure_user(Submitter(user.id, user.username, user.full_name, user.language_code))
     if action == 'recommend':
         await show_recommendations(message, chat_service, user.id)
+    elif action == 'taste':
+        summary = await chat_service.taste_summary(user.id)
+        if summary is None:
+            await message.answer(M.TASTE_EMPTY, reply_markup=main_menu())
+        else:
+            counts, songs, signals, channels, artists, tags = summary
+            await message.answer(M.TASTE_TEXT.format(artists=', '.join(artists) or M.UNKNOWN,
+                tags=', '.join(tags) or M.UNKNOWN, songs=songs, signals=signals, channels=channels,
+                explanation=M.TASTE_EXPLANATION, **{v: counts.get(v, 0) for v in RATINGS}), reply_markup=main_menu())
     elif action == 'profile':
         counts, shown = await chat_service.profile(user.id)
         await message.answer(M.PROFILE_TEXT.format(**{value: counts.get(value, 0) for value in RATINGS}, shown=shown), reply_markup=main_menu())
