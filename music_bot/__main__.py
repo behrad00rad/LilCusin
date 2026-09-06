@@ -4,6 +4,7 @@ import aiohttp
 from contextlib import AsyncExitStack
 
 from aiogram import Bot, Dispatcher
+from aiogram.types import BotCommand, BotCommandScopeAllPrivateChats
 
 from .config import ConfigError, load_config
 from .database import Database
@@ -14,8 +15,11 @@ from .enrichment import Enrichment
 from .providers.lastfm import LastFMClient
 from .providers.musicbrainz import MusicBrainzClient
 from .workflow import Workflow
-from .lifecycle import UpdateTasks
+from .lifecycle import UpdateTasks, PrivateActions
 from .audio.service import AudioAnalysisService
+from .chat_service import ChatService
+from .recommendations import RecommendationService
+from . import messages
 
 logger = logging.getLogger("music_bot")
 
@@ -61,7 +65,13 @@ async def main() -> None:
             stack.push_async_callback(update_tasks.close)
             dispatcher = Dispatcher(disable_fsm=True)
             dispatcher.update.outer_middleware(update_tasks)
+            private_actions = PrivateActions()
+            dispatcher.message.outer_middleware(private_actions)
+            dispatcher.callback_query.outer_middleware(private_actions)
             dispatcher.include_router(router)
+            await bot.set_my_commands([BotCommand(command=command, description=description)
+                                      for command, description in messages.COMMAND_DESCRIPTIONS.items()],
+                                      scope=BotCommandScopeAllPrivateChats())
             logger.info("Bot initialized; starting long polling.")
             # aiogram handles SIGINT/SIGTERM; cleanup drains handlers first.
             await dispatcher.start_polling(
@@ -70,6 +80,7 @@ async def main() -> None:
                 submissions=SubmissionService(database), workflow=Workflow(database, providers),
                 enrichment=enrichment,
                 audio_analysis=audio_analysis,
+                chat_service=ChatService(database, RecommendationService(database, providers)),
             )
     finally:
         logger.info("Bot stopped; handler tasks, provider sessions and database closed.")

@@ -17,6 +17,17 @@ MAX_ATTEMPTS = 3
 RATINGS = {"love", "like", "neutral", "dislike"}
 
 
+async def save_rating(session, user_id, track_id, value):
+    """Shared upsert for confirmed submissions and displayed recommendations."""
+    if value not in RATINGS:
+        raise FlowError("stale")
+    now = utc_now()
+    await session.execute(insert(Rating).values(
+        user_id=user_id, track_id=track_id, value=value, created_at=now, updated_at=now,
+    ).on_conflict_do_update(index_elements=["user_id", "track_id"],
+        set_={"value": value, "updated_at": now}, where=Rating.value != value))
+
+
 class FlowError(ValueError):
     """Fixed internal reason, translated to centralized messages by the UI."""
 
@@ -215,12 +226,5 @@ class Workflow:
             submission = await owned_submission(session, submission_id, user_id)
             if submission.identification_status != "confirmed" or submission.track_id is None:
                 raise FlowError("stale")
-            now = utc_now()
-            await session.execute(insert(Rating).values(
-                user_id=submission.user_id, track_id=submission.track_id, value=value,
-                created_at=now, updated_at=now,
-            ).on_conflict_do_update(
-                index_elements=["user_id", "track_id"], set_={"value": value, "updated_at": now},
-                where=Rating.value != value,
-            ))
+            await save_rating(session, submission.user_id, submission.track_id, value)
             return await confirmed_result(session, submission)

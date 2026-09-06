@@ -40,7 +40,8 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
     async def test_commands_preserved_and_not_saved(self):
         for command, response in [("/start", messages.START), ("/help", messages.HELP)]:
             await self.send(text=command)
-            self.answer.assert_called_with(response)
+            self.assertEqual(self.answer.call_args.args[0], response)
+            self.assertIsNotNone(self.answer.call_args.kwargs.get("reply_markup"))
         await self.send(text="/unknown - song")
         self.service.submit_text.assert_not_called()
 

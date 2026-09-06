@@ -12,27 +12,43 @@ from .submissions import AudioMetadata, InvalidSubmission, SubmissionService, Su
 from .workflow import FlowError, Workflow
 from .enrichment import Enrichment
 from .interactions import parse_callback, present, rating_keyboard
+from . import chat_handlers
+from .chat_ui import main_menu
 
 router = Router()
 logger = logging.getLogger("music_bot")
 
 
 @router.message(CommandStart())
-async def start(message: Message) -> None:
-    await message.answer(messages.START)
+async def start(message: Message, chat_service=None) -> None:
+    if message.chat.type != "private" or submitter(message) is None:
+        await message.answer(messages.PRIVATE_ONLY)
+        return
+    if chat_service is not None:
+        await chat_service.ensure_user(submitter(message))
+    await message.answer(messages.START, reply_markup=main_menu())
 
 
 @router.message(Command("help"))
 async def help_command(message: Message) -> None:
-    await message.answer(messages.HELP)
+    await message.answer(messages.HELP if message.chat.type == "private" else messages.PRIVATE_ONLY,
+                         reply_markup=main_menu() if message.chat.type == "private" else None)
+
+
+router.message.register(chat_handlers.command, Command("recommend", "profile", "privacy", "forgetme"))
+router.message.register(chat_handlers.command, F.text.in_({messages.MENU_SEND, messages.MENU_FOR_YOU,
+                                                        messages.MENU_PROFILE, messages.MENU_HELP}))
+router.callback_query.register(chat_handlers.callback, F.data.startswith("q:"))
 
 
 @router.message(Command("cancel"))
-async def cancel(message: Message, workflow: Workflow) -> None:
+async def cancel(message: Message, workflow: Workflow, chat_service=None) -> None:
     if message.chat.type != "private" or submitter(message) is None:
         await message.answer(messages.PRIVATE_ONLY)
         return
     await workflow.cancel(message.from_user.id)
+    if chat_service is not None:
+        await chat_service.cancel_controls(message.from_user.id)
     await message.answer(messages.CANCELLED)
 
 
@@ -45,7 +61,7 @@ def submitter(message: Message) -> Submitter | None:
 
 @router.message(F.audio)
 async def audio_submission(message: Message, submissions: SubmissionService,
-                           workflow: Workflow, enrichment: Enrichment, audio_analysis=None) -> None:
+                           workflow: Workflow, enrichment: Enrichment, audio_analysis=None, chat_service=None) -> None:
     if message.chat.type != "private":
         await message.answer(messages.PRIVATE_ONLY)
         return
@@ -66,12 +82,12 @@ async def audio_submission(message: Message, submissions: SubmissionService,
         return
     await message.answer(messages.audio_received(metadata))
     result = await workflow.start(saved.id, user.telegram_user_id)
-    await present(message, result, user.telegram_user_id, workflow, enrichment, audio_analysis)
+    await present(message, result, user.telegram_user_id, workflow, enrichment, audio_analysis, chat_service)
 
 
 @router.message(F.text, ~F.text.lstrip().startswith("/"))
 async def text_submission(message: Message, submissions: SubmissionService,
-                          workflow: Workflow, enrichment: Enrichment, audio_analysis=None) -> None:
+                          workflow: Workflow, enrichment: Enrichment, audio_analysis=None, chat_service=None) -> None:
     if message.chat.type != "private":
         await message.answer(messages.PRIVATE_ONLY)
         return
@@ -82,7 +98,7 @@ async def text_submission(message: Message, submissions: SubmissionService,
     try:
         if message.reply_to_message is not None:
             result = await workflow.correct(user.telegram_user_id, message.reply_to_message.message_id, message.text)
-            await present(message, result, user.telegram_user_id, workflow, enrichment, audio_analysis)
+            await present(message, result, user.telegram_user_id, workflow, enrichment, audio_analysis, chat_service)
             return
         saved = await submissions.submit_text(user, message.text)
     except InvalidSubmission:
@@ -97,7 +113,7 @@ async def text_submission(message: Message, submissions: SubmissionService,
         return
     await message.answer(messages.text_received(saved.parsed_artist, saved.parsed_title))
     result = await workflow.start(saved.id, user.telegram_user_id)
-    await present(message, result, user.telegram_user_id, workflow, enrichment, audio_analysis)
+    await present(message, result, user.telegram_user_id, workflow, enrichment, audio_analysis, chat_service)
 
 
 @router.message(~F.text)
@@ -106,7 +122,7 @@ async def unsupported_submission(message: Message) -> None:
 
 
 @router.callback_query()
-async def callback(query: CallbackQuery, workflow: Workflow, enrichment: Enrichment, audio_analysis=None) -> None:
+async def callback(query: CallbackQuery, workflow: Workflow, enrichment: Enrichment, audio_analysis=None, chat_service=None) -> None:
     acknowledgement = messages.STALE
     answered = False
     try:
@@ -129,8 +145,12 @@ async def callback(query: CallbackQuery, workflow: Workflow, enrichment: Enrichm
         await query.answer(acknowledgement)
         answered = True
         if action == "rate":
+            if chat_service is not None:
+                from .chat_ui import show_card
+                track = await chat_service.submitted_track(query.from_user.id, result.submission_id)
+                await show_card(query.message, chat_service, query.from_user.id, track, rating=result.rating, submitted=True)
             try:
-                await query.message.edit_reply_markup(reply_markup=rating_keyboard(result))
+                await query.message.edit_reply_markup(reply_markup=rating_keyboard(result) if chat_service is None else None)
             except TelegramBadRequest:
                 pass  # Repeated ratings can leave the keyboard unchanged.
         else:
@@ -138,7 +158,7 @@ async def callback(query: CallbackQuery, workflow: Workflow, enrichment: Enrichm
                 await query.message.edit_reply_markup(reply_markup=None)
             except TelegramBadRequest:
                 pass
-            await present(query.message, result, query.from_user.id, workflow, enrichment, audio_analysis)
+            await present(query.message, result, query.from_user.id, workflow, enrichment, audio_analysis, chat_service)
     except FlowError as error:
         acknowledgement = messages.FLOW_FAILED if str(error) == "failure" else messages.STALE
     except Exception:

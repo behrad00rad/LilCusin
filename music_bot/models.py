@@ -225,3 +225,15 @@ class AudioAnalysis(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, onupdate=utc_now)
     track: Mapped[Track] = relationship()
+
+
+class ChatControl(Base):
+    """Short-lived owner/message-bound Telegram controls; no secret or raw messages."""
+
+    __tablename__ = "chat_controls"
+
+    token: Mapped[str] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    message_id: Mapped[int | None]
+    payload: Mapped[dict] = mapped_column(JSON)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime(), index=True)

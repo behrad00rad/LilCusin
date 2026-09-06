@@ -4,14 +4,15 @@ START = (
     "Hi! This bot will learn your music taste from songs you submit. "
     "Send a Telegram audio message or text as Artist - Song title. "
     "I’ll look for a match, ask you to confirm when needed, then ask how you feel about it. "
-    "Recommendations are still under development."
+    "Rate at least one song, then choose For You or More Like This."
 )
 HELP = (
-    "Recommendation functionality is still under development. "
+    "Use /recommend for your taste or More Like This for one song. "
     "Send an audio message (forwarded audio works too) or Artist - Song title. "
     "Choose a match or None of these, then rate it. Submitting does not rate a song. "
     "Reply directly to a correction prompt with Artist - Song title. "
-    "Use /cancel to end open identification flows. Please use a private chat."
+    "Use /profile for your rating counts, /privacy for stored data, /forgetme to remove your data, "
+    "and /cancel to end open flows. Please use a private chat."
 )
 
 INVALID_TEXT = "Use this format: Artist - Song title"
@@ -103,4 +104,49 @@ REC_SELECTED_REASONS = {
     REC_AUDIO: "Shares measured audio characteristics with the song you selected",
     REC_ARTIST: "Same artist as the song you selected",
     REC_RELATED_ARTIST: "An artist connected to the selected song through similar-track metadata",
+}
+
+MENU_SEND = '🎵 Send a song'
+MENU_FOR_YOU = '✨ For You'
+MENU_PROFILE = '👤 My Music Profile'
+MENU_HELP = 'ℹ️ Help'
+MORE_LIKE = '✨ More Like This'
+AFTER_FOR_YOU = '🎧 For You'
+DONE = 'Done'
+MAIN_MENU = 'Main menu'
+ANOTHER_LIST = 'Another list'
+CONTINUE = 'Continue recommendations'
+CATALOGUE = 'Catalogue'
+ARTWORK = 'Artwork'
+RATE_NUMBER = 'Rate {number}'
+SIMILAR_NUMBER = 'More like {number}'
+FOR_YOU_TITLE = '✨ For You'
+SIMILAR_TITLE = '✨ More Like This: {artist} — {title}'
+RECOMMENDATION_LINE = '{number}. {artist} — {title}'
+ALBUM_LINE = 'Album: {album}'
+CARD_TITLE = '{artist} — {title}\n\n' + RATING_QUESTION
+PREFERENCES_NEEDED = 'Rate at least one song Love or Like to get For You recommendations. Send or forward a song to begin.'
+NO_RECOMMENDATIONS = 'No fresh matches are available right now. Try For You, rate more songs, or come back later.'
+BUSY = 'Please wait for the current action to finish, then try again.'
+MENU_PROMPT = 'What would you like to do?'
+PROFILE_TEXT = 'Your music profile\n❤️ Loved: {love}\n👍 Liked: {like}\n😐 Neutral: {neutral}\n👎 Disliked: {dislike}\nRecommendations shown: {shown}'
+PRIVACY = (
+    'I store your Telegram user ID and basic profile fields, song submissions, explicit ratings, '
+    'recommendation history, and extracted music metadata/audio features. Short-lived button state '
+    'keeps your controls private. Song artist/title metadata is sent to Last.fm and sometimes MusicBrainz '
+    'for identification and enrichment. Submitted audio is processed temporarily and is not intentionally '
+    'stored permanently. Shared song metadata can be reused for other users. Only explicit ratings '
+    'affect your preferences; forwarding, navigation, links and silence do not. Use /forgetme to remove '
+    'your personal records. This does not remove messages already stored in Telegram or provider records.'
+)
+FORGET_CONFIRM = 'Remove your profile, submissions, ratings, recommendation history and user-linked audio analyses? Shared song metadata and other users’ data will be kept.'
+FORGET_YES = 'Yes, remove my data'
+FORGET_NO = 'Cancel'
+FORGET_DONE = 'Your personal data has been removed. Shared song metadata is kept. You can start again whenever you choose.'
+FORGET_CANCELLED = 'Cancelled. Your data is kept.'
+COMMAND_DESCRIPTIONS = {
+    'start': 'Open the main menu', 'recommend': 'Get For You recommendations',
+    'profile': 'View your music profile', 'help': 'How to use this bot',
+    'privacy': 'See what data is stored', 'forgetme': 'Remove your personal data',
+    'cancel': 'Cancel open flows and controls',
 }

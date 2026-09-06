@@ -7,9 +7,9 @@ Telegram audio (including forwarded audio) or text as `Artist - Song title`.
 Spaced Unicode dashes work too: `گوگوش — من آمده‌ام`. The bot identifies songs,
 asks for confirmation when needed, and collects Love/Like/Neutral/Dislike ratings.
 Confirmed Telegram audio can also be analysed locally for estimated BPM and
-compact numerical features. A first recommendation engine is available through
-the application service and developer CLI. Telegram recommendation controls,
-recognition and downloads are not implemented.
+compact numerical features. Private-chat menus now offer For You recommendations,
+More Like This, recommendation ratings, a profile summary and personal-data removal.
+The recommendation engine is also available through its application service and CLI.
 
 In the Codespaces terminal, from the repository root:
 
@@ -284,7 +284,7 @@ provider sessions. Results have `status`, `recommendations` and optional `batch_
 each recommendation has canonical `track_id`, artist/title, optional album/artwork,
 external IDs, internal `score`, user-facing `reason`, debug `sources`, and
 `exploration`. Normal user interfaces should display the reason, never the score.
-There are no recommendation Telegram handlers or buttons in this task.
+Task 10 connects these methods to private-chat Telegram controls, described below.
 
 No Love/Like ratings returns `insufficient_preferences`; submissions, neutral
 ratings and silence create no preferences. One positive rating is sufficient.
@@ -403,3 +403,69 @@ Different recordings can share names, provider IDs can be incomplete, BPM may
 be half/double perceived tempo, and numerical similarity does not establish genre,
 mood or perceptual equivalence. This is an explainable heuristic, not a trained
 model or a guarantee of user satisfaction.
+
+## Private-chat recommendation experience (Task 10)
+
+Run the bot from the repository root:
+
+```bash
+.venv/bin/python -m music_bot
+```
+
+`/start` opens **Send a song**, **For You**, **My Music Profile**, and **Help**.
+The private-chat command menu registers `/start`, `/recommend`, `/profile`,
+`/help`, `/privacy`, `/forgetme`, and `/cancel`.
+
+Send or forward Telegram audio, or submit `Artist - Song title`. Identification
+and confirmation work as before. The confirmed song card has Love/Like/Neutral/
+Dislike, More Like This, For You, and Done. More Like This can be used before
+rating; selecting or forwarding a song never creates a preference automatically.
+
+For You and More Like This each send one numbered list of up to five tracks,
+with concise reasons and optional albums. Each entry offers Rate and More Like
+This. Catalogue/artwork links are shown only for validated HTTPS URLs on known
+Last.fm/MusicBrainz hosts; artwork is an optional link so invalid or unavailable
+artwork never blocks a text list. Provider text is bounded and sent as plain text,
+with automatic previews disabled. Internal scores and database IDs are not shown.
+
+Rate opens a compact card whose rating can be changed. It also offers More Like
+This, Continue recommendations, and Main menu. Another list preserves the current
+mode and seed. Navigation, opening links and silence are never rating signals.
+Insufficient preferences prompt the user to rate a song; empty results offer the
+main menu and For You. `/profile` shows the four rating counts and the number of
+recommendation entries shown (including later redisplays).
+
+`chat_service.py` handles authorization, UI state, history, profiles and removal;
+`chat_ui.py` formats lists/cards and validates links; `chat_handlers.py` handles
+navigation. Both submission and recommendation ratings share the same upsert in
+`workflow.py`. Existing handlers and background enrichment/analysis are retained.
+
+One new `chat_controls` table is created additively by the existing initialization
+path. Random compact tokens bind actions to the owning user, Telegram message,
+allowed track IDs and mode. Controls expire after 30 minutes; at most 20 active
+controls are retained per user. Consumed navigation actions cannot create duplicate
+lists/cards; rating callbacks remain editable and idempotent. Private-chat updates
+are serialized per user, with a three-second recommendation navigation cooldown.
+Busy clicks receive a short acknowledgement. `/cancel` invalidates open controls
+and identification flows while retaining saved submissions and ratings.
+
+The UI previews through the recommendation service, sends the list, then records
+exactly those displayed tracks using the control token as an idempotent batch ID.
+Failed sends do not count as recommendations shown. Telegram delivery and SQLite
+cannot share a transaction: a process crash or database failure immediately after
+a successful send can leave that delivered list unrecorded. Controls from deleted,
+expired or inaccessible messages are rejected safely.
+
+`/privacy` explains profile/submission/rating/history storage, shared metadata,
+provider metadata requests and temporary audio processing. `/forgetme` requires
+an owner-checked confirmation with a cancel option. It cancels and drains that
+user's active audio jobs, then deletes their controls, identification state,
+submissions, ratings, history, audio-analysis rows and profile in one transaction.
+Canonical tracks, external IDs, tags, cached metadata and other users' rows remain.
+Shared numerical track metadata such as BPM is retained without user linkage.
+Messages already in Telegram and provider-side records are outside this deletion.
+Old controls cannot recreate a deleted account; a new explicit interaction can.
+
+No channel integration/import, acoustic recognition, new download/link-processing
+feature, Mini App, admin panel, paid service or deployment infrastructure is added.
+The existing temporary audio-analysis path is unchanged apart from per-user cancellation.

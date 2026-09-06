@@ -150,3 +150,15 @@ class AudioAnalysisService:
                     AudioAnalysis.id.in_(identifiers), AudioAnalysis.status.in_(["pending", "processing"]),
                 ).values(status="failed", error_category=Category.INTERRUPTED.value, updated_at=utc_now()))
         self.tasks.clear()
+
+    async def cancel_user(self, telegram_user_id):
+        async with self.database.sessions() as session:
+            identifiers = (await session.scalars(select(AudioAnalysis.id).join(
+                User, User.id == AudioAnalysis.requested_by,
+            ).where(User.telegram_user_id == telegram_user_id))).all()
+        tasks = [self.tasks[key] for key in identifiers if key in self.tasks]
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        for key in identifiers:
+            self.tasks.pop(key, None)
