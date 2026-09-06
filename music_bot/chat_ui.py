@@ -1,12 +1,15 @@
 """Plain-text Telegram lists, compact controls and conservative catalogue links."""
 
 import re
+import html
+from urllib.parse import quote
 from urllib.parse import urlsplit
 
 from aiogram.types import InlineKeyboardButton as Button, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, LinkPreviewOptions
 
 from . import messages as M
 from .matching import identity_key
+from .config import normalized_lil_bro_username
 
 
 def main_menu():
@@ -60,16 +63,29 @@ def clean(value, limit=120):
     return ' '.join(str(value or '').split())[:limit]
 
 
+def lil_bro_url(artist, title, username=None):
+    artist, title = clean(artist, 85), clean(title, 85)
+    username = normalized_lil_bro_username(username)
+    if not artist or not title or not username:
+        return None
+    query = quote(f'{artist} - {title}', safe='')
+    return f"https://t.me/{username}?text={query}"
+
+
 def list_content(rows, token, seed_track=None):
     title = M.FOR_YOU_TITLE if seed_track is None else M.SIMILAR_TITLE.format(
         artist=clean(seed_track.display_artist or seed_track.artist, 70),
         title=clean(seed_track.display_title or seed_track.title, 70))
-    lines, keyboard = [title], []
+    lines, keyboard = [html.escape(title)], []
     for index, row in enumerate(rows):
-        entry = M.RECOMMENDATION_LINE.format(number=index + 1, artist=clean(row.artist, 85), title=clean(row.title, 85))
+        artist, song_title = clean(row.artist, 85), clean(row.title, 85)
+        label = html.escape(f'{artist} — {song_title}')
+        if url := lil_bro_url(artist, song_title):
+            label = f'<a href="{html.escape(url, quote=True)}">{label}</a>'
+        entry = f'{index + 1}. {label}'
         if row.album:
-            entry += '\n' + M.ALBUM_LINE.format(album=clean(row.album, 85))
-        entry += '\n' + clean(row.reason, 120)
+            entry += '\n' + html.escape(M.ALBUM_LINE.format(album=clean(row.album, 85)))
+        entry += '\n' + html.escape(clean(row.reason, 120))
         lines.append(entry)
         actions = [button(token, 'rate', M.RATE_NUMBER.format(number=index + 1), index),
                    button(token, 'more', M.SIMILAR_NUMBER.format(number=index + 1), index)]
@@ -81,6 +97,7 @@ def list_content(rows, token, seed_track=None):
     keyboard.append([button(token, 'next', M.ANOTHER_LIST), button(token, 'menu', M.MAIN_MENU)])
     if seed_track is not None:
         keyboard.append([button(token, 'foryou', M.AFTER_FOR_YOU)])
+    lines.insert(1, M.LIL_BRO_HANDOFF_NOTE)
     return '\n\n'.join(lines), InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
@@ -128,7 +145,7 @@ async def show_recommendations(message, service, user_id, seed=None):
         return
     token = await service.create_control(user_id, tracks=[row.track_id for row in rows], seed=seed)
     text, keyboard = list_content(rows, token, seed_track)
-    sent = await message.answer(text, parse_mode=None, reply_markup=keyboard,
+    sent = await message.answer(text, parse_mode='HTML', reply_markup=keyboard,
                                link_preview_options=LinkPreviewOptions(is_disabled=True))
     await service.record_displayed(user_id, rows, token, seed)
     await service.bind_control(token, sent.message_id)

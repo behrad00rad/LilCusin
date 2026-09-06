@@ -123,6 +123,7 @@ SIMILAR_NUMBER = 'More like {number}'
 FOR_YOU_TITLE = '✨ For You'
 SIMILAR_TITLE = '✨ More Like This: {artist} — {title}'
 RECOMMENDATION_LINE = '{number}. {artist} — {title}'
+LIL_BRO_HANDOFF_NOTE = 'Tap a song name to open it in Lil Bro, then press Send.'
 ALBUM_LINE = 'Album: {album}'
 CARD_TITLE = '{artist} — {title}\n\n' + RATING_QUESTION
 PREFERENCES_NEEDED = 'Rate a song Love or Like, or connect a playlist with /connectchannel to get For You recommendations. Send or forward a song to begin.'

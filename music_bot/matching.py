@@ -8,6 +8,11 @@ from difflib import SequenceMatcher
 
 from .providers.common import Release, Tag, TrackCandidate
 
+AUTO_CONFIRM_ARTIST_THRESHOLD = 0.90
+AUTO_CONFIRM_TITLE_THRESHOLD = 0.90
+AUTO_CONFIRM_COMBINED_THRESHOLD = 0.90
+AUTO_CONFIRM_LEAD_THRESHOLD = 0.08
+
 
 def comparison_text(value: str) -> str:
     value = unicodedata.normalize("NFKC", value).casefold()
@@ -82,7 +87,13 @@ def strong_match(artist: str, title: str, candidates: list[TrackCandidate]) -> b
         return False
     best = candidates[0]
     a, t = similarities(artist, title, best)
+    if not best.artist or not best.title:
+        return False
     score = confidence(artist, title, best)
     margin = score - confidence(artist, title, candidates[1]) if len(candidates) > 1 else 1
-    # Exact normalized names, a stable identifier, high score, and no close rival.
-    return a == 1 and t == 1 and bool(best.external_ids) and score >= 0.94 and margin >= 0.08
+    if any(best.external_ids.get(provider) and any(
+        candidate.external_ids.get(provider) and candidate.external_ids[provider] != best.external_ids[provider]
+        for candidate in candidates[1:]) for provider in ("musicbrainz", "lastfm")):
+        return False
+    return (a >= AUTO_CONFIRM_ARTIST_THRESHOLD and t >= AUTO_CONFIRM_TITLE_THRESHOLD
+            and score >= AUTO_CONFIRM_COMBINED_THRESHOLD and margin >= AUTO_CONFIRM_LEAD_THRESHOLD)
