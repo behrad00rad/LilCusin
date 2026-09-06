@@ -6,7 +6,7 @@ from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.types import Message, InlineKeyboardMarkup
 
 from . import messages as M
-from .chat_ui import button, card_keyboard, main_menu, parse_control, show_card, show_recommendations
+from .chat_ui import button, card_keyboard, dismiss, main_menu, parse_control, show_card, show_recommendations
 from .submissions import Submitter
 from .workflow import FlowError, RATINGS
 
@@ -73,12 +73,16 @@ async def callback(query, chat_service):
         elif action in {'next', 'more', 'foryou'}:
             seed = track.id if action == 'more' else payload['seed'] if action == 'next' else None
             await show_recommendations(query.message, chat_service, query.from_user.id, seed)
+            if payload.get('kind') == 'card':
+                await dismiss(query.message)
+        elif action == 'menu':
+            await dismiss(query.message)
         elif action == 'delete':
             await chat_service.forget(query.from_user.id)
             await query.message.answer(M.FORGET_DONE, reply_markup=main_menu())
         else:
             await query.message.answer(M.FORGET_CANCELLED if action == 'keep' else M.MAIN_MENU, reply_markup=main_menu())
-        if action in {'delete', 'keep', 'menu'}:
+        if action in {'delete', 'keep'}:
             try:
                 await query.message.edit_reply_markup(reply_markup=None)
             except TelegramBadRequest:

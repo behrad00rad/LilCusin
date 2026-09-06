@@ -79,13 +79,20 @@ class ChatService:
                 await save_rating(session, row.user_id, track.id, rating)
             return payload, track
 
-    async def taste_control(self, token, user_id, message_id):
-        async with self.database.sessions() as session:
+    async def taste_control(self, token, user_id, message_id, *, state=None, require=None):
+        async with self.database.write() as session:
             row = await session.scalar(select(ChatControl).join(User).where(
                 ChatControl.token == token, User.telegram_user_id == user_id,
                 ChatControl.message_id == message_id, ChatControl.expires_at > utc_now()))
             if row is None or row.payload.get('kind') != 'taste':
                 raise FlowError('stale')
+            payload = dict(row.payload)
+            if require is not None and payload.get('view') != require:
+                raise FlowError('stale')
+            if state is not None:
+                payload.update(state)
+                row.payload = payload
+            return payload
 
     async def submitted_track(self, user_id, submission_id):
         async with self.database.sessions() as session:
@@ -133,8 +140,10 @@ class ChatService:
                 return None
             counts = dict((await session.execute(select(Rating.value, func.count()).where(
                 Rating.user_id == internal).group_by(Rating.value))).all())
-            songs = await session.scalar(select(func.count(SongSubmission.id)).where(
-                SongSubmission.user_id == internal, SongSubmission.identification_status == 'confirmed'))
+            learning_tracks = select(Rating.track_id).where(Rating.user_id == internal).union(
+                select(UserTrackSignal.track_id).where(UserTrackSignal.user_id == internal,
+                                                       UserTrackSignal.weight > 0)).subquery()
+            songs = await session.scalar(select(func.count()).select_from(learning_tracks))
             signals = await session.scalar(select(func.count(UserTrackSignal.id)).where(UserTrackSignal.user_id == internal))
             channels = await session.scalar(select(func.count(PlaylistChannel.id)).where(PlaylistChannel.user_id == internal))
             positive_tracks = select(Rating.track_id).where(Rating.user_id == internal,
@@ -162,7 +171,7 @@ class ChatService:
             recent = sorted([('rating', *row) for row in recent_ratings]
                             + [('inferred', *row) for row in recent_signals], key=lambda row: row[1], reverse=True)[:5]
             explicit = sum(counts.values())
-            return {'counts': counts, 'songs': songs or 0, 'signals': signals or 0,
+            return {'counts': counts, 'songs': songs or 0, 'signals': explicit + (signals or 0),
                     'channels': channels or 0, 'artists': artists, 'inferred_artists': inferred_artists,
                     'tags': tags, 'inferred_tags': inferred_tags, 'recent': recent,
                     'reliable': explicit + (signals or 0) >= 5}

@@ -95,7 +95,8 @@ class Workflow:
             except ProviderError:
                 failed = True
             ranked = sorted(deduplicate(candidates), key=lambda c: confidence(artist, title, c), reverse=True)
-        if not strong_match(artist, title, ranked) or (ranked and ranked[0].missing_metadata):
+        # Album, duration and artwork belong to enrichment, not identity.
+        if not strong_match(artist, title, ranked):
             try:
                 candidates += await self.providers.call("musicbrainz", "search_recordings", artist, title)
             except ProviderError:
@@ -147,8 +148,8 @@ class Workflow:
             flow.candidates = [encode_track(candidate) for candidate in candidates]
             accepted, reason, metrics = match_decision(artist, title, candidates)
             logger.info("Identification decision: accepted=%s reason=%s artist=%.3f title=%.3f combined=%.3f margin=%.3f",
-                        accepted and not failed, reason, *metrics)
-            if accepted and not failed:
+                        accepted, reason, *metrics)
+            if accepted:
                 try:
                     track = await canonical_track(session, candidates[0])
                 except IdentityConflict:

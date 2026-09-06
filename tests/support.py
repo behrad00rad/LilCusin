@@ -8,11 +8,13 @@ from aiogram import Dispatcher
 from music_bot.database import Database
 from music_bot.handlers import router
 from music_bot.channel_handlers import router as channel_router
+from music_bot.taste_ui import router as taste_router
 from music_bot.submissions import SubmissionService, Submitter
 from music_bot.workflow import Workflow
 
 dispatcher = Dispatcher(disable_fsm=True)
 dispatcher.include_router(channel_router)
+dispatcher.include_router(taste_router)
 dispatcher.include_router(router)
 
 

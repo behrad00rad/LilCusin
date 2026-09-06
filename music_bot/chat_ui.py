@@ -10,6 +10,18 @@ from aiogram.types import InlineKeyboardButton as Button, InlineKeyboardMarkup, 
 from . import messages as M
 from .matching import identity_key
 from .config import normalized_lil_bro_username
+from aiogram.exceptions import TelegramBadRequest
+
+
+async def dismiss(message):
+    """Remove a finished prompt; older messages can still be made inert."""
+    try:
+        await message.delete()
+    except TelegramBadRequest:
+        try:
+            await message.edit_text(M.DONE, reply_markup=None)
+        except TelegramBadRequest:
+            await message.edit_reply_markup(reply_markup=None)
 
 
 def main_menu():

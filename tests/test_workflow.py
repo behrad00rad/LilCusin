@@ -111,13 +111,19 @@ class IdentificationTests(ServiceTestCase):
         async with self.database.sessions() as session:
             self.assertIsNone((await session.get(SongSubmission, submission.id)).track_id)
 
-    async def test_provider_failure_recoverable_and_never_auto_confirms(self):
+    async def test_provider_failure_does_not_override_reliable_result(self):
         self.providers.call.side_effect = ProviderError(Failure.NETWORK)
         result = await self.workflow.start((await self.text()).id, 123)
         self.assertEqual(result.kind, "failure")
         self.providers.call.side_effect = [ProviderError(Failure.NETWORK), [EXACT]]
         result = await self.workflow.start((await self.text()).id, 123)
-        self.assertEqual(result.kind, "candidates")
+        self.assertEqual(result.kind, "confirmed")
+
+    async def test_exact_names_without_optional_metadata_skip_fallback(self):
+        self.providers.call.side_effect = [[replace(EXACT, album=None, duration=None)], ProviderError(Failure.NETWORK)]
+        result = await self.workflow.start((await self.text()).id, 123)
+        self.assertEqual(result.kind, 'confirmed')
+        self.assertEqual(self.providers.call.await_count, 1)
 
     async def test_confidence_thresholds_both_names_and_rivals(self):
         self.assertTrue(strong_match("Artist", "Song", [EXACT]))

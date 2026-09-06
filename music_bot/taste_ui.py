@@ -7,7 +7,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery, InlineKeyboardButton as Button, InlineKeyboardMarkup, Message
 
 from . import messages as M
-from .chat_ui import main_menu
+from .chat_ui import clean, dismiss, main_menu
 from .workflow import FlowError, RATINGS
 
 router = Router()
@@ -25,7 +25,7 @@ def taste_keyboard(token):
 
 
 def names(rows):
-    return ', '.join((display or normalized) for display, normalized, _ in rows) or M.UNKNOWN
+    return ', '.join(clean(display or normalized, 70) for display, normalized, _ in rows) or M.UNKNOWN
 
 
 def overview(data):
@@ -43,7 +43,7 @@ async def show_taste(message, service, user_id):
         await message.answer(M.TASTE_EMPTY, reply_markup=main_menu())
         return
     token = await service.create_control(user_id, kind='taste')
-    sent = await message.answer(overview(data), reply_markup=taste_keyboard(token))
+    sent = await message.answer(overview(data), parse_mode=None, reply_markup=taste_keyboard(token))
     await service.bind_control(token, sent.message_id)
 
 
@@ -54,24 +54,27 @@ def back(token):
 
 async def edit(message, text, keyboard):
     try:
-        await message.edit_text(text, reply_markup=keyboard)
-    except TelegramBadRequest:
-        pass
+        await message.edit_text(text, parse_mode=None, reply_markup=keyboard)
+    except TelegramBadRequest as error:
+        if 'message is not modified' not in error.message.lower():
+            raise
 
 
 async def callback(query: CallbackQuery, chat_service):
     match = re.fullmatch(r't:([a-f0-9]{32}):(overview|artists|tags|clusters|recent|correct|pick[0-9]|reset|confirmreset|menu|cancel)', query.data or '')
-    if not match or not isinstance(query.message, Message) or query.message.chat.id != query.from_user.id:
+    if (not match or not isinstance(query.message, Message) or query.message.chat.type != 'private'
+            or query.message.chat.id != query.from_user.id or query.from_user.is_bot):
         await query.answer(M.STALE)
         return
     token, action = match.groups()
     try:
-        await chat_service.taste_control(token, query.from_user.id, query.message.message_id)
+        payload = await chat_service.taste_control(token, query.from_user.id, query.message.message_id)
         data = await chat_service.taste_summary(query.from_user.id)
         if action == 'menu':
-            await edit(query.message, M.MAIN_MENU, None)
-            await query.message.answer(M.MAIN_MENU, reply_markup=main_menu())
+            await dismiss(query.message)
         elif action in {'overview', 'cancel'}:
+            await chat_service.taste_control(token, query.from_user.id, query.message.message_id,
+                                            state={'view': 'overview'})
             await edit(query.message, overview(data), taste_keyboard(token))
         elif action == 'artists':
             await edit(query.message, 'Explicit from ratings: ' + names(data['artists']) + '\n\nInferred from playlists: ' + names(data['inferred_artists']), back(token))
@@ -85,31 +88,41 @@ async def callback(query: CallbackQuery, chat_service):
             rows = []
             for source, _, value, artist_display, artist, title_display, title in data['recent']:
                 marker = marks.get(value, '📻') if source == 'rating' else '📻'
-                rows.append(f"{marker} {artist_display or artist} — {title_display or title}")
+                rows.append(f"{marker} {clean(artist_display or artist, 70)} — {clean(title_display or title, 90)}")
             await edit(query.message, 'Recent learning signals:\n' + ('\n'.join(rows) or M.UNKNOWN), back(token))
         elif action == 'correct':
             targets = await chat_service.taste_targets(query.from_user.id)
+            await chat_service.taste_control(token, query.from_user.id, query.message.message_id,
+                                            state={'view': 'correct', 'targets': targets})
             keys = [[Button(text=display[:50], callback_data=f't:{token}:pick{i}')]
                     for i, (_, _, display) in enumerate(targets)]
             keys.append([Button(text=M.CANCEL, callback_data=f't:{token}:cancel')])
             await edit(query.message, M.TASTE_CORRECT_HELP, InlineKeyboardMarkup(inline_keyboard=keys))
         elif action.startswith('pick'):
-            targets = await chat_service.taste_targets(query.from_user.id)
+            payload = await chat_service.taste_control(token, query.from_user.id, query.message.message_id,
+                                                      require='correct', state={'view': 'overview'})
+            targets = payload.get('targets', [])
             index = int(action[4:])
             if index >= len(targets):
                 raise FlowError('stale')
             await chat_service.reduce_taste(query.from_user.id, *targets[index][:2])
             await edit(query.message, M.TASTE_CORRECTED, back(token))
         elif action == 'reset':
+            await chat_service.taste_control(token, query.from_user.id, query.message.message_id,
+                                            state={'view': 'reset'})
             keys = [[Button(text=M.RESET_CONFIRM, callback_data=f't:{token}:confirmreset')],
                     [Button(text=M.CANCEL, callback_data=f't:{token}:cancel')]]
             await edit(query.message, M.TASTE_RESET_CONFIRM, InlineKeyboardMarkup(inline_keyboard=keys))
         elif action == 'confirmreset':
+            await chat_service.taste_control(token, query.from_user.id, query.message.message_id,
+                                            require='reset', state={'view': 'overview'})
             await chat_service.reset_learning(query.from_user.id)
             await edit(query.message, M.TASTE_RESET_DONE, back(token))
         await query.answer(M.WORKING)
     except FlowError:
         await query.answer(M.STALE)
+    except TelegramBadRequest:
+        await query.answer(M.FLOW_FAILED)
 
 
 router.callback_query.register(callback, F.data.startswith('t:'))

@@ -63,10 +63,8 @@ def similarities(artist: str, title: str, candidate: TrackCandidate) -> tuple[fl
 
 def confidence(artist: str, title: str, candidate: TrackCandidate) -> float:
     a, t = similarities(artist, title, candidate)
-    relevance = 0.5
-    if candidate.score is not None:
-        relevance = min(1.0, candidate.score / 100 if candidate.source == "musicbrainz" else candidate.score)
-    return 0.45 * a + 0.45 * t + 0.1 * relevance
+    # Provider scores can reflect relevance/popularity rather than identity.
+    return (a + t) / 2
 
 
 def deduplicate(candidates: list[TrackCandidate]) -> list[TrackCandidate]:
@@ -100,7 +98,7 @@ def match_decision(artist: str, title: str, candidates: list[TrackCandidate]) ->
         return False, "no_candidate", (0, 0, 0, 0)
     best = candidates[0]
     a, t = similarities(artist, title, best)
-    if not best.artist or not best.title:
+    if not all(comparison_text(value or '') for value in (artist, title, best.artist, best.title)):
         return False, "incomplete_metadata", (a, t, 0, 0)
     score = confidence(artist, title, best)
     margin = score - confidence(artist, title, candidates[1]) if len(candidates) > 1 else 1

@@ -1,6 +1,6 @@
 """Six focused private-chat recommendation/privacy integration scenarios."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from aiogram import Bot
 from aiogram.types import Message, Update
@@ -49,7 +49,7 @@ class ChatFlowTests(ServiceTestCase):
 
     async def feed(self, **fields):
         await dispatcher.feed_update(self.bot, Update(update_id=self.serial, **fields),
-            chat_service=self.chat, submissions=self.submissions, workflow=self.workflow, enrichment=AsyncMock())
+            chat_service=self.chat, submissions=self.submissions, workflow=self.workflow, enrichment=Mock())
 
     async def click(self, outgoing, row=0, column=0, user=TELEGRAM_ID):
         message, _, fields = outgoing
@@ -189,3 +189,37 @@ class ChatFlowTests(ServiceTestCase):
             own_id = await session.scalar(select(User.id).where(User.telegram_user_id == TELEGRAM_ID))
             self.assertEqual(await session.scalar(select(func.count()).select_from(Rating)
                 .where(Rating.user_id == own_id)), 0)
+
+    async def test_dashboard_routes_and_done_remove_prompt(self):
+        with patch('aiogram.types.Message.edit_text', new_callable=AsyncMock) as edit_text, \
+             patch('aiogram.types.Message.delete', new_callable=AsyncMock) as delete_message:
+            await self.feed(message=self.message(text='/taste'))
+            dashboard = self.outgoing[-1]
+            self.assertIn(M.TASTE_TITLE, dashboard[1])
+            await self.click(dashboard)
+            self.assertIn('Explicit from ratings', edit_text.call_args.args[0])
+            for row, column in ((0, 1), (1, 0), (1, 1), (2, 0), (3, 0)):
+                await self.click(dashboard, row=row, column=column)
+                self.assertNotEqual(self.ack.call_args.args[0], M.STALE)
+            await self.feed(message=self.message(text=M.MENU_PROFILE))
+            self.assertIn(M.TASTE_TITLE, self.outgoing[-1][1])
+            await self.feed(message=self.message(text='/recommend'))
+            await self.click(self.outgoing[-1])
+            card = self.outgoing[-1]
+            await self.click(card)
+            before = len(self.outgoing)
+            await self.click(card, row=2)
+            delete_message.assert_awaited_once()
+            self.assertEqual(len(self.outgoing), before)
+
+    async def test_audio_exact_match_immediately_rates_without_optional_lookup(self):
+        from dataclasses import replace
+        from tests.test_workflow import EXACT
+        self.providers.call.return_value = [replace(EXACT, album=None, duration=None)]
+        await self.feed(message=self.message(audio={'file_id': 'test', 'file_unique_id': 'unique',
+            'duration': 120, 'performer': 'Artist', 'title': 'Song'}))
+        self.assertIn(M.RATING_QUESTION, self.outgoing[-1][1])
+        self.assertFalse(any(text == M.CHOOSE for _, text, _ in self.outgoing))
+        self.assertEqual(self.providers.call.await_count, 1)
+        await self.click(self.outgoing[-1])
+        self.assertEqual(self.ack.call_args.args[0], M.RATING_SAVED)

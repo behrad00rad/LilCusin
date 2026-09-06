@@ -73,10 +73,11 @@ database contains user data and is ignored by Git.
 
 Use a **private chat**. Text/audio metadata starts a search in Last.fm. Weak,
 incomplete or absent results also trigger MusicBrainz. Artist and title each
-contribute 45% of confidence using normalized string similarity; provider relevance
-contributes 10% (neutral 0.5 when unavailable). Automatic selection accepts exact
-normalized names immediately, both name scores at least 0.90, or combined confidence
-at least 0.90 with a lead of at least 0.08 and no stable-ID conflict or provider failure. Otherwise up to
+contribute 50% of confidence using normalized string similarity. Provider relevance
+does not affect identity. Exact normalized names are accepted immediately unless
+stable IDs conflict. Other matches require combined confidence at least 0.90 and
+a lead of at least 0.08. Optional metadata and unrelated provider outages do not
+override a reliable match. Otherwise up to
 five plausible candidates and **None of these** are shown. This is metadata
 matching, not acoustic identification or a guarantee of the correct recording.
 
