@@ -120,6 +120,9 @@ class RecommendationTests(unittest.IsolatedAsyncioTestCase):
         artists = {row.artist for row in result.recommendations}
         self.assertTrue(any(name.startswith("Metal") for name in artists))
         self.assertTrue(any(name.startswith("Piano") or name == "گوگوش" for name in artists))
+        metal_score = next(row.score for row in result.recommendations if row.artist.startswith("Metal"))
+        piano_score = next(row.score for row in result.recommendations if row.artist.startswith("Piano") or row.artist == "گوگوش")
+        self.assertGreater(metal_score, piano_score)
         rated = {tracks[key] for key in ("metal_seed", "piano_seed", "neutral", "dislike")}
         self.assertFalse(rated & {row.track_id for row in result.recommendations})
         self.assertTrue(all(row.reason and 0 < row.score <= 1 for row in result.recommendations))
@@ -336,3 +339,64 @@ class RecommendationTests(unittest.IsolatedAsyncioTestCase):
         with sqlite3.connect(path) as connection:
             row = connection.execute("SELECT * FROM recommendation_history").fetchone()
             self.assertEqual(row, (1, 2, 3, "2026-01-01", "old reason", "old source", None, None, None))
+
+    async def test_selected_seed_focus_and_ratings_unchanged(self):
+        tracks = await populate(self.database)
+        async with self.database.write() as session:
+            user_id = await session.scalar(select(User.id))
+            session.add(Rating(user_id=user_id, track_id=tracks["piano_1"], value="dislike"))
+        async with self.database.sessions() as session:
+            before = (await session.execute(select(Rating.track_id, Rating.value, Rating.updated_at).order_by(Rating.id))).all()
+        result = await self.service.recommend_similar_to_track(TELEGRAM_ID, tracks["piano_0"], random_seed=42)
+        self.assertEqual(result.status, "ok")
+        ids = {row.track_id for row in result.recommendations}
+        self.assertFalse(ids & {tracks["piano_0"], tracks["piano_1"], tracks["piano_seed"]})
+        self.assertTrue(all(row.artist.startswith("Piano") or row.artist == "گوگوش" for row in result.recommendations))
+        self.assertTrue(all("selected" in row.reason and "liked" not in row.reason for row in result.recommendations))
+        self.assertTrue(all(row.score < .75 for row in result.recommendations))  # Close disliked piano seed penalizes shared tags.
+        await self.service.recommend_similar_to_track(TELEGRAM_ID, tracks["piano_seed"])  # An existing Like stays Like too.
+        async with self.database.sessions() as session:
+            after = (await session.execute(select(Rating.track_id, Rating.value, Rating.updated_at).order_by(Rating.id))).all()
+        self.assertEqual(before, after)
+
+    async def test_selected_seed_without_positive_ratings_and_history_replay(self):
+        tracks = await populate(self.database)
+        async with self.database.write() as session:
+            await session.execute(update(Rating).where(Rating.value.in_(["love", "like"])).values(value="neutral"))
+        self.assertEqual((await self.service.recommend_for_user(TELEGRAM_ID)).status, "insufficient_preferences")
+        first = await self.service.recommend_similar_to_track(TELEGRAM_ID, tracks["piano_0"], limit=3,
+                    random_seed=7, for_display=True, batch_id="selected-batch")
+        repeat = await self.service.recommend_similar_to_track(TELEGRAM_ID, tracks["piano_0"], limit=3,
+                    random_seed=7, for_display=True, batch_id="selected-batch")
+        self.assertEqual(first, repeat)
+        self.assertEqual(len(first.recommendations), 3)
+        self.assertEqual(await self.count(RecommendationHistory), 3)
+        fresh = await self.service.recommend_similar_to_track(TELEGRAM_ID, tracks["piano_0"], limit=3, random_seed=7)
+        self.assertFalse({row.track_id for row in first.recommendations} & {row.track_id for row in fresh.recommendations})
+        with self.assertRaisesRegex(ValueError, "another recommendation mode or selected track"):
+            await self.service.recommend_similar_to_track(TELEGRAM_ID, tracks["metal_0"], for_display=True, batch_id="selected-batch")
+        async with self.database.write() as session:
+            await session.execute(update(Rating).where(Rating.track_id == tracks["piano_seed"]).values(value="like"))
+        with self.assertRaisesRegex(ValueError, "another recommendation mode or selected track"):
+            await self.service.recommend_for_user(TELEGRAM_ID, for_display=True, batch_id="selected-batch")
+        self.assertEqual(await self.count(RecommendationHistory), 3)
+
+    async def test_selected_seed_empty_and_cached_provider_failure(self):
+        tracks = await populate(self.database)
+        self.assertEqual((await self.service.recommend_similar_to_track(TELEGRAM_ID, 999999)).status, "no_candidates")
+        async with self.database.write() as session:
+            await session.execute(delete(SimilarTrack))
+            await session.execute(delete(TrackTag))
+        self.assertEqual((await self.service.recommend_similar_to_track(TELEGRAM_ID, tracks["piano_0"])).status, "no_candidates")
+        async with self.database.write() as session:
+            candidate = TrackCandidate("Cached Piano", "New Pianist", "lastfm", score=.9)
+            session.add(SimilarTrack(track_id=tracks["piano_0"], provider="lastfm", candidate_key="cached-piano",
+                                    candidate=encode_track(candidate), score=.9, updated_at=utc_now() - timedelta(hours=25)))
+        providers = AsyncMock()
+        providers.call.side_effect = ProviderError(Failure.NETWORK)
+        result = await RecommendationService(self.database, providers).recommend_similar_to_track(TELEGRAM_ID, tracks["piano_0"])
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.recommendations[0].title, "Cached Piano")
+        self.assertEqual(result.recommendations[0].reason, "Similar to the song you selected")
+        providers.call.assert_awaited_once_with("lastfm", "get_similar_tracks", "Piano Artist 0", "Piano Candidate 0")
+        self.assertEqual(await self.count(Rating), 4)

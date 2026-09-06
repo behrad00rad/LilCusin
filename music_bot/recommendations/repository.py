@@ -65,17 +65,20 @@ def balanced_seeds(rows, values, maximum):
     return chosen
 
 
-async def load_profile(session, telegram_user_id):
+async def load_profile(session, telegram_user_id, selected_track_id=None):
     user_id = await session.scalar(select(User.id).where(User.telegram_user_id == telegram_user_id))
     if user_id is None:
         return None
     rows = (await session.execute(select(Rating, Track).join(Track).where(Rating.user_id == user_id)
                                   .order_by(Rating.track_id))).all()
-    positives = balanced_seeds(rows, {"love", "like"}, S.MAX_POSITIVE_SEEDS)
-    if not positives:
+    selected = await session.get(Track, selected_track_id) if selected_track_id is not None else None
+    if selected_track_id is not None and selected is None:
+        return None
+    positives = [(rating, track) for rating, track in rows if rating.value in {"love", "like"}] if selected is None else []
+    if not positives and selected is None:
         return None
     negatives = balanced_seeds(rows, {"dislike"}, S.MAX_NEGATIVE_SEEDS)
-    items = await load_items(session, [track for _, track in positives + negatives])
+    items = await load_items(session, [track for _, track in positives + negatives] + ([selected] if selected is not None else []))
     rated_aliases = set()
     for _, track in rows:
         rated_aliases.update(aliases(from_track(track).metadata))
@@ -95,9 +98,16 @@ async def load_profile(session, telegram_user_id):
         for row in await session.scalars(select(TrackExternalID).where(TrackExternalID.track_id.in_(history))):
             key = ("id", row.provider, row.external_identifier)
             history_aliases[key] = max(history_aliases.get(key, history[row.track_id]), history[row.track_id])
-    return Profile(user_id, [Seed(items[track.id], rating.value) for rating, track in positives],
+    positive_seeds = [Seed(items[track.id], rating.value) for rating, track in positives]
+    excluded_ids = {track.id for _, track in rows}
+    if selected is not None:
+        positive_seeds = [Seed(items[selected.id], None)]
+        # Exclude the focus track and its aliases even if it has never been rated.
+        excluded_ids.add(selected.id)
+        rated_aliases.update(items[selected.id].identities)
+    return Profile(user_id, positive_seeds,
                    [Seed(items[track.id], rating.value) for rating, track in negatives],
-                   {track.id for _, track in rows}, rated_aliases, history, history_aliases)
+                   excluded_ids, rated_aliases, history, history_aliases, selected_track_id)
 
 
 async def load_edges(session, seed_ids):
@@ -106,7 +116,8 @@ async def load_edges(session, seed_ids):
     ).label("position")).where(SimilarTrack.track_id.in_(seed_ids)).subquery()
     return (await session.scalars(select(SimilarTrack).join(ranked, ranked.c.id == SimilarTrack.id)
                                   .where(ranked.c.position <= S.MAX_EDGES_PER_SEED)
-                                  .order_by(SimilarTrack.track_id, ranked.c.position))).all()
+                                  .order_by(ranked.c.position, SimilarTrack.track_id)
+                                  .limit(S.MAX_SIMILAR_CANDIDATES))).all()
 
 
 async def local_candidates(session, profile, related_artists):
@@ -172,7 +183,7 @@ async def resolve_tracks(session, candidates):
     return resolved, tracks
 
 
-async def replay_batch(session, user_id, batch_id, rated_aliases):
+async def replay_batch(session, user_id, batch_id, rated_aliases, selected_track_id=None):
     rows = (await session.execute(select(RecommendationHistory, Track).join(Track).where(
         RecommendationHistory.user_id == user_id, RecommendationHistory.batch_id == batch_id,
     ).order_by(RecommendationHistory.position, RecommendationHistory.id))).all()
@@ -182,28 +193,30 @@ async def replay_batch(session, user_id, batch_id, rated_aliases):
     recommendations = []
     for history, track in rows:
         item = items[track.id]
-        if item.identities & rated_aliases:
-            continue
         try:
             source = json.loads(history.source or "{}")
         except ValueError:
             source = {}
         if not isinstance(source, dict):
             source = {}
+        if source.get("selected_track_id") != selected_track_id:
+            raise ValueError("batch_id already belongs to another recommendation mode or selected track")
+        if item.identities & rated_aliases:
+            continue
         recommendations.append(Recommendation(track.id, item.metadata.artist, item.metadata.title,
             track.album, track.artwork_url, item.metadata.external_ids, history.ranking_score or 0,
             history.reason or "", tuple(source.get("sources", [])), bool(source.get("exploration"))))
     return RecommendationResult("ok" if recommendations else "no_candidates", tuple(recommendations), batch_id)
 
 
-async def persist_selection(database, telegram_user_id, ranked, for_display, batch_id):
+async def persist_selection(database, telegram_user_id, ranked, for_display, batch_id, selected_track_id=None):
     async with database.write() as session:
         # Recheck ratings/history under the writer lock to cover concurrent calls.
-        profile = await load_profile(session, telegram_user_id)
+        profile = await load_profile(session, telegram_user_id, selected_track_id)
         if profile is None:
-            return RecommendationResult("insufficient_preferences")
+            return RecommendationResult("insufficient_preferences" if selected_track_id is None else "no_candidates")
         if for_display:
-            replay = await replay_batch(session, profile.user_id, batch_id, profile.rated_aliases)
+            replay = await replay_batch(session, profile.user_id, batch_id, profile.rated_aliases, selected_track_id)
             if replay is not None:
                 return replay
         ranked = [row for row in ranked if not row.item.identities & profile.rated_aliases]
@@ -241,7 +254,8 @@ async def persist_selection(database, telegram_user_id, ranked, for_display, bat
                 item.metadata.external_ids.copy(), row.score, row.reason, tuple(sorted(item.sources)), row.exploration))
             if for_display:
                 history_rows.append(dict(user_id=profile.user_id, track_id=track_id, ranking_score=row.score,
-                    reason=row.reason, source=json.dumps({"sources": sorted(item.sources), "exploration": row.exploration}),
+                    reason=row.reason, source=json.dumps({"sources": sorted(item.sources), "exploration": row.exploration,
+                                                         "selected_track_id": selected_track_id}),
                     batch_id=batch_id, position=len(output), recommended_at=utc_now()))
         if external:
             await session.execute(insert(TrackExternalID).values(external).on_conflict_do_nothing(index_elements=["provider", "external_identifier"]))

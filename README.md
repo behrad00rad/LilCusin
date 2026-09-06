@@ -248,6 +248,13 @@ Evaluate an existing user's explicit ratings from the repository root. Replace
 .venv/bin/python -m music_bot.evaluate_recommendations 123456789 --limit 5 --seed 42
 ```
 
+This is **For You**, using every Love/Like rating. For **More Like This**, add
+the selected canonical track ID (shown as `track_id` in evaluation output):
+
+```bash
+.venv/bin/python -m music_bot.evaluate_recommendations 123456789 --track-id 17 --limit 5 --seed 42
+```
+
 This defaults to local/cached data and prints artist, title, internal score,
 reason, source categories and exploration status. It sends no Telegram messages
 and records no recommendation history. Optional `--online` allows cached Last.fm
@@ -263,6 +270,9 @@ from music_bot.recommendations import RecommendationService
 
 service = RecommendationService(database, providers=cached_providers)
 preview = await service.recommend_for_user(telegram_user_id, limit=5, random_seed=42)
+similar = await service.recommend_similar_to_track(
+    telegram_user_id, track_id=17, limit=5, random_seed=42,
+)
 display = await service.recommend_for_user(
     telegram_user_id, limit=5, random_seed=42,
     for_display=True, batch_id="unique-display-request-id",
@@ -283,6 +293,16 @@ engine does not invent a fallback preference. Every rated song is excluded,
 including neutral/disliked songs, with external-ID and Unicode-normalized identity
 checks. Conflicting external IDs are skipped. Display spelling is preserved.
 
+More Like This instead uses only the selected song as its positive seed, with
+request weight 3. This is a temporary focus, not a Love rating: it never creates
+or changes ratings, even if the selected track was unrated, neutral or disliked.
+The user's disliked seeds and shared recommendation history still apply. The
+selected track and its aliases are excluded from results. Reasons refer to the
+song selected rather than claiming the user liked it. This mode needs no positive
+ratings, but does require an existing user and canonical track; an unknown user,
+missing track or no usable matches returns `no_candidates`. Both methods accept
+the same `for_display`, `batch_id` and `random_seed` options.
+
 Candidates come from positive seeds' Last.fm similar-track relationships, shared
 local tags, exact artists, related artists supported by those relationships, and
 compatible successful local audio analyses. Existing MusicBrainz IDs/metadata
@@ -295,6 +315,7 @@ All weights and bounds live in `music_bot/recommendations/settings.py`:
 | Factor | Weight or calculation |
 | --- | --- |
 | Explicit ratings | Love +3, Like +1, Neutral 0, Dislike −3 |
+| More Like This focus | Selected seed 3, independently of its stored rating |
 | Seed affinity | Last.fm 0.45, weighted tags 0.30, artist 0.10, audio 0.15 |
 | Provider similarity | Finite scores clamped to [0, 1]; invalid scores unknown |
 | Tag weights | Provider count / 100, clamped to [0, 1]; unknown weight 0.5; duplicate tags take maximum |
@@ -323,13 +344,19 @@ monotonically decreasing. A fixed random seed gives reproducible choices for
 unchanged data. Small or weak pools can return fewer tracks or fewer exploration
 slots; every exploration candidate still needs positive evidence.
 
-Bounds: 1–20 results, up to 40 positive and 40 negative seeds selected round-robin
-across artists, 10 similar relationships per seed, 20 seed tags, and 100 local
+Bounds: 1–20 results; all positive seeds are scored, with up to 40 negative seeds
+selected round-robin across artists. Retrieval uses 10 similar relationships per
+seed, capped at 400 total positive relationships and a separate 400 negative
+relationship budget, plus at most 800 cached seed entries. It uses 20 tags per
+seed and 100 local
 candidates per source (tags/artists/audio). Tag and artist loading interleaves
-patterns before its cap. At most 700 positive raw entries (400 similar + 300 local)
+patterns before its cap; similar relationships interleave seeds before their cap.
+At most 700 positive raw entries (400 similar + 300 local)
 are deduplicated and compared for affinity, then at most 200 candidates receive
 full negative/history ranking, distributed across dominant positive seeds.
-All rated identities remain excluded even when their ratings exceed seed caps.
+Every Love/Like seed participates in affinity scoring, even when retrieval caps
+omit some of its similar relationships. Every rated identity remains excluded;
+preference loading/scoring cost grows with the user's positive rating count.
 Local audio discovery is capped in canonical-ID order; very large catalogs may
 need a better retrieval strategy later.
 
@@ -348,7 +375,10 @@ always have real track IDs, but never change ratings, submissions or history.
 transaction that rechecks ratings/history. Reusing a batch ID returns its original
 order without inserting more rows; newly rated tracks are removed on replay.
 Reuse the same ID for retries; omit it to generate a fresh UUID for a new display
-request. A repeated batch ignores a changed limit. Concurrent different batches
+request. Batch IDs are unique per user across both modes; reuse for a different
+mode or selected track raises `ValueError` rather than replaying unrelated songs.
+The selected track ID is stored in the existing source JSON, requiring no further
+schema change. A repeated batch ignores a changed limit. Concurrent different batches
 may return fewer tracks after the final exclusion recheck. Empty batches have no
 stored rows and can be regenerated when metadata becomes available.
 
@@ -363,6 +393,8 @@ Recommendation tests use synthetic Love/Like/Neutral/Dislike fixtures, mocked
 providers and temporary SQLite databases. They cover scoring, mixed tastes,
 Persian aliases, exclusions, missing metadata, stale cache, timeouts, history,
 concurrency, migration, candidate caps and a query-count regression guard.
+Focused mode tests also verify selected-track focus, unchanged ratings, shared
+history, safe batch replay, empty results and cached fallback during failure.
 
 Limitations: quality depends on the user's explicit ratings and catalog coverage.
 Sparse Persian tags/similar links may yield fewer or no results. Normalization

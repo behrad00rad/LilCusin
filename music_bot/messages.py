@@ -95,3 +95,12 @@ REC_ARTIST = "Same artist as a song you liked"
 REC_RELATED_ARTIST = "An artist connected to your liked songs through similar-track metadata"
 REC_INSUFFICIENT = "insufficient_preferences: rate at least one song Love or Like first."
 REC_EMPTY = "no_candidates: no fresh, unrated matches are available from the current metadata."
+REC_SELECTED_REASONS = {
+    REC_SIMILAR_LIKE: "Similar to the song you selected",
+    REC_TAGS: "Matches several tags from the song you selected",
+    REC_SHARED_TAG: "Shares a tag with the song you selected",
+    REC_TEMPO: "Close in tempo to the song you selected",
+    REC_AUDIO: "Shares measured audio characteristics with the song you selected",
+    REC_ARTIST: "Same artist as the song you selected",
+    REC_RELATED_ARTIST: "An artist connected to the selected song through similar-track metadata",
+}

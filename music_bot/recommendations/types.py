@@ -18,7 +18,7 @@ class Item:
 @dataclass
 class Seed:
     item: Item
-    rating: str
+    rating: str | None  # None is an explicitly selected seed, not an inferred rating.
 
 
 @dataclass
@@ -30,6 +30,7 @@ class Profile:
     rated_aliases: set[tuple]
     history: dict[int, datetime]
     history_aliases: dict[tuple, datetime] = field(default_factory=dict)
+    selected_track_id: int | None = None
 
 
 @dataclass

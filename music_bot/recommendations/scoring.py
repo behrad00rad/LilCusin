@@ -10,6 +10,10 @@ from . import settings as S
 from .types import Item, Ranked, Seed
 
 
+def seed_weight(seed):
+    return S.SELECTED_SEED_WEIGHT if seed.rating is None else S.RATING_WEIGHTS[seed.rating]
+
+
 def clamp(value, default=None):
     if isinstance(value, bool):
         return default
@@ -93,7 +97,7 @@ def rank_candidate(candidate, profile, related_artists, now):
     evidence_rows = []
     for seed in profile.positives:
         affinity, values, tempo = evidence(seed, candidate, related_artists)
-        weighted = affinity * S.RATING_WEIGHTS[seed.rating] / S.RATING_WEIGHTS["love"]
+        weighted = affinity * seed_weight(seed) / S.RATING_WEIGHTS["love"]
         evidence_rows.append((weighted, seed, affinity, values, tempo))
     evidence_rows.sort(key=lambda row: (-row[0], row[1].item.track_id))
     best, seed, affinity, signals, tempo = evidence_rows[0]
@@ -134,6 +138,8 @@ def rank_candidate(candidate, profile, related_artists, now):
         reason = messages.REC_RELATED_ARTIST
     else:
         reason = messages.REC_SHARED_TAG
+    if seed.rating is None:
+        reason = messages.REC_SELECTED_REASONS[reason]
     return Ranked(candidate, score, reason, seed.item.track_id, affinity)
 
 

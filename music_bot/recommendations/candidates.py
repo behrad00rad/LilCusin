@@ -13,7 +13,7 @@ from ..models import ProviderCache, utc_now
 from ..providers.common import ProviderError, TrackCandidate
 from . import settings as S
 from .repository import aliases, load_edges, load_items, local_candidates, resolve_tracks
-from .scoring import clamp, evidence, tag_weight
+from .scoring import clamp, evidence, seed_weight, tag_weight
 from .types import Item
 
 logger = logging.getLogger(__name__)
@@ -70,6 +70,21 @@ def deduplicate(items):
     return list(groups.values())
 
 
+def bound_relationships(relationships, positive_ids):
+    bounded = defaultdict(list)
+    for positive in (True, False):
+        seed_ids = sorted(key for key in relationships if (key in positive_ids) == positive)
+        count = 0
+        for position in range(S.MAX_EDGES_PER_SEED):
+            for seed_id in seed_ids:
+                if position < len(relationships[seed_id]) and count < S.MAX_SIMILAR_CANDIDATES:
+                    bounded[seed_id].append(relationships[seed_id][position])
+                    count += 1
+            if count == S.MAX_SIMILAR_CANDIDATES:
+                break
+    return bounded
+
+
 async def generate(database, profile, providers, limit):
     now = utc_now()
     seeds = profile.positives + profile.negatives
@@ -78,8 +93,10 @@ async def generate(database, profile, providers, limit):
             (seed.item.metadata.artist, seed.item.metadata.title)) for seed in seeds}
     relationships, fresh, related_artists = defaultdict(list), set(), {}
     async with database.sessions() as session:
-        edges = await load_edges(session, list(keys))
-        cached = {row.key: row for row in await session.scalars(select(ProviderCache).where(ProviderCache.key.in_(keys.values())))}
+        edges = await load_edges(session, sorted(positive_ids))
+        edges += await load_edges(session, sorted(set(keys) - positive_ids))
+        cached = {row.key: row for row in await session.scalars(select(ProviderCache)
+                  .where(ProviderCache.key.in_(keys.values())).order_by(ProviderCache.key).limit(S.MAX_CACHED_SEEDS))}
     for edge in edges:
         if edge.provider != "lastfm" or edge.updated_at + S.RELATIONSHIP_TTL + S.RELATIONSHIP_GRACE <= now:
             continue
@@ -103,6 +120,8 @@ async def generate(database, profile, providers, limit):
                     relationships[seed_id] = values[:S.MAX_EDGES_PER_SEED]
                 elif values and seed_id not in fresh:
                     relationships[seed_id] = values[:S.MAX_EDGES_PER_SEED]
+
+    relationships = bound_relationships(relationships, positive_ids)
 
     def related():
         result = {}
@@ -136,6 +155,7 @@ async def generate(database, profile, providers, limit):
             except (ProviderError, TimeoutError):
                 # Do not log exception bodies, identities, URLs or provider payloads.
                 logger.warning("Recommendation provider unavailable; using cached/local candidates.")
+        relationships = bound_relationships(relationships, positive_ids)
         related_artists = related()
         async with database.sessions() as session:
             local = await local_candidates(session, profile, related_artists)
@@ -180,7 +200,7 @@ async def generate(database, profile, providers, limit):
     # Cap fairly across dominant seed patterns, not by most recent submission.
     groups = defaultdict(list)
     for item in candidates:
-        scores = [(evidence(seed, item, related_artists)[0] * S.RATING_WEIGHTS[seed.rating], seed.item.track_id)
+        scores = [(evidence(seed, item, related_artists)[0] * seed_weight(seed), seed.item.track_id)
                   for seed in profile.positives]
         affinity, seed_id = max(scores, key=lambda pair: (pair[0], -pair[1]))
         if affinity > 0:
