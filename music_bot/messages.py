@@ -74,24 +74,10 @@ def rating_label(value, selected):
     return ("✓ " if value == selected else "") + RATING_LABELS[value]
 
 
-AUDIO_ANALYSIS_FAILED = "Local audio analysis could not finish for this file. Your confirmed song and rating are kept."
-AUDIO_BPM_UNKNOWN = "Audio analysis complete. A BPM estimate could not be obtained."
-
-
-def audio_analysis_complete(bpm):
-    if bpm is None:
-        return AUDIO_BPM_UNKNOWN
-    return (f"Audio analysis complete.\nEstimated BPM: {bpm:.0f}\n\n"
-            "BPM is an estimate and may occasionally be detected at half or double tempo.")
-
-
 REC_SIMILAR_LOVE = "Similar to a song you loved"
 REC_SIMILAR_LIKE = "Similar to a song you liked"
 REC_TAGS = "Matches several tags from a song you liked"
 REC_SHARED_TAG = "Shares a tag with a song you liked"
-REC_TEMPO_TAGS = "Close in tempo and shared tags to two songs you rated positively"
-REC_TEMPO = "Close in tempo to a song you liked"
-REC_AUDIO = "Shares measured audio characteristics with a song you liked"
 REC_ARTIST = "Same artist as a song you liked"
 REC_RELATED_ARTIST = "An artist connected to your liked songs through similar-track metadata"
 REC_INSUFFICIENT = "insufficient_preferences: rate a song Love/Like or connect a playlist with identified songs."
@@ -100,8 +86,6 @@ REC_SELECTED_REASONS = {
     REC_SIMILAR_LIKE: "Similar to the song you selected",
     REC_TAGS: "Matches several tags from the song you selected",
     REC_SHARED_TAG: "Shares a tag with the song you selected",
-    REC_TEMPO: "Close in tempo to the song you selected",
-    REC_AUDIO: "Shares measured audio characteristics with the song you selected",
     REC_ARTIST: "Same artist as the song you selected",
     REC_RELATED_ARTIST: "An artist connected to the selected song through similar-track metadata",
 }
@@ -112,8 +96,9 @@ MENU_PROFILE = '🧠 My Taste'
 MENU_CHANNELS = '📻 Playlist Channels'
 MENU_SETTINGS = '⚙️ Settings'
 MENU_HELP = 'ℹ️ Help'
-MORE_LIKE = '✨ More Like This'
-AFTER_FOR_YOU = '🎧 For You'
+SEND_SONG_PROMPT = 'Send or forward a Telegram audio file, or type Artist - Song title.'
+MORE_LIKE = '🎯 More Like This'
+AFTER_FOR_YOU = '✨ Recommendations for You'
 DONE = 'Done'
 MAIN_MENU = 'Main menu'
 ANOTHER_LIST = 'Another list'
@@ -139,16 +124,31 @@ TASTE_TEXT = ('🧠 My Taste\n\nTop artists: {artists}\nTags: {tags}\n'
               'Ratings: ❤️ {love}  👍 {like}  😐 {neutral}  👎 {dislike}\n'
               'Songs: {songs} · Signals: {signals}\nPlaylist channels: {channels}\n\n{explanation}')
 TASTE_EXPLANATION = 'Ratings are explicit preferences; playlist activity is an inferred signal. I will refine this as you teach me.'
+TASTE_ARTISTS = 'Top Artists'
+TASTE_TAGS = 'Genres & Tags'
+TASTE_CLUSTERS = 'Taste Clusters'
+TASTE_RECENT = 'Recent Activity'
+TASTE_CORRECT = 'Correct My Taste'
+TASTE_RESET = 'Reset Learning Data'
+TASTE_RESET_CONFIRM = 'Reset your ratings and inferred learning signals? Your submissions and connected channels will stay.'
+TASTE_RESET_DONE = 'Learning data reset. Your submissions and playlist connections are still here.'
+TASTE_CORRECT_HELP = 'Choose an artist or tag to reduce. Positive ratings become neutral and matching inferred signals are removed.'
+TASTE_CORRECTED = 'That preference was reduced.'
+TASTE_RELIABILITY_LOW = 'Early estimate — add more ratings for a reliable picture.'
+TASTE_RELIABILITY_GOOD = 'Based on enough explicit and inferred signals to show a useful pattern.'
+SETTINGS_TEXT = 'Settings\n\nUse /privacy to review stored data or /forgetme to remove your account data.'
+BACK = '‹ Back'
+CANCEL = 'Cancel'
+RESET_CONFIRM = 'Yes, reset'
 PRIVACY = (
     'I store your Telegram user ID and basic profile fields, song submissions, explicit ratings, '
-    'recommendation history, and extracted music metadata/audio features. Short-lived button state '
+    'recommendation history, and music metadata. Short-lived button state '
     'keeps your controls private. Song artist/title metadata is sent to Last.fm and sometimes MusicBrainz '
-    'for identification and enrichment. Submitted audio is processed temporarily and is not intentionally '
-    'stored permanently. Shared song metadata can be reused for other users. Only explicit ratings '
+    'for identification and enrichment. Shared song metadata can be reused for other users. Only explicit ratings '
     'affect your preferences; forwarding, navigation, links and silence do not. Use /forgetme to remove '
     'your personal records. This does not remove messages already stored in Telegram or provider records.'
 )
-FORGET_CONFIRM = 'Remove your profile, submissions, ratings, recommendation history and user-linked audio analyses? Shared song metadata and other users’ data will be kept.'
+FORGET_CONFIRM = 'Remove your profile, submissions, ratings and recommendation history? Shared song metadata and other users’ data will be kept.'
 FORGET_YES = 'Yes, remove my data'
 FORGET_NO = 'Cancel'
 FORGET_DONE = 'Your personal data has been removed. Shared song metadata is kept. You can start again whenever you choose.'
@@ -205,9 +205,6 @@ REC_PLAYLIST_REASONS = {
     REC_SIMILAR_LIKE: 'Similar to a song in your saved playlist',
     REC_TAGS: 'Matches several tags from a song in your saved playlist',
     REC_SHARED_TAG: 'Shares a tag with a song in your saved playlist',
-    REC_TEMPO: 'Close in tempo to a song in your saved playlist',
-    REC_AUDIO: 'Shares audio characteristics with a song in your saved playlist',
     REC_ARTIST: 'Same artist as a song in your saved playlist',
     REC_RELATED_ARTIST: 'An artist connected to your playlist through similar-track metadata',
-    REC_TEMPO_TAGS: 'Close in tempo and shared tags to songs in your music profile',
 }

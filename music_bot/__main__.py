@@ -18,7 +18,7 @@ from .workflow import Workflow
 from .lifecycle import UpdateTasks, PrivateActions, ChannelUpdates
 from .channels import ChannelService
 from .channel_handlers import router as channel_router
-from .audio.service import AudioAnalysisService
+from .taste_ui import router as taste_router
 from .chat_service import ChatService
 from .recommendations import RecommendationService
 from . import messages
@@ -60,9 +60,6 @@ async def main() -> None:
                                         MusicBrainzClient(provider_session))
             enrichment = Enrichment(database, providers)
             stack.push_async_callback(enrichment.close)
-            audio_analysis = AudioAnalysisService(database, bot, config)
-            stack.push_async_callback(audio_analysis.close)
-            await audio_analysis.initialize()
             workflow = Workflow(database, providers)
             channels = ChannelService(database, workflow)
             await channels.initialize()
@@ -77,6 +74,7 @@ async def main() -> None:
             dispatcher.channel_post.outer_middleware(channel_updates)
             dispatcher.my_chat_member.outer_middleware(channel_updates)
             dispatcher.include_router(channel_router)
+            dispatcher.include_router(taste_router)
             dispatcher.include_router(router)
             await bot.set_my_commands([BotCommand(command=command, description=description)
                                       for command, description in messages.COMMAND_DESCRIPTIONS.items()],
@@ -88,7 +86,6 @@ async def main() -> None:
                 close_bot_session=False, handle_as_tasks=True, tasks_concurrency_limit=20,
                 submissions=SubmissionService(database), workflow=workflow,
                 enrichment=enrichment,
-                audio_analysis=audio_analysis,
                 chat_service=ChatService(database, RecommendationService(database, providers)),
                 channel_service=channels,
             )

@@ -6,8 +6,7 @@ Requires Python 3.12. `/start` and `/help` introduce the bot. Users can submit
 Telegram audio (including forwarded audio) or text as `Artist - Song title`.
 Spaced Unicode dashes work too: `گوگوش — من آمده‌ام`. The bot identifies songs,
 asks for confirmation when needed, and collects Love/Like/Neutral/Dislike ratings.
-Confirmed Telegram audio can also be analysed locally for estimated BPM and
-compact numerical features. Private-chat menus now offer For You recommendations,
+Private-chat menus now offer For You recommendations,
 More Like This, recommendation ratings, a profile summary and personal-data removal.
 The recommendation engine is also available through its application service and CLI.
 
@@ -19,32 +18,12 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
-Local audio analysis also needs FFmpeg/ffprobe. If they are missing:
-
-```bash
-sudo apt-get update
-sudo apt-get install -y --no-install-recommends ffmpeg
-```
-
-FFmpeg absence disables analysis gracefully; identification and rating still work.
-
 Create `.env` in the repository root using `.env.example` as a template if you
 do not already have one. Set both required variables:
 
 - `TELEGRAM_BOT_TOKEN`: your BotFather token.
 - `LASTFM_API_KEY`: your Last.fm API key for identification and enrichment.
   No shared secret or Last.fm user authentication is needed.
-
-Optional nonsecret limits (defaults shown; invalid/out-of-range values stop startup):
-
-```env
-MAX_AUDIO_FILE_MB=20
-MAX_AUDIO_DURATION_SECONDS=900
-AUDIO_ANALYSIS_CONCURRENCY=2
-```
-
-Allowed ranges: 1–20 decimal MB, 1–900 seconds, and 1–2 concurrent analyses.
-Text submissions require no audio and are skipped normally by local analysis.
 
 Keep secret values out of Git and logs. `.env` is ignored. Existing environment
 variables take precedence over `.env`. Startup stops if either value is missing
@@ -81,24 +60,23 @@ round-trip as timezone-aware values; durations are seconds.
 
 Models: `User`, `Track`, `TrackExternalID`, `TrackTag`, `SongSubmission`, `Rating`,
 and `RecommendationHistory`, plus `IdentificationFlow`, `ProviderCache` and
-`SimilarTrack`. Task 8 adds `AudioAnalysis` through the same repeatable
-table-creation approach, without changing or recreating existing tables.
+`SimilarTrack`. Legacy audio-analysis columns remain readable for database
+compatibility, but the bot no longer performs local audio or BPM analysis.
 New canonical track keys also normalize punctuation, Arabic/Persian
 yeh/kaf, diacritics and spacing; separate display columns preserve source spelling.
 Existing track keys are preserved. Stable external IDs are checked first when
 reusing tracks. Unique constraints and reserved SQLite write transactions prevent
 duplicate confirmations and ratings. Recommendation display batches now use the
 existing history table with nullable score, batch ID and position fields.
-Only Telegram metadata/file identifiers and compact extracted features are stored.
-Audio for analysis is downloaded temporarily and never stored in SQLite or the
-repository. The database contains user data and is ignored by Git.
+Only Telegram metadata and file identifiers are stored for submissions. The
+database contains user data and is ignored by Git.
 
 Use a **private chat**. Text/audio metadata starts a search in Last.fm. Weak,
 incomplete or absent results also trigger MusicBrainz. Artist and title each
 contribute 45% of confidence using normalized string similarity; provider relevance
-contributes 10% (neutral 0.5 when unavailable). Automatic selection requires exact
-normalized artist and title, an external ID, confidence at least 0.94, a lead of
-at least 0.08 over the next candidate, and no provider failure. Otherwise up to
+contributes 10% (neutral 0.5 when unavailable). Automatic selection accepts exact
+normalized names immediately, both name scores at least 0.90, or combined confidence
+at least 0.90 with a lead of at least 0.08 and no stable-ID conflict or provider failure. Otherwise up to
 five plausible candidates and **None of these** are shown. This is metadata
 matching, not acoustic identification or a guarantee of the correct recording.
 
@@ -135,68 +113,6 @@ past expiry**. Authentication failures are never cached as successes or hidden b
 stale fallback. Fresh entries avoid HTTP calls; concurrent identical calls share
 one request. Provider operations have an additional 8-second deadline. Handler
 and enrichment tasks are cancelled and observed before resources close at shutdown.
-
-After a confirmed **audio** submission's rating prompt appears, local analysis
-is scheduled separately. It does not depend on the rating value. One successful
-compatible analysis is reused per canonical track/analyzer version, including
-submissions by other users. The first successful recording supplies that track's
-features; different performances of a song can differ. `Track.bpm` is written only
-by the latest successful local analysis, and is null when tempo could not be
-estimated. Failures retain prior successful versions and do not undo ratings.
-
-`music_bot/audio/` separates download validation, FFmpeg conversion, synchronous
-feature extraction, killable worker execution, and async persistence/scheduling.
-CPU processing runs in a dedicated local Python subprocess rather than an
-uncancellable worker thread, so timeout/cancellation can stop it before cleanup.
-No live DB session or secret environment variables enter a worker. No remote
-audio-analysis service or machine-learning model is used.
-
-Reported size/duration/MIME/extension are checked before download. Missing labels
-defer to content validation; inaccurate sizes are caught by a bounded streaming
-sink. Internally generated filenames live in isolated OS-managed directories
-under `/tmp`, never the repository. FFprobe checks content and duration; FFmpeg
-permits only expected audio containers and local file/pipe protocols, uses no
-shell, and decodes one stream to mono 22,050 Hz, 16-bit PCM. Decoded duration and
-output size are bounded even when container metadata is wrong. Original filenames
-are never used as paths. Input, WAV and worker cache files are removed on success,
-failure, timeout and orderly cancellation. An OS-level kill or machine loss cannot
-run Python cleanup; OS temporary storage may need reclamation after such a crash.
-
-Analysis has a **180-second total deadline including queue time**: Telegram file
-lookup is limited to 10 seconds, download to 30, probing to 10, FFmpeg conversion
-to 30, and librosa to 120. At most twice the configured concurrency may be queued
-or running. Each user may have one active job, with a 60-second cooldown after
-completion. Failed jobs may retry through a subsequent confirmation or submission,
-up to three attempts for the same submission. There is no forced-analysis command.
-Workers use one numerical-library thread, a 2 GiB address-space ceiling and a
-120-second CPU limit. Subprocess output is capped at 16 KiB; raw diagnostics and
-paths are not logged. Slow/large files can hit limits and fail without blocking ratings.
-
-`AudioAnalysis` stores status (`pending`, `processing`, `succeeded`, `failed`),
-safe error category, source submission/user, analyzer name/version, timestamps,
-BPM estimate and a small validated JSON feature summary. A unique constraint on
-track/analyzer/version prevents duplicate successes. Startup marks interrupted
-pending/processing jobs failed and retryable; it does not download old files
-automatically. No existing submissions, users or ratings are modified by analysis.
-
-Stored features and units:
-
-| Feature | Unit/meaning |
-| --- | --- |
-| BPM, beat count | Estimated beats/minute; number of detected beats |
-| Mean onset strength | librosa positive spectral-flux measure; not confidence |
-| RMS mean/std | Linear amplitude relative to PCM full scale |
-| Spectral centroid/bandwidth/85% rolloff mean/std | Hz |
-| Zero-crossing rate mean/std | Fraction of crossings per frame |
-| Chroma mean | 12 dimensionless normalized pitch-class values, C through B |
-| Analysed duration, sample rate | Seconds; Hz |
-
-Values retain numerical precision in storage and must be finite/nonnegative.
-Unknown BPM remains null. BPM can land at half/double perceived tempo; no assumed
-correction or accuracy percentage is applied. No genre, mood, danceability or other
-semantic labels are inferred. A successful new analysis sends one short result
-message; ordinary failure sends at most one generic message per admitted attempt.
-Cached reuse and text submissions send no analysis notification.
 
 Run the automated tests (standard-library unittest; all HTTP is mocked):
 
@@ -305,11 +221,9 @@ missing track or no usable matches returns `no_candidates`. Both methods accept
 the same `for_display`, `batch_id` and `random_seed` options.
 
 Candidates come from positive seeds' Last.fm similar-track relationships, shared
-local tags, exact artists, related artists supported by those relationships, and
-compatible successful local audio analyses. Existing MusicBrainz IDs/metadata
+local tags, exact artists and related artists supported by those relationships. Existing MusicBrainz IDs/metadata
 help resolve canonical identity; this engine makes no MusicBrainz requests.
-Tags are community metadata, not predicted genres. Features must have the same
-analyzer name, version and sample rate; missing features remain unknown.
+Tags are community metadata, not predicted genres.
 
 All weights and bounds live in `music_bot/recommendations/settings.py`:
 
@@ -317,17 +231,13 @@ All weights and bounds live in `music_bot/recommendations/settings.py`:
 | --- | --- |
 | Explicit ratings | Love +3, Like +1, Neutral 0, Dislike −3 |
 | More Like This focus | Selected seed 3, independently of its stored rating |
-| Seed affinity | Last.fm 0.45, weighted tags 0.30, artist 0.10, audio 0.15 |
+| Seed affinity | Last.fm 0.55, weighted tags 0.35, artist 0.10 |
 | Provider similarity | Finite scores clamped to [0, 1]; invalid scores unknown |
 | Tag weights | Provider count / 100, clamped to [0, 1]; unknown weight 0.5; duplicate tags take maximum |
 | Tag similarity | Weighted Jaccard: sum of minimum weights / sum of maximum weights |
 | Artist | Exact normalized match 1; supported related artist 0.5 × strongest relationship; otherwise 0 |
-| Audio | BPM 0.50, spectral 0.30, RMS 0.10, chroma 0.10 |
-| BPM similarity | `exp(-abs(log2(bpm_a / bpm_b)) / 0.25)`; no half/double correction |
-| Spectral/RMS similarity | `1 - abs(a-b) / max(a,b)`; both zero gives 1; spectral averages centroid, bandwidth, rolloff and zero-crossing means |
-| Chroma | Cosine similarity of 12 pitch-class means; zero vectors are unknown |
 | Positive score | Best `affinity × rating / 3`, plus 0.15 × each of the next two positive contributions; capped at 1 |
-| Close negative evidence | Last.fm ≥0.70; or tag similarity ≥0.60 with ≥2 shared tags; or audio ≥0.85 and tags ≥0.25 |
+| Close negative evidence | Last.fm ≥0.70; or tag similarity ≥0.60 with ≥2 shared tags |
 | Negative penalty | Each close negative contributes `3 × affinity`; subtract 0.10 × strongest and 0.15 × each of next two as a fraction of score, capped at 90% reduction |
 | History | Suppress for 7 days; multiply score by 0.35 from 7–30 days; no penalty after 30 days |
 | Variety | Selection priority divided by `(1 + 0.75 × already selected from this seed)` and `(1 + 0.25 × already selected from this artist)` |
@@ -336,8 +246,8 @@ All weights and bounds live in `music_bot/recommendations/settings.py`:
 
 Missing optional signals leave the weighted denominator; they are not zero-quality
 evidence. Artist mismatch and measured tag non-overlap are actual zero signals.
-Separate seed scores preserve taste patterns rather than averaging audio vectors
-or all genres into one profile. One disliked artist or one shared broad tag is
+Separate seed scores preserve taste patterns instead of averaging all genres into
+one profile. One disliked artist or one shared broad tag is
 insufficient to penalize an entire artist/genre. Multiple close dislikes can
 reduce a candidate by up to 90%. Explanations name evidence actually present.
 The returned score precedes variety selection, so output scores need not be
@@ -349,8 +259,7 @@ Bounds: 1–20 results; all positive seeds are scored, with up to 40 negative se
 selected round-robin across artists. Retrieval uses 10 similar relationships per
 seed, capped at 400 total positive relationships and a separate 400 negative
 relationship budget, plus at most 800 cached seed entries. It uses 20 tags per
-seed and 100 local
-candidates per source (tags/artists/audio). Tag and artist loading interleaves
+seed and 100 local candidates per source (tags/artists). Tag and artist loading interleaves
 patterns before its cap; similar relationships interleave seeds before their cap.
 At most 700 positive raw entries (400 similar + 300 local)
 are deduplicated and compared for affinity, then at most 200 candidates receive
@@ -358,10 +267,8 @@ full negative/history ranking, distributed across dominant positive seeds.
 Every Love/Like seed participates in affinity scoring, even when retrieval caps
 omit some of its similar relationships. Every rated identity remains excluded;
 preference loading/scoring cost grows with the user's positive rating count.
-Local audio discovery is capped in canonical-ID order; very large catalogs may
-need a better retrieval strategy later.
 
-Database reads use bulk joins/IN queries, including metadata, IDs, features and
+Database reads use bulk joins/IN queries, including metadata, IDs and
 cached relationships. No per-candidate SQL or provider lookup is performed.
 Sparse pools may make at most three sequential cache-backed Last.fm calls, each
 with an 8-second deadline (up to 24 seconds total). Fresh relationships/entries
@@ -400,8 +307,7 @@ history, safe batch replay, empty results and cached fallback during failure.
 Limitations: quality depends on the user's explicit ratings and catalog coverage.
 Sparse Persian tags/similar links may yield fewer or no results. Normalization
 handles script variants and spacing but does not translate or transliterate.
-Different recordings can share names, provider IDs can be incomplete, BPM may
-be half/double perceived tempo, and numerical similarity does not establish genre,
+Different recordings can share names, provider IDs can be incomplete, and metadata similarity does not establish genre,
 mood or perceptual equivalence. This is an explainable heuristic, not a trained
 model or a guarantee of user satisfaction.
 
@@ -413,8 +319,8 @@ Run the bot from the repository root:
 .venv/bin/python -m music_bot
 ```
 
-`/start` opens **Send a song**, **For You**, **My Music Profile**, and **Help**.
-The private-chat command menu registers `/start`, `/recommend`, `/profile`,
+`/start` opens **Send a Song**, **Recommendations**, **My Taste**, **Playlist Channels**, **Settings**, and **Help**.
+The private-chat command menu registers `/start`, `/recommend`, `/taste`, `/profile`,
 `/help`, `/privacy`, `/forgetme`, and `/cancel`.
 
 Send or forward Telegram audio, or submit `Artist - Song title`. Identification
@@ -439,7 +345,7 @@ recommendation entries shown (including later redisplays).
 `chat_service.py` handles authorization, UI state, history, profiles and removal;
 `chat_ui.py` formats lists/cards and validates links; `chat_handlers.py` handles
 navigation. Both submission and recommendation ratings share the same upsert in
-`workflow.py`. Existing handlers and background enrichment/analysis are retained.
+`workflow.py`. Existing handlers and background enrichment are retained.
 
 One new `chat_controls` table is created additively by the existing initialization
 path. Random compact tokens bind actions to the owning user, Telegram message,
@@ -458,12 +364,10 @@ a successful send can leave that delivered list unrecorded. Controls from delete
 expired or inaccessible messages are rejected safely.
 
 `/privacy` explains profile/submission/rating/history storage, shared metadata,
-provider metadata requests and temporary audio processing. `/forgetme` requires
-an owner-checked confirmation with a cancel option. It cancels and drains that
-user's active audio jobs, then deletes their controls, identification state,
-submissions, ratings, history, audio-analysis rows and profile in one transaction.
+provider metadata requests. `/forgetme` requires
+an owner-checked confirmation with a cancel option. It deletes their controls,
+identification state, submissions, ratings, history and profile in one transaction.
 Canonical tracks, external IDs, tags, cached metadata and other users' rows remain.
-Shared numerical track metadata such as BPM is retained without user linkage.
 Messages already in Telegram and provider-side records are outside this deletion.
 Old controls cannot recreate a deleted account; a new explicit interaction can.
 
@@ -504,9 +408,8 @@ a normal owner-linked submission for the existing identification service. Databa
 constraints deduplicate message deliveries and same-file reposts within a channel.
 Different uploads resolving to the same canonical track create at most one signal
 per user/channel/track. Signals from multiple channels combine by **maximum**, not
-sum, in the recommendation profile. Channel audio is metadata-only: the existing
-audio-analysis service explicitly skips these submissions, including after manual
-confirmation. It does not fetch or download their audio.
+sum, in the recommendation profile. Channel audio is metadata-only; the bot does
+not fetch or download it.
 
 Confident identification links the canonical track and adds a `playlist_channel`
 signal without sending a private success message for every import. Existing cached

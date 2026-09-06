@@ -9,7 +9,6 @@ class Item:
     metadata: TrackCandidate
     track_id: int | None = None
     tags: dict[str, float] = field(default_factory=dict)
-    analyses: dict[tuple[str, str, int], dict] = field(default_factory=dict)
     links: dict[int, float | None] = field(default_factory=dict)
     sources: set[str] = field(default_factory=set)
     identities: set[tuple] = field(default_factory=set)

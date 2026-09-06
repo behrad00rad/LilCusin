@@ -47,6 +47,7 @@ async def connect_prompt(message, user, channel_service, chat_service):
     await message.answer(M.CHANNEL_INSTRUCTIONS.format(code=code), parse_mode=None)
 
 
+@router.message(F.text.in_({M.MENU_CHANNELS}))
 @router.message(Command('connectchannel', 'channels', 'disconnectchannel'))
 async def command(message, channel_service, chat_service):
     if message.chat.type != 'private' or message.from_user is None or message.from_user.is_bot:
@@ -85,7 +86,7 @@ async def callback(query, channel_service, chat_service, workflow, enrichment):
             await chat_service.bind_control(token, sent.message_id)
         elif action == 'review':
             result = await channel_service.review(query.from_user.id, channel.id)
-            await present(query.message, result, query.from_user.id, workflow, enrichment, None, chat_service)
+            await present(query.message, result, query.from_user.id, workflow, enrichment, chat_service)
         else:
             await channel_service.disconnect(query.from_user.id, channel.id, action == 'remove')
             await query.message.answer(M.CHANNEL_REMOVED if action == 'remove' else M.CHANNEL_DISCONNECTED, reply_markup=main_menu())
@@ -129,7 +130,7 @@ async def channel_post(message, bot, channel_service, workflow, enrichment, chat
             enrichment.schedule(result.track_id)
             return
         anchor = await bot.send_message(user_id, M.CHANNEL_REVIEW_INTRO)
-        await present(anchor, result, user_id, workflow, enrichment, None, chat_service)
+        await present(anchor, result, user_id, workflow, enrichment, chat_service)
     except (TelegramBadRequest, TelegramForbiddenError, FlowError):
         pass  # Pending records remain available through /channels.
     except Exception:

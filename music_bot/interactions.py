@@ -30,7 +30,7 @@ def rating_keyboard(result):
     ]])
 
 
-async def present(message, result, user_id, workflow, enrichment, audio_analysis=None, chat_service=None):
+async def present(message, result, user_id, workflow, enrichment, chat_service=None):
     if result.kind == "confirmed":
         if chat_service is not None:
             from .chat_ui import show_card
@@ -39,8 +39,6 @@ async def present(message, result, user_id, workflow, enrichment, audio_analysis
         else:
             await message.answer(messages.rating_prompt(result.artist, result.title), reply_markup=rating_keyboard(result))
         enrichment.schedule(result.track_id)
-        if audio_analysis is not None:
-            await audio_analysis.schedule(result.submission_id, user_id)
     elif result.kind == "candidates":
         rows = [[InlineKeyboardButton(
             text=messages.candidate_label(candidate.artist, candidate.title),

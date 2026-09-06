@@ -1,6 +1,6 @@
 """Additive legacy-column upgrades.
 
-New tables (including Task 8 audio_analyses) are added by create_all immediately
+New tables are added by create_all immediately
 after this function. Existing tables and records are never rebuilt or deleted.
 """
 

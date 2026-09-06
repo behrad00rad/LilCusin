@@ -35,9 +35,10 @@ async def help_command(message: Message) -> None:
                          reply_markup=main_menu() if message.chat.type == "private" else None)
 
 
-router.message.register(chat_handlers.command, Command("recommend", "profile", "privacy", "forgetme"))
+router.message.register(chat_handlers.command, Command("recommend", "profile", "taste", "privacy", "forgetme"))
 router.message.register(chat_handlers.command, F.text.in_({messages.MENU_SEND, messages.MENU_FOR_YOU,
-                                                        messages.MENU_PROFILE, messages.MENU_HELP}))
+                                                        messages.MENU_PROFILE, messages.MENU_SETTINGS,
+                                                        messages.MENU_HELP}))
 router.callback_query.register(chat_handlers.callback, F.data.startswith("q:"))
 
 
@@ -61,7 +62,7 @@ def submitter(message: Message) -> Submitter | None:
 
 @router.message(F.audio)
 async def audio_submission(message: Message, submissions: SubmissionService,
-                           workflow: Workflow, enrichment: Enrichment, audio_analysis=None, chat_service=None) -> None:
+                           workflow: Workflow, enrichment: Enrichment, chat_service=None) -> None:
     if message.chat.type != "private":
         await message.answer(messages.PRIVATE_ONLY)
         return
@@ -82,12 +83,12 @@ async def audio_submission(message: Message, submissions: SubmissionService,
         return
     await message.answer(messages.audio_received(metadata))
     result = await workflow.start(saved.id, user.telegram_user_id)
-    await present(message, result, user.telegram_user_id, workflow, enrichment, audio_analysis, chat_service)
+    await present(message, result, user.telegram_user_id, workflow, enrichment, chat_service)
 
 
 @router.message(F.text, ~F.text.lstrip().startswith("/"))
 async def text_submission(message: Message, submissions: SubmissionService,
-                          workflow: Workflow, enrichment: Enrichment, audio_analysis=None, chat_service=None) -> None:
+                          workflow: Workflow, enrichment: Enrichment, chat_service=None) -> None:
     if message.chat.type != "private":
         await message.answer(messages.PRIVATE_ONLY)
         return
@@ -98,7 +99,7 @@ async def text_submission(message: Message, submissions: SubmissionService,
     try:
         if message.reply_to_message is not None:
             result = await workflow.correct(user.telegram_user_id, message.reply_to_message.message_id, message.text)
-            await present(message, result, user.telegram_user_id, workflow, enrichment, audio_analysis, chat_service)
+            await present(message, result, user.telegram_user_id, workflow, enrichment, chat_service)
             return
         saved = await submissions.submit_text(user, message.text)
     except InvalidSubmission:
@@ -113,7 +114,7 @@ async def text_submission(message: Message, submissions: SubmissionService,
         return
     await message.answer(messages.text_received(saved.parsed_artist, saved.parsed_title))
     result = await workflow.start(saved.id, user.telegram_user_id)
-    await present(message, result, user.telegram_user_id, workflow, enrichment, audio_analysis, chat_service)
+    await present(message, result, user.telegram_user_id, workflow, enrichment, chat_service)
 
 
 @router.message(~F.text)
@@ -122,7 +123,7 @@ async def unsupported_submission(message: Message) -> None:
 
 
 @router.callback_query()
-async def callback(query: CallbackQuery, workflow: Workflow, enrichment: Enrichment, audio_analysis=None, chat_service=None) -> None:
+async def callback(query: CallbackQuery, workflow: Workflow, enrichment: Enrichment, chat_service=None) -> None:
     acknowledgement = messages.STALE
     answered = False
     try:
@@ -148,17 +149,19 @@ async def callback(query: CallbackQuery, workflow: Workflow, enrichment: Enrichm
             if chat_service is not None:
                 from .chat_ui import show_card
                 track = await chat_service.submitted_track(query.from_user.id, result.submission_id)
-                await show_card(query.message, chat_service, query.from_user.id, track, rating=result.rating, submitted=True)
-            try:
-                await query.message.edit_reply_markup(reply_markup=rating_keyboard(result) if chat_service is None else None)
-            except TelegramBadRequest:
-                pass  # Repeated ratings can leave the keyboard unchanged.
+                await show_card(query.message, chat_service, query.from_user.id, track,
+                                rating=result.rating, submitted=True, edit_existing=True)
+            else:
+                try:
+                    await query.message.edit_reply_markup(reply_markup=rating_keyboard(result))
+                except TelegramBadRequest:
+                    pass  # Repeated ratings can leave the keyboard unchanged.
         else:
             try:
                 await query.message.edit_reply_markup(reply_markup=None)
             except TelegramBadRequest:
                 pass
-            await present(query.message, result, query.from_user.id, workflow, enrichment, audio_analysis, chat_service)
+            await present(query.message, result, query.from_user.id, workflow, enrichment, chat_service)
     except FlowError as error:
         acknowledgement = messages.FLOW_FAILED if str(error) == "failure" else messages.STALE
     except Exception:
@@ -171,7 +174,7 @@ async def callback(query: CallbackQuery, workflow: Workflow, enrichment: Enrichm
 
 @router.errors()
 async def unexpected_error(event: ErrorEvent) -> bool:
-    logger.error("Update processing failed; details omitted for privacy.")
+    logger.error("Update processing failed (%s); details omitted for privacy.", type(event.exception).__name__)
     message = event.update.message
     if message is not None:
         await message.answer(messages.FLOW_FAILED)

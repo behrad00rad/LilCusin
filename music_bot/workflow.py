@@ -7,7 +7,11 @@ from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import insert
 
 from .catalog import IdentityConflict, canonical_track
-from .matching import confidence, decode_track, deduplicate, encode_track, similarities, strong_match
+from .matching import confidence, decode_track, deduplicate, encode_track, similarities, match_decision, strong_match
+
+import logging
+
+logger = logging.getLogger("music_bot")
 from .models import IdentificationFlow, Rating, SongSubmission, Track, User, utc_now
 from .providers.common import ProviderError, TrackCandidate
 from .submissions import parse_song
@@ -85,6 +89,12 @@ class Workflow:
         except ProviderError:
             failed = True
         ranked = sorted(deduplicate(candidates), key=lambda c: confidence(artist, title, c), reverse=True)
+        if not strong_match(artist, title, ranked):
+            try:
+                candidates += await self.providers.call("lastfm", "search_tracks", title, artist)
+            except ProviderError:
+                failed = True
+            ranked = sorted(deduplicate(candidates), key=lambda c: confidence(artist, title, c), reverse=True)
         if not strong_match(artist, title, ranked) or (ranked and ranked[0].missing_metadata):
             try:
                 candidates += await self.providers.call("musicbrainz", "search_recordings", artist, title)
@@ -135,7 +145,10 @@ class Workflow:
             if flow.state != "searching":
                 raise FlowError("stale")
             flow.candidates = [encode_track(candidate) for candidate in candidates]
-            if strong_match(artist, title, candidates) and not failed:
+            accepted, reason, metrics = match_decision(artist, title, candidates)
+            logger.info("Identification decision: accepted=%s reason=%s artist=%.3f title=%.3f combined=%.3f margin=%.3f",
+                        accepted and not failed, reason, *metrics)
+            if accepted and not failed:
                 try:
                     track = await canonical_track(session, candidates[0])
                 except IdentityConflict:

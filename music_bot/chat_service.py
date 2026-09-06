@@ -4,10 +4,10 @@ import json
 from datetime import timedelta
 from uuid import uuid4
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.dialects.sqlite import insert
 
-from .models import AudioAnalysis, ChannelConnectionCode, ChannelPost, ChatControl, IdentificationFlow, PlaylistChannel, Rating, RecommendationHistory, SongSubmission, Track, TrackTag, User, UserTrackSignal, utc_now
+from .models import ChannelConnectionCode, ChannelPost, ChatControl, IdentificationFlow, PlaylistChannel, Rating, RecommendationHistory, SongSubmission, Track, TrackTag, User, UserTrackSignal, utc_now
 from .workflow import FlowError, owned_submission, save_rating
 
 CONTROL_TTL = timedelta(minutes=30)
@@ -79,6 +79,14 @@ class ChatService:
                 await save_rating(session, row.user_id, track.id, rating)
             return payload, track
 
+    async def taste_control(self, token, user_id, message_id):
+        async with self.database.sessions() as session:
+            row = await session.scalar(select(ChatControl).join(User).where(
+                ChatControl.token == token, User.telegram_user_id == user_id,
+                ChatControl.message_id == message_id, ChatControl.expires_at > utc_now()))
+            if row is None or row.payload.get('kind') != 'taste':
+                raise FlowError('stale')
+
     async def submitted_track(self, user_id, submission_id):
         async with self.database.sessions() as session:
             submission = await owned_submission(session, submission_id, user_id)
@@ -129,12 +137,70 @@ class ChatService:
                 SongSubmission.user_id == internal, SongSubmission.identification_status == 'confirmed'))
             signals = await session.scalar(select(func.count(UserTrackSignal.id)).where(UserTrackSignal.user_id == internal))
             channels = await session.scalar(select(func.count(PlaylistChannel.id)).where(PlaylistChannel.user_id == internal))
-            artists = (await session.scalars(select(Track.artist).join(Rating, Rating.track_id == Track.id)
-                .where(Rating.user_id == internal).group_by(Track.artist).order_by(func.count().desc()).limit(5))).all()
-            tags = (await session.scalars(select(TrackTag.name).join(Track, Track.id == TrackTag.track_id)
-                .join(Rating, Rating.track_id == Track.id).where(Rating.user_id == internal)
-                .group_by(TrackTag.name).order_by(func.count().desc()).limit(5))).all()
-            return counts, songs or 0, signals or 0, channels or 0, artists, tags
+            positive_tracks = select(Rating.track_id).where(Rating.user_id == internal,
+                                                             Rating.value.in_(['love', 'like']))
+            inferred_tracks = select(UserTrackSignal.track_id).where(UserTrackSignal.user_id == internal)
+            artists = (await session.execute(select(Track.display_artist, Track.artist, func.count())
+                .where(Track.id.in_(positive_tracks)).group_by(Track.artist)
+                .order_by(func.count().desc(), Track.artist).limit(5))).all()
+            inferred_artists = (await session.execute(select(Track.display_artist, Track.artist, func.count())
+                .where(Track.id.in_(inferred_tracks)).group_by(Track.artist)
+                .order_by(func.count().desc(), Track.artist).limit(5))).all()
+            tags = (await session.execute(select(TrackTag.display_name, TrackTag.name, func.count())
+                .where(TrackTag.track_id.in_(positive_tracks)).group_by(TrackTag.name)
+                .order_by(func.count().desc(), TrackTag.name).limit(8))).all()
+            inferred_tags = (await session.execute(select(TrackTag.display_name, TrackTag.name, func.count())
+                .where(TrackTag.track_id.in_(inferred_tracks)).group_by(TrackTag.name)
+                .order_by(func.count().desc(), TrackTag.name).limit(8))).all()
+            recent_ratings = (await session.execute(select(Rating.updated_at, Rating.value, Track.display_artist, Track.artist,
+                Track.display_title, Track.title).join(Track, Track.id == Rating.track_id)
+                .where(Rating.user_id == internal).order_by(Rating.updated_at.desc()).limit(5))).all()
+            recent_signals = (await session.execute(select(UserTrackSignal.created_at, UserTrackSignal.signal_type,
+                Track.display_artist, Track.artist, Track.display_title, Track.title)
+                .join(Track, Track.id == UserTrackSignal.track_id).where(UserTrackSignal.user_id == internal)
+                .order_by(UserTrackSignal.created_at.desc()).limit(5))).all()
+            recent = sorted([('rating', *row) for row in recent_ratings]
+                            + [('inferred', *row) for row in recent_signals], key=lambda row: row[1], reverse=True)[:5]
+            explicit = sum(counts.values())
+            return {'counts': counts, 'songs': songs or 0, 'signals': signals or 0,
+                    'channels': channels or 0, 'artists': artists, 'inferred_artists': inferred_artists,
+                    'tags': tags, 'inferred_tags': inferred_tags, 'recent': recent,
+                    'reliable': explicit + (signals or 0) >= 5}
+
+    async def taste_targets(self, user_id):
+        summary = await self.taste_summary(user_id)
+        if summary is None:
+            return []
+        combined = [*summary['artists'], *summary['inferred_artists']]
+        artists = [('artist', normalized, display or normalized) for display, normalized, _ in combined]
+        combined_tags = [*summary['tags'], *summary['inferred_tags']]
+        tags = [('tag', normalized, display or normalized) for display, normalized, _ in combined_tags]
+        seen, result = set(), []
+        for target in artists + tags:
+            key = target[:2]
+            if key not in seen:
+                seen.add(key)
+                result.append(target)
+        return result[:10]
+
+    async def reduce_taste(self, user_id, kind, value):
+        async with self.database.write() as session:
+            internal = await session.scalar(select(User.id).where(User.telegram_user_id == user_id))
+            if internal is None or kind not in {'artist', 'tag'}:
+                raise FlowError('stale')
+            tracks = select(Track.id).where(Track.artist == value) if kind == 'artist' else select(TrackTag.track_id).where(TrackTag.name == value)
+            await session.execute(delete(UserTrackSignal).where(UserTrackSignal.user_id == internal,
+                                                                 UserTrackSignal.track_id.in_(tracks)))
+            await session.execute(update(Rating).where(Rating.user_id == internal, Rating.track_id.in_(tracks),
+                                                       Rating.value.in_(['love', 'like'])).values(value='neutral', updated_at=utc_now()))
+
+    async def reset_learning(self, user_id):
+        async with self.database.write() as session:
+            internal = await session.scalar(select(User.id).where(User.telegram_user_id == user_id))
+            if internal is None:
+                raise FlowError('stale')
+            await session.execute(delete(Rating).where(Rating.user_id == internal))
+            await session.execute(delete(UserTrackSignal).where(UserTrackSignal.user_id == internal))
 
     async def cancel_controls(self, user_id):
         async with self.database.write() as session:
@@ -142,22 +208,23 @@ class ChatService:
             await session.execute(delete(ChatControl).where(ChatControl.user_id.in_(ids)))
             await session.execute(delete(ChannelConnectionCode).where(ChannelConnectionCode.user_id.in_(ids)))
 
-    async def forget(self, user_id, audio_analysis=None):
-        # Private-chat middleware serializes updates; drain background work first.
-        if audio_analysis is not None:
-            await audio_analysis.cancel_user(user_id)
+    async def forget(self, user_id):
         async with self.database.write() as session:
             internal = await session.scalar(select(User.id).where(User.telegram_user_id == user_id))
             if internal is None:
                 return
             submissions = select(SongSubmission.id).where(SongSubmission.user_id == internal)
             links = select(PlaylistChannel.id).where(PlaylistChannel.user_id == internal)
+            legacy_analysis = await session.scalar(text(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='audio_analyses'"))
+            if legacy_analysis:
+                await session.execute(text(
+                    "DELETE FROM audio_analyses WHERE requested_by=:user_id OR submission_id IN "
+                    "(SELECT id FROM song_submissions WHERE user_id=:user_id)"), {"user_id": internal})
             await session.execute(delete(UserTrackSignal).where(UserTrackSignal.user_id == internal))
             await session.execute(delete(ChannelPost).where(ChannelPost.channel_id.in_(links)))
             await session.execute(delete(PlaylistChannel).where(PlaylistChannel.user_id == internal))
             await session.execute(delete(ChannelConnectionCode).where(ChannelConnectionCode.user_id == internal))
-            await session.execute(delete(AudioAnalysis).where(or_(
-                AudioAnalysis.requested_by == internal, AudioAnalysis.submission_id.in_(submissions))))
             await session.execute(delete(IdentificationFlow).where(IdentificationFlow.submission_id.in_(submissions)))
             for model in (ChatControl, Rating, RecommendationHistory, SongSubmission):
                 await session.execute(delete(model).where(model.user_id == internal))

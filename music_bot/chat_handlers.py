@@ -17,27 +17,24 @@ def private(message):
     return message.chat.type == 'private' and message.from_user is not None and not message.from_user.is_bot
 
 
-async def command(message, chat_service, audio_analysis=None):
+async def command(message, chat_service):
     if not private(message):
         await message.answer(M.PRIVATE_ONLY)
         return
     user = message.from_user
-    action = {M.MENU_SEND: 'send', M.MENU_FOR_YOU: 'recommend', M.MENU_PROFILE: 'taste', M.MENU_HELP: 'help'}.get(message.text)
+    action = {M.MENU_SEND: 'send', M.MENU_FOR_YOU: 'recommend', M.MENU_PROFILE: 'taste',
+              M.MENU_SETTINGS: 'settings', M.MENU_HELP: 'help'}.get(message.text)
     if action is None:
         action = message.text.split()[0].split('@')[0].lstrip('/')
     if action in {'recommend', 'taste', 'forgetme'}:
         await chat_service.ensure_user(Submitter(user.id, user.username, user.full_name, user.language_code))
     if action == 'recommend':
         await show_recommendations(message, chat_service, user.id)
+    elif action == 'send':
+        await message.answer(M.SEND_SONG_PROMPT, reply_markup=main_menu())
     elif action == 'taste':
-        summary = await chat_service.taste_summary(user.id)
-        if summary is None:
-            await message.answer(M.TASTE_EMPTY, reply_markup=main_menu())
-        else:
-            counts, songs, signals, channels, artists, tags = summary
-            await message.answer(M.TASTE_TEXT.format(artists=', '.join(artists) or M.UNKNOWN,
-                tags=', '.join(tags) or M.UNKNOWN, songs=songs, signals=signals, channels=channels,
-                explanation=M.TASTE_EXPLANATION, **{v: counts.get(v, 0) for v in RATINGS}), reply_markup=main_menu())
+        from .taste_ui import show_taste
+        await show_taste(message, chat_service, user.id)
     elif action == 'profile':
         counts, shown = await chat_service.profile(user.id)
         await message.answer(M.PROFILE_TEXT.format(**{value: counts.get(value, 0) for value in RATINGS}, shown=shown), reply_markup=main_menu())
@@ -48,11 +45,13 @@ async def command(message, chat_service, audio_analysis=None):
         keyboard = InlineKeyboardMarkup(inline_keyboard=[[button(token, 'delete', M.FORGET_YES), button(token, 'keep', M.FORGET_NO)]])
         sent = await message.answer(M.FORGET_CONFIRM, reply_markup=keyboard)
         await chat_service.bind_control(token, sent.message_id)
+    elif action == 'settings':
+        await message.answer(M.SETTINGS_TEXT, reply_markup=main_menu())
     else:
         await message.answer(M.HELP if action == 'help' else M.UNSUPPORTED, reply_markup=main_menu())
 
 
-async def callback(query, chat_service, audio_analysis=None):
+async def callback(query, chat_service):
     acknowledged = False
     try:
         data = parse_control(query.data)
@@ -75,10 +74,10 @@ async def callback(query, chat_service, audio_analysis=None):
             seed = track.id if action == 'more' else payload['seed'] if action == 'next' else None
             await show_recommendations(query.message, chat_service, query.from_user.id, seed)
         elif action == 'delete':
-            await chat_service.forget(query.from_user.id, audio_analysis)
+            await chat_service.forget(query.from_user.id)
             await query.message.answer(M.FORGET_DONE, reply_markup=main_menu())
         else:
-            await query.message.answer(M.FORGET_CANCELLED if action == 'keep' else M.MENU_PROMPT, reply_markup=main_menu())
+            await query.message.answer(M.FORGET_CANCELLED if action == 'keep' else M.MAIN_MENU, reply_markup=main_menu())
         if action in {'delete', 'keep', 'menu'}:
             try:
                 await query.message.edit_reply_markup(reply_markup=None)

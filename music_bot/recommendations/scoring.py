@@ -41,41 +41,10 @@ def tag_overlap(left, right):
     return sum(min(left.get(name, 0), right.get(name, 0)) for name in names) / denominator if denominator else None
 
 
-def relative_similarity(left, right):
-    if not all(isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x) and x >= 0 for x in (left, right)):
-        return None
-    return 1.0 - abs(left - right) / max(left, right) if max(left, right) else 1.0
-
-
 def weighted_available(values, weights):
     present = {name: value for name, value in values.items() if value is not None}
     denominator = sum(weights[name] for name in present)
     return sum(weights[name] * value for name, value in present.items()) / denominator if denominator else None
-
-
-def audio_similarity(left: Item, right: Item):
-    compatible = sorted(left.analyses.keys() & right.analyses.keys())
-    if not compatible:
-        return None, False
-    # A single compatible version per comparison; never mix analyzer versions.
-    a, b = left.analyses[compatible[-1]], right.analyses[compatible[-1]]
-    bpm_a, bpm_b = a.get("bpm"), b.get("bpm")
-    tempo = None
-    if relative_similarity(bpm_a, bpm_b) is not None and bpm_a > 0 and bpm_b > 0:
-        tempo = math.exp(-abs(math.log2(bpm_a / bpm_b)) / S.BPM_OCTAVE_DECAY)
-    spectral = [relative_similarity(a.get(name), b.get(name)) for name in
-                ("spectral_centroid_mean", "spectral_bandwidth_mean", "spectral_rolloff_mean", "zero_crossing_rate_mean")]
-    spectral = [value for value in spectral if value is not None]
-    chroma = None
-    x, y = a.get("chroma_mean"), b.get("chroma_mean")
-    if isinstance(x, list) and isinstance(y, list) and len(x) == len(y) == 12:
-        if all(relative_similarity(u, v) is not None for u, v in zip(x, y)):
-            denominator = math.sqrt(sum(u*u for u in x) * sum(v*v for v in y))
-            if denominator:
-                chroma = clamp(sum(u*v for u, v in zip(x, y)) / denominator)
-    values = {"bpm": tempo, "spectral": sum(spectral) / len(spectral) if spectral else None,
-              "rms": relative_similarity(a.get("rms_mean"), b.get("rms_mean")), "chroma": chroma}
-    return weighted_available(values, S.AUDIO_WEIGHTS), tempo is not None and tempo >= S.NEGATIVE_AUDIO_THRESHOLD
 
 
 def evidence(seed: Seed, candidate: Item, related_artists):
@@ -83,10 +52,9 @@ def evidence(seed: Seed, candidate: Item, related_artists):
     if seed.item.metadata.artist and candidate.metadata.artist:
         a, b = comparison_text(seed.item.metadata.artist), comparison_text(candidate.metadata.artist)
         artist = 1.0 if a == b else related_artists.get((seed.item.track_id, b), 0.0) * S.RELATED_ARTIST_WEIGHT
-    audio, close_tempo = audio_similarity(seed.item, candidate)
     values = {"lastfm": clamp(candidate.links.get(seed.item.track_id)),
-              "tags": tag_overlap(seed.item.tags, candidate.tags), "artist": artist, "audio": audio}
-    return weighted_available(values, S.SIGNAL_WEIGHTS) or 0.0, values, close_tempo
+              "tags": tag_overlap(seed.item.tags, candidate.tags), "artist": artist}
+    return weighted_available(values, S.SIGNAL_WEIGHTS) or 0.0, values
 
 
 def rank_candidate(candidate, profile, related_artists, now):
@@ -98,22 +66,21 @@ def rank_candidate(candidate, profile, related_artists, now):
         return None
     evidence_rows = []
     for seed in profile.positives:
-        affinity, values, tempo = evidence(seed, candidate, related_artists)
+        affinity, values = evidence(seed, candidate, related_artists)
         weighted = affinity * seed_weight(seed) / S.RATING_WEIGHTS["love"]
-        evidence_rows.append((weighted, seed, affinity, values, tempo))
+        evidence_rows.append((weighted, seed, affinity, values))
     evidence_rows.sort(key=lambda row: (-row[0], row[1].item.track_id))
-    best, seed, affinity, signals, tempo = evidence_rows[0]
+    best, seed, affinity, signals = evidence_rows[0]
     if best <= 0:
         return None
     score = min(1.0, best + S.SUPPORT_BONUS * sum(row[0] for row in evidence_rows[1:3]))
     negatives = []
     for negative in profile.negatives:
-        value, signals_negative, _ = evidence(negative, candidate, related_artists)
+        value, signals_negative = evidence(negative, candidate, related_artists)
         tags = signals_negative["tags"] or 0
         overlap_count = len(negative.item.tags.keys() & candidate.tags.keys())
         close = ((signals_negative["lastfm"] or 0) >= S.NEGATIVE_LASTFM_THRESHOLD
-                 or (tags >= S.NEGATIVE_TAG_THRESHOLD and overlap_count >= 2)
-                 or ((signals_negative["audio"] or 0) >= S.NEGATIVE_AUDIO_THRESHOLD and tags >= S.NEGATIVE_AUDIO_TAG_THRESHOLD))
+                 or (tags >= S.NEGATIVE_TAG_THRESHOLD and overlap_count >= 2))
         if close:
             negatives.append(value * abs(S.RATING_WEIGHTS[negative.rating]))
     negatives.sort(reverse=True)
@@ -126,14 +93,8 @@ def rank_candidate(candidate, profile, related_artists, now):
     similar = signals["lastfm"]
     if similar is not None and similar > 0:
         reason = messages.REC_SIMILAR_LOVE if seed.rating == "love" else messages.REC_SIMILAR_LIKE
-    elif sum(row[4] and (row[3]["tags"] or 0) > 0 and row[1].rating in {"love", "like"} for row in evidence_rows) >= 2:
-        reason = messages.REC_TEMPO_TAGS
     elif len(seed.item.tags.keys() & candidate.tags.keys()) >= 2:
         reason = messages.REC_TAGS
-    elif tempo:
-        reason = messages.REC_TEMPO
-    elif signals["audio"] is not None and signals["audio"] > 0:
-        reason = messages.REC_AUDIO
     elif signals["artist"] == 1:
         reason = messages.REC_ARTIST
     elif (signals["artist"] or 0) > 0:

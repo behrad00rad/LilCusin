@@ -111,10 +111,14 @@ def card_keyboard(token, selected=None, submitted=False):
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-async def show_card(message, service, user_id, track, seed=None, rating=None, submitted=False):
+async def show_card(message, service, user_id, track, seed=None, rating=None, submitted=False, edit_existing=False):
     token = await service.create_control(user_id, tracks=[track.id], seed=seed, kind='card', submitted=submitted)
     text = M.CARD_TITLE.format(artist=clean(track.display_artist or track.artist), title=clean(track.display_title or track.title))
-    sent = await message.answer(text, parse_mode=None, reply_markup=card_keyboard(token, rating, submitted))
+    if edit_existing:
+        await message.edit_text(text, parse_mode=None, reply_markup=card_keyboard(token, rating, submitted))
+        sent = message
+    else:
+        sent = await message.answer(text, parse_mode=None, reply_markup=card_keyboard(token, rating, submitted))
     await service.bind_control(token, sent.message_id)
 
 

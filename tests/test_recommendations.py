@@ -13,13 +13,13 @@ from sqlalchemy import delete, event, func, select, update
 from music_bot.cache import CachedProviders, cache_key, encode
 from music_bot.database import Database
 from music_bot.matching import encode_track, identity_key
-from music_bot.models import AudioAnalysis, ProviderCache, Rating, RecommendationHistory, SimilarTrack, SongSubmission, Track, TrackExternalID, TrackTag, User, utc_now
+from music_bot.models import ProviderCache, Rating, RecommendationHistory, SimilarTrack, SongSubmission, Track, TrackExternalID, TrackTag, User, utc_now
 from music_bot.providers.common import Failure, ProviderError, Tag, TrackCandidate
 from music_bot.recommendations import RecommendationService
 from music_bot.recommendations.candidates import candidate_item, deduplicate
 from music_bot.recommendations.candidates import generate
 from music_bot.recommendations.repository import load_profile
-from music_bot.recommendations.scoring import audio_similarity, clamp, evidence, rank_candidate, select_varied, tag_overlap
+from music_bot.recommendations.scoring import clamp, evidence, rank_candidate, select_varied, tag_overlap
 from music_bot.recommendations.types import Item, Profile, Seed
 from tests.recommendation_fixture import TELEGRAM_ID, populate
 
@@ -41,22 +41,9 @@ class ScoringTests(unittest.TestCase):
         seed = Seed(Item(TrackCandidate("seed", "A", "fixture"), 1), "love")
         item = self.item(artist="B")
         item.links[1] = 1
-        self.assertAlmostEqual(evidence(seed, item, {})[0], .45 / .55)
+        self.assertAlmostEqual(evidence(seed, item, {})[0], .55 / .65)
         item.tags = {"rock": 1}  # Missing seed tags remain neutral.
-        self.assertAlmostEqual(evidence(seed, item, {})[0], .45 / .55)
-
-    def test_compatible_audio_bpm_missing_and_version(self):
-        a, b = self.item(), self.item("other")
-        key = ("librosa", "1", 22050)
-        a.analyses[key] = {"bpm": 120, "rms_mean": .5}
-        b.analyses[key] = {"bpm": 120, "rms_mean": .5}
-        self.assertEqual(audio_similarity(a, b), (1, True))
-        b.analyses[key]["bpm"] = 60
-        self.assertLess(audio_similarity(a, b)[0], .3)
-        b.analyses[key]["bpm"] = None
-        self.assertEqual(audio_similarity(a, b), (1, False))
-        b.analyses = {("librosa", "2", 22050): {"bpm": 120}}
-        self.assertEqual(audio_similarity(a, b), (None, False))
+        self.assertAlmostEqual(evidence(seed, item, {})[0], .55 / .65)
 
     def test_multiple_negatives_stronger_without_artist_or_genre_ban(self):
         positive = self.item("seed")
@@ -211,24 +198,6 @@ class RecommendationTests(unittest.IsolatedAsyncioTestCase):
         result = await RecommendationService(self.database, providers).recommend_for_user(TELEGRAM_ID, limit=20)
         self.assertEqual(result.status, "ok")
         self.assertLessEqual(providers.call.await_count, 3)
-
-    async def test_audio_candidates_require_compatible_analysis(self):
-        tracks = await populate(self.database)
-        async with self.database.write() as session:
-            await session.execute(delete(SimilarTrack))
-            await session.execute(delete(TrackTag))
-            user_id = await session.scalar(select(User.id))
-            submission = SongSubmission(user_id=user_id, track_id=tracks["piano_seed"], submission_type="telegram_audio")
-            session.add(submission)
-            await session.flush()
-            for name, version, bpm in [("piano_seed", "1", 120), ("piano_0", "1", 121), ("piano_1", "2", 120)]:
-                session.add(AudioAnalysis(track_id=tracks[name], requested_by=user_id, submission_id=submission.id,
-                    analyzer_name="librosa", analyzer_version=version, status="succeeded", bpm=bpm,
-                    features={"sample_rate": 22050, "bpm": bpm}))
-        result = await self.service.recommend_for_user(TELEGRAM_ID)
-        self.assertIn(tracks["piano_0"], {row.track_id for row in result.recommendations})
-        self.assertNotIn(tracks["piano_1"], {row.track_id for row in result.recommendations})
-        self.assertTrue(any("tempo" in row.reason for row in result.recommendations))
 
     async def test_query_count_does_not_grow_per_result(self):
         await populate(self.database)

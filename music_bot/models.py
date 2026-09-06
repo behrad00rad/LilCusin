@@ -59,7 +59,6 @@ class Track(Base):
     album: Mapped[str | None]
     artwork_url: Mapped[str | None]
     duration: Mapped[float | None]
-    bpm: Mapped[float | None]
     metadata_source: Mapped[str]
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, onupdate=utc_now)
@@ -200,31 +199,6 @@ class SimilarTrack(Base):
     candidate: Mapped[dict] = mapped_column(JSON)
     score: Mapped[float | None]
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
-
-
-class AudioAnalysis(Base):
-    """Compact numerical results, versioned by analyzer; never raw audio."""
-
-    __tablename__ = "audio_analyses"
-    __table_args__ = (
-        UniqueConstraint("track_id", "analyzer_name", "analyzer_version"),
-        CheckConstraint("status IN ('pending', 'processing', 'succeeded', 'failed')"),
-    )
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    track_id: Mapped[int] = mapped_column(ForeignKey("tracks.id"), index=True)
-    submission_id: Mapped[int] = mapped_column(ForeignKey("song_submissions.id"))
-    requested_by: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    analyzer_name: Mapped[str]
-    analyzer_version: Mapped[str]
-    status: Mapped[str]
-    error_category: Mapped[str | None]
-    attempts: Mapped[int] = mapped_column(default=1)
-    bpm: Mapped[float | None]
-    features: Mapped[dict | None] = mapped_column(JSON)
-    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
-    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, onupdate=utc_now)
-    track: Mapped[Track] = relationship()
 
 
 class ChatControl(Base):

@@ -1,7 +1,7 @@
 """Deterministic synthetic music for tests and a separate evaluation database."""
 
 from music_bot.matching import encode_track, identity_key
-from music_bot.models import AudioAnalysis, Rating, SimilarTrack, SongSubmission, Track, TrackTag, User
+from music_bot.models import Rating, SimilarTrack, SongSubmission, Track, TrackTag, User
 from music_bot.providers.common import TrackCandidate
 
 TELEGRAM_ID = 424242

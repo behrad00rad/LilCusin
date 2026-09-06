@@ -102,7 +102,7 @@ class ChannelTests(ServiceTestCase):
 
     async def test_ambiguous_private_confirmation_before_signal(self):
         await self.connect()
-        self.providers.call.return_value = [replace(EXACT, title='Songs', external_ids={})]
+        self.providers.call.return_value = [replace(EXACT, title='Song remix', external_ids={})]
         private = Message.model_validate({'message_id': 99, 'date': int(utc_now().timestamp()),
             'chat': {'id': 123, 'type': 'private'}})
         self.bot.send_message.return_value = private

@@ -29,15 +29,15 @@ class IdentificationTests(ServiceTestCase):
             self.assertEqual(await session.scalar(select(func.count()).select_from(Rating)), 0)
 
     async def test_musicbrainz_fallback(self):
-        self.providers.call.side_effect = [[], [replace(EXACT, source="musicbrainz", score=100)]]
+        self.providers.call.side_effect = [[], [], [replace(EXACT, source="musicbrainz", score=100)]]
         result = await self.workflow.start((await self.text()).id, 123)
         self.assertEqual(result.kind, "confirmed")
         self.assertEqual(self.providers.call.call_args.args[:2], ("musicbrainz", "search_recordings"))
 
     async def test_ambiguous_requires_confirmation_and_repeats_are_safe(self):
         other = replace(EXACT, title="Songs", external_ids={"lastfm": "other"})
-        self.providers.call.side_effect = [[EXACT, other], []]
-        submission = await self.text()
+        self.providers.call.side_effect = [[EXACT, other], [], []]
+        submission = await self.text("Artistt", "Song")
         result = await self.workflow.start(submission.id, 123)
         self.assertEqual(result.kind, "candidates")
         selected = await asyncio.gather(*[
@@ -60,6 +60,20 @@ class IdentificationTests(ServiceTestCase):
         result = await self.workflow.start((await self.text("كيهان", "من آمده ام")).id, 123)
         self.assertEqual(result.kind, "confirmed")
         self.assertEqual(result.artist, "کیهان")
+
+    async def test_noise_and_reversed_names_auto_confirm(self):
+        self.providers.call.side_effect = [[], [EXACT]]
+        noisy = await self.text("Song (Official Audio)", "Artist.mp3")
+        result = await self.workflow.start(noisy.id, 123)
+        self.assertEqual(result.kind, "confirmed")
+        self.assertEqual(self.providers.call.call_args_list[1].args,
+                         ("lastfm", "search_tracks", "Artist.mp3", "Song (Official Audio)"))
+
+    async def test_conflicting_id_for_same_identity_requires_confirmation(self):
+        conflict = replace(EXACT, external_ids={"lastfm": "different"})
+        self.providers.call.return_value = [EXACT, conflict]
+        result = await self.workflow.start((await self.text()).id, 123)
+        self.assertEqual(result.kind, "candidates")
 
     async def test_cross_provider_deduplication_and_different_recordings(self):
         mb = replace(EXACT, source="musicbrainz", external_ids={"musicbrainz": "one"})
@@ -86,7 +100,7 @@ class IdentificationTests(ServiceTestCase):
             self.assertEqual(await session.scalar(select(func.count()).select_from(SongSubmission)), 1)
 
     async def test_none_invalidates_candidates_without_confirmation(self):
-        weak = replace(EXACT, title="Songs", external_ids={})
+        weak = replace(EXACT, title="Song remix", external_ids={})
         self.providers.call.return_value = [weak]
         submission = await self.text()
         result = await self.workflow.start(submission.id, 123)
@@ -108,9 +122,9 @@ class IdentificationTests(ServiceTestCase):
     async def test_confidence_thresholds_both_names_and_rivals(self):
         self.assertTrue(strong_match("Artist", "Song", [EXACT]))
         self.assertFalse(strong_match("Other", "Song", [EXACT]))
-        self.assertFalse(strong_match("Artist", "Songs", [EXACT]))
-        self.assertFalse(strong_match("Artist", "Song", [replace(EXACT, external_ids={})]))
-        self.assertFalse(strong_match("Artist", "Song", [EXACT, replace(EXACT, title="Songs")]))
+        self.assertFalse(strong_match("Artist", "Completely different", [EXACT]))
+        self.assertTrue(strong_match("Artist", "Song", [replace(EXACT, external_ids={})]))
+        self.assertTrue(strong_match("Artist", "Song", [EXACT, replace(EXACT, title="Songs")]))
         self.assertGreater(confidence("Artist", "Song", EXACT), 0.94)
 
     async def test_multiple_submissions_external_id_reuses_track(self):

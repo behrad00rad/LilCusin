@@ -7,7 +7,7 @@ from sqlalchemy import func, or_, select, tuple_
 from sqlalchemy.dialects.sqlite import insert
 
 from ..matching import comparison_text, identity_key
-from ..models import AudioAnalysis, Rating, RecommendationHistory, SimilarTrack, Track, TrackExternalID, TrackTag, User, UserTrackSignal, utc_now
+from ..models import Rating, RecommendationHistory, SimilarTrack, Track, TrackExternalID, TrackTag, User, UserTrackSignal, utc_now
 from ..providers.common import TrackCandidate
 from . import settings as S
 from .scoring import tag_weight
@@ -38,12 +38,6 @@ async def load_items(session, tracks):
         if name and weight > 0:
             tags = result[row.track_id].tags
             tags[name] = max(tags.get(name, 0), weight)
-    for row in await session.scalars(select(AudioAnalysis).where(
-        AudioAnalysis.track_id.in_(ids), AudioAnalysis.status == "succeeded",
-    ).order_by(AudioAnalysis.updated_at)):
-        if isinstance(row.features, dict) and isinstance(row.features.get("sample_rate"), int):
-            key = (row.analyzer_name, row.analyzer_version, row.features["sample_rate"])
-            result[row.track_id].analyses[key] = row.features
     for item in result.values():
         item.identities = aliases(item.metadata)
     return result
@@ -149,13 +143,6 @@ async def local_candidates(session, profile, related_artists):
         "shared_tags": Track.id.in_(select(TrackTag.track_id).where(TrackTag.name.in_(seed_tags))),
         "artist_metadata": Track.artist.in_(artists),
     }
-    compatible = {key for seed in profile.positives for key in seed.item.analyses}
-    if compatible:
-        # Actual sample-rate compatibility is checked in scoring after bulk loading.
-        versions = {(name, version) for name, version, _ in compatible}
-        conditions["local_audio"] = Track.id.in_(select(AudioAnalysis.track_id).where(
-            AudioAnalysis.status == "succeeded",
-            tuple_(AudioAnalysis.analyzer_name, AudioAnalysis.analyzer_version).in_(versions)))
     tracks, sources = {}, defaultdict(set)
     for source, condition in conditions.items():
         query = select(Track).where(~Track.id.in_(rated), condition).order_by(Track.id)

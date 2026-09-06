@@ -46,8 +46,7 @@ class FlowHandlerTests(ServiceTestCase):
     async def feed(self, **fields):
         await dispatcher.feed_update(self.bot, Update(update_id=1, **fields),
                                      submissions=self.submissions, workflow=self.workflow,
-                                     enrichment=self.enrichment,
-                                     audio_analysis=getattr(self, "audio_analysis", None))
+                                     enrichment=self.enrichment)
 
     async def callback(self, data, user=123):
         update = Update.model_validate({"update_id": 2, "callback_query": {
@@ -123,39 +122,3 @@ class FlowHandlerTests(ServiceTestCase):
         self.assertEqual(self.outgoing[-1][0], messages.PRIVATE_ONLY)
         async with self.database.sessions() as session:
             self.assertEqual(await session.scalar(select(func.count()).select_from(SongSubmission)), 0)
-
-    async def test_rating_responsive_while_audio_analysis_runs(self):
-        from music_bot.audio.service import AudioAnalysisService
-        from music_bot.config import Config
-        from music_bot.models import AudioAnalysis
-        from tests.audio_fixture import feature_result
-
-        self.audio_analysis = AudioAnalysisService(self.database, self.bot, Config("fake", "fake"))
-        started, release = asyncio.Event(), asyncio.Event()
-        async def slow(path):
-            started.set()
-            await release.wait()
-            return feature_result()
-        async def provider(provider, method, *args):
-            if method == "search_tracks":
-                return [EXACT]
-            raise ProviderError(Failure.NETWORK)
-        self.providers.call.side_effect = provider
-        with patch("music_bot.audio.service.available", return_value=True), \
-             patch("music_bot.audio.service.download_audio", new_callable=AsyncMock), \
-             patch("music_bot.audio.service.convert_audio", new_callable=AsyncMock), \
-             patch("music_bot.audio.service.analyse_audio", side_effect=slow), \
-             patch("aiogram.Bot.send_message", new_callable=AsyncMock):
-            try:
-                await self.feed(message=self.message(audio={"file_id": "f", "file_unique_id": "u", "duration": 12,
-                                                           "performer": "Artist", "title": "Song"}))
-                data = self.outgoing[-1][1]["reply_markup"].inline_keyboard[0][0].callback_data
-                await asyncio.wait_for(started.wait(), 2)
-                await asyncio.wait_for(self.callback(data), 1)
-                async with self.database.sessions() as session:
-                    self.assertEqual(await session.scalar(select(Rating.value)), "love")
-                    self.assertEqual(await session.scalar(select(AudioAnalysis.status)), "processing")
-                release.set()
-                await asyncio.gather(*list(self.audio_analysis.tasks.values()))
-            finally:
-                await self.audio_analysis.close()

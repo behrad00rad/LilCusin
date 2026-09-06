@@ -11,7 +11,7 @@ from sqlalchemy import delete, func, select, update
 from music_bot import messages as M
 from music_bot.chat_service import ChatService
 from music_bot.chat_ui import safe_url
-from music_bot.models import AudioAnalysis, ChatControl, IdentificationFlow, Rating, RecommendationHistory, SongSubmission, Track, User, utc_now
+from music_bot.models import ChatControl, IdentificationFlow, Rating, RecommendationHistory, SongSubmission, Track, User, utc_now
 from music_bot.recommendations import RecommendationService
 from music_bot.submissions import Submitter
 from tests.support import ServiceTestCase, dispatcher
@@ -95,8 +95,9 @@ class ChatFlowTests(ServiceTestCase):
         await self.feed(message=self.message(text='/recommend'))
         self.assertEqual(await self.count(RecommendationHistory), 1)
         _, text, options = self.outgoing[-1]
-        self.assertEqual(text.count('<b>Artist</b>'), 1)
-        self.assertIsNone(options['parse_mode'])
+        self.assertEqual(text.count('&lt;b&gt;Artist&lt;/b&gt;'), 1)
+        self.assertEqual(options['parse_mode'], 'HTML')
+        self.assertIn('https://t.me/musicbehbot?text=', text)
         self.assertFalse(any(b.url for r in options['reply_markup'].inline_keyboard for b in r))
         self.assertIsNone(safe_url('https://www.last.fm@evil.example/music'))
         self.assertEqual(safe_url('https://www.last.fm/music/A/_/B'), 'https://www.last.fm/music/A/_/B')
@@ -155,8 +156,6 @@ class ChatFlowTests(ServiceTestCase):
         async with self.database.write() as session:
             session.add(IdentificationFlow(submission_id=own.id, state='confirmed', expires_at=utc_now()))
             for submission, key in ((own, 'metal_seed'), (other, 'piano_seed')):
-                session.add(AudioAnalysis(track_id=self.tracks[key], submission_id=submission.id, requested_by=submission.user_id,
-                    analyzer_name='fixture', analyzer_version='1', status='succeeded', features={'sample_rate': 22050, 'bpm': 120}))
                 session.add(RecommendationHistory(user_id=submission.user_id, track_id=self.tracks[key]))
             session.add(Rating(user_id=other.user_id, track_id=self.tracks['metal_seed'], value='love'))
         track_count = await self.count(Track)
@@ -169,7 +168,7 @@ class ChatFlowTests(ServiceTestCase):
         self.assertEqual(await self.count(User), 2)
         await self.click(confirmation)
         self.assertEqual(self.outgoing[-1][1], M.FORGET_DONE)
-        for model in (User, SongSubmission, Rating, RecommendationHistory, AudioAnalysis):
+        for model in (User, SongSubmission, Rating, RecommendationHistory):
             self.assertEqual(await self.count(model), 1)
         self.assertEqual(await self.count(IdentificationFlow), 0)
         self.assertEqual(await self.count(ChatControl), 0)
@@ -177,3 +176,16 @@ class ChatFlowTests(ServiceTestCase):
         await self.click(confirmation)
         self.assertEqual(await self.count(User), 1)
         self.ack.assert_called_with(M.STALE)
+
+    async def test_reset_learning_is_owner_scoped(self):
+        await self.chat.ensure_user(Submitter(999))
+        async with self.database.write() as session:
+            other_id = await session.scalar(select(User.id).where(User.telegram_user_id == 999))
+            session.add(Rating(user_id=other_id, track_id=self.tracks['piano_seed'], value='love'))
+        await self.chat.reset_learning(TELEGRAM_ID)
+        async with self.database.sessions() as session:
+            self.assertEqual(await session.scalar(select(func.count()).select_from(Rating)
+                .where(Rating.user_id == other_id)), 1)
+            own_id = await session.scalar(select(User.id).where(User.telegram_user_id == TELEGRAM_ID))
+            self.assertEqual(await session.scalar(select(func.count()).select_from(Rating)
+                .where(Rating.user_id == own_id)), 0)

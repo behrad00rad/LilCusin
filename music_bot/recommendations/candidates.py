@@ -45,7 +45,6 @@ def merge(left, right):
     for seed_id, score in right.links.items():
         previous = left.links.get(seed_id)
         left.links[seed_id] = max(previous, score) if previous is not None and score is not None else previous if previous is not None else score
-    left.analyses.update({key: value for key, value in right.analyses.items() if key not in left.analyses})
     left.sources.update(right.sources)
     left.identities.update(right.identities)
     if left.track_id is not None:
