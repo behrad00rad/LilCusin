@@ -286,8 +286,9 @@ external IDs, internal `score`, user-facing `reason`, debug `sources`, and
 `exploration`. Normal user interfaces should display the reason, never the score.
 Task 10 connects these methods to private-chat Telegram controls, described below.
 
-No Love/Like ratings returns `insufficient_preferences`; submissions, neutral
-ratings and silence create no preferences. One positive rating is sufficient.
+No Love/Like ratings or confirmed playlist signals returns `insufficient_preferences`;
+private submissions, neutral ratings and silence create no preferences. One
+positive rating or confirmed playlist signal is sufficient.
 `no_candidates` means the available metadata has no fresh unrated matches; the
 engine does not invent a fallback preference. Every rated song is excluded,
 including neutral/disliked songs, with external-ID and Unicode-normalized identity
@@ -466,6 +467,103 @@ Shared numerical track metadata such as BPM is retained without user linkage.
 Messages already in Telegram and provider-side records are outside this deletion.
 Old controls cannot recreate a deleted account; a new explicit interaction can.
 
-No channel integration/import, acoustic recognition, new download/link-processing
-feature, Mini App, admin panel, paid service or deployment infrastructure is added.
-The existing temporary audio-analysis path is unchanged apart from per-user cancellation.
+Task 11 adds future playlist-channel posts, described below. Acoustic recognition,
+new download/link-processing features, Mini Apps, admin panels, paid services and
+deployment infrastructure remain outside this project stage.
+
+## Connected playlist channels (Task 11)
+
+Use `/connectchannel` in the bot's private chat. Add the bot to a development or
+playlist channel as an administrator, leaving optional posting, editing, deleting,
+inviting and administrator-management permissions disabled. Administrator status
+is required because Telegram guarantees `getChatMember` for other users only when
+the bot is an administrator ([official API documentation](https://core.telegram.org/bots/api#getchatmember)).
+The bot itself never posts in the channel.
+
+Post the displayed `PL-…` code as a **new text post** in that channel. It has 192
+random bits, expires in ten minutes and is stored only as a SHA-256 hash. Issuing
+another code replaces the old one; `/cancel` invalidates it. The bot checks both
+its own administrator status and the requesting user's creator/administrator
+status using the channel's numeric identity, never its title or username. A
+successful connection consumes the code atomically and is confirmed privately.
+Expired and rejected administrator checks also consume the matched code; temporary
+verification failures permit retry until expiry. Concurrent/replayed codes cannot
+link another channel. Up to ten channels can belong to one profile; a channel has
+one profile owner, including while disconnected. It cannot be transferred to
+another profile implicitly; `/forgetme` removes the ownership record.
+
+Only `channel_post` audio updates after the connection-code post's message ID and
+timestamp are eligible. Edited posts, old history, documents, voice messages and
+unlinked/disconnected channels are not imported. No history API, scraping, Telethon,
+user-account session or Telegram login credential is used. Forward older songs
+privately through the existing submission flow. Receiving an audio post does not
+mean the owner listened to it.
+
+Each eligible post stores its source channel, message ID and file unique ID, with
+a normal owner-linked submission for the existing identification service. Database
+constraints deduplicate message deliveries and same-file reposts within a channel.
+Different uploads resolving to the same canonical track create at most one signal
+per user/channel/track. Signals from multiple channels combine by **maximum**, not
+sum, in the recommendation profile. Channel audio is metadata-only: the existing
+audio-analysis service explicitly skips these submissions, including after manual
+confirmation. It does not fetch or download their audio.
+
+Confident identification links the canonical track and adds a `playlist_channel`
+signal without sending a private success message for every import. Existing cached
+enrichment is reused. Ambiguous/missing/failed matches are retained for review and
+send the existing candidate or correction controls **privately**. There is no
+signal until the owner confirms. `/channels` shows titles, connection status,
+learned-song counts and pending-review counts, plus Disconnect and Review buttons.
+Review opens the oldest pending item; repeat after completing it for the next.
+It also reopens expired correction flows with a fresh bounded attempt window.
+If a private notification cannot be delivered, the pending item remains available.
+
+The weak weight is `PLAYLIST_CHANNEL_WEIGHT = 0.25` in recommendation settings,
+compared with explicit Like **1** and Love **3**. For You includes these additional
+seeds and uses reasons that say “saved playlist,” without claiming an explicit
+rating. Any explicit rating overrides the corresponding signal: Love/Like supply
+the stronger seed, Neutral removes positive influence, and Dislike excludes the
+track and supplies negative evidence. Known implicit seed tracks are also excluded
+from For You results. The existing candidate/scoring bounds still apply; More Like
+This keeps its selected-track behavior. Implicit signals do not alter rating counts.
+
+`/disconnectchannel` opens the same management list. Disconnect then offers
+**keep signals** or **remove signals**. Both stop future ingestion. Removal affects
+only that channel's signal provenance and prevents pending/old confirmations from
+restoring it, even after reconnecting. Shared tracks, metadata, explicit ratings
+and other users' rows remain. Kept signals continue to inform For You. A new code
+reconnects for future posts only. A bot removal/demotion update pauses ingestion;
+rejoining alone does not import a backlog or reactivate a link.
+
+Four tables are added through the existing `initialize`/`create_all` path:
+`channel_connection_codes`, `playlist_channels`, `channel_posts`, and
+`user_track_signals`. No existing table is rebuilt or data removed. New channel/post
+IDs are monotonic to prevent stale controls from addressing reused records. The
+confirmation transaction stores the canonical association and weak signal together.
+Per-channel locks keep a connection post ahead of subsequent audio updates; linked
+channel processing shares its owner's private-chat lock so deletion cannot race
+an in-flight identification. Polling
+includes `channel_post` and `my_chat_member`; identification uses the existing
+provider cache/timeouts, and membership verification has an eight-second deadline.
+Interrupted processing becomes reviewable on startup, without automatic history
+fetching. `/privacy` and transactional `/forgetme` include all four new data types.
+
+Implementation: `channels.py` owns connection/ingestion/management, `channel_handlers.py`
+owns private presentation and incoming channel updates, and `channel_signals.py`
+adds signals within the existing confirmation transaction. The six focused tests
+in `tests/test_channels.py` mock Telegram/providers and cover administrator checks,
+expiry/replay, deduplication, private confirmation, rating overrides, disconnect
+choices and privacy isolation. Run:
+
+```bash
+.venv/bin/python -m unittest tests.test_channels -v
+.venv/bin/python -m unittest discover -v
+.venv/bin/python -m compileall -q music_bot tests
+.venv/bin/python -m music_bot
+```
+
+For a live check, use `/connectchannel`, post its code, then post one new audio
+track and inspect `/channels`. Confirm no public bot response appears. Provider
+coverage can still leave songs awaiting correction, and Bot API update delivery
+is not permanent archival storage: posts not delivered while the bot is offline
+cannot be recovered through this implementation. No old-history import is claimed.

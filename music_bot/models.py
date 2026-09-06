@@ -237,3 +237,50 @@ class ChatControl(Base):
     message_id: Mapped[int | None]
     payload: Mapped[dict] = mapped_column(JSON)
     expires_at: Mapped[datetime] = mapped_column(UTCDateTime(), index=True)
+
+
+class ChannelConnectionCode(Base):
+    __tablename__ = "channel_connection_codes"
+    code_hash: Mapped[str] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime())
+
+
+class PlaylistChannel(Base):
+    __tablename__ = "playlist_channels"
+    __table_args__ = ({"sqlite_autoincrement": True},)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    telegram_chat_id: Mapped[int] = mapped_column(BigInteger, unique=True)
+    title: Mapped[str]
+    status: Mapped[str] = mapped_column(default="connected")
+    connected_at: Mapped[datetime] = mapped_column(UTCDateTime())
+    after_message_id: Mapped[int]
+
+
+class ChannelPost(Base):
+    __tablename__ = "channel_posts"
+    __table_args__ = (UniqueConstraint("channel_id", "message_id"),
+                     UniqueConstraint("channel_id", "file_unique_id"), {"sqlite_autoincrement": True})
+    id: Mapped[int] = mapped_column(primary_key=True)
+    channel_id: Mapped[int] = mapped_column(ForeignKey("playlist_channels.id"), index=True)
+    message_id: Mapped[int]
+    file_unique_id: Mapped[str]
+    submission_id: Mapped[int] = mapped_column(ForeignKey("song_submissions.id"), unique=True)
+    track_id: Mapped[int | None] = mapped_column(ForeignKey("tracks.id"))
+    status: Mapped[str] = mapped_column(default="processing")
+    learn_allowed: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
+
+
+class UserTrackSignal(Base):
+    __tablename__ = "user_track_signals"
+    __table_args__ = (UniqueConstraint("user_id", "track_id", "channel_id"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    track_id: Mapped[int] = mapped_column(ForeignKey("tracks.id"), index=True)
+    signal_type: Mapped[str] = mapped_column(default="playlist_channel")
+    channel_id: Mapped[int] = mapped_column(ForeignKey("playlist_channels.id"), index=True)
+    channel_post_id: Mapped[int] = mapped_column(ForeignKey("channel_posts.id"))
+    weight: Mapped[float]
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)

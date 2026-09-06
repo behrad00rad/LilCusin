@@ -94,7 +94,7 @@ REC_TEMPO = "Close in tempo to a song you liked"
 REC_AUDIO = "Shares measured audio characteristics with a song you liked"
 REC_ARTIST = "Same artist as a song you liked"
 REC_RELATED_ARTIST = "An artist connected to your liked songs through similar-track metadata"
-REC_INSUFFICIENT = "insufficient_preferences: rate at least one song Love or Like first."
+REC_INSUFFICIENT = "insufficient_preferences: rate a song Love/Like or connect a playlist with identified songs."
 REC_EMPTY = "no_candidates: no fresh, unrated matches are available from the current metadata."
 REC_SELECTED_REASONS = {
     REC_SIMILAR_LIKE: "Similar to the song you selected",
@@ -125,7 +125,7 @@ SIMILAR_TITLE = '✨ More Like This: {artist} — {title}'
 RECOMMENDATION_LINE = '{number}. {artist} — {title}'
 ALBUM_LINE = 'Album: {album}'
 CARD_TITLE = '{artist} — {title}\n\n' + RATING_QUESTION
-PREFERENCES_NEEDED = 'Rate at least one song Love or Like to get For You recommendations. Send or forward a song to begin.'
+PREFERENCES_NEEDED = 'Rate a song Love or Like, or connect a playlist with /connectchannel to get For You recommendations. Send or forward a song to begin.'
 NO_RECOMMENDATIONS = 'No fresh matches are available right now. Try For You, rate more songs, or come back later.'
 BUSY = 'Please wait for the current action to finish, then try again.'
 MENU_PROMPT = 'What would you like to do?'
@@ -149,4 +149,56 @@ COMMAND_DESCRIPTIONS = {
     'profile': 'View your music profile', 'help': 'How to use this bot',
     'privacy': 'See what data is stored', 'forgetme': 'Remove your personal data',
     'cancel': 'Cancel open flows and controls',
+}
+
+CHANNEL_CONNECT = 'Connect a playlist channel'
+CHANNELS_TITLE = 'Your playlist channels'
+CHANNELS_EMPTY = 'No playlist channels connected. Use /connectchannel to begin.'
+CHANNEL_INSTRUCTIONS = (
+    'I can detect only future audio posts after connection. I cannot fetch old channel history. '
+    'Forward older songs to me privately instead.\n\n'
+    'Add me to your development or playlist channel as an administrator so I can verify ownership. '
+    'Leave optional permissions such as posting, editing, deleting posts, inviting members and adding '
+    'administrators disabled; I never post in your channel. You must be its creator or an administrator.\n\n'
+    'Post this single-use code as a new text post in that channel within ten minutes:\n\n{code}\n\n'
+    'A new /connectchannel code replaces the previous one. Use /cancel to cancel it.'
+)
+CHANNEL_OUTCOMES = {
+    'connected': 'Playlist connected. I will learn weak preferences from new identified audio posts only. Uncertain matches will come here for review. Nothing has been rated or marked as listened to.',
+    'already': 'That playlist is already connected to your profile. No history was imported.',
+    'in_use': 'That channel is already linked to another bot profile. It has not been linked to yours.',
+    'expired': 'That connection code has expired. Use /connectchannel for a new one.',
+    'not_admin': 'Connection rejected: I could not verify you as the channel creator or an administrator. Use /connectchannel to try again.',
+    'permissions': 'I could not verify channel membership or permissions. Ensure I am a channel administrator, then try /connectchannel again.',
+    'limit': 'You can link up to ten playlist channels to this profile.',
+}
+CHANNEL_ROW = '{number}. {title}\nStatus: {status}\nSongs learned: {learned}\nNeeding review: {review}'
+CHANNEL_STATUSES = {'connected': 'Connected', 'disconnected': 'Disconnected', 'unavailable': 'Bot access unavailable'}
+CHANNEL_UNTITLED = 'Playlist channel'
+CHANNEL_DISCONNECT = 'Disconnect {number}'
+CHANNEL_REVIEW = 'Review {number}'
+CHANNEL_DISCONNECT_QUESTION = 'Disconnect {title}? Choose whether to keep its learned signals. Shared song metadata and your explicit ratings will stay.'
+CHANNEL_KEEP = 'Disconnect, keep signals'
+CHANNEL_REMOVE = 'Disconnect, remove signals'
+CHANNEL_DISCONNECTED = 'Channel disconnected. Future posts will not be processed.'
+CHANNEL_REMOVED = 'Channel disconnected and its playlist signals removed. Shared tracks and explicit ratings are kept.'
+CHANNEL_REVIEW_INTRO = 'A new playlist song needs your review. Confirm the match or correct its artist/title privately. No playlist signal is added until confirmation. You can reopen pending items through /channels.'
+CHANNEL_NO_REVIEW = 'No pending song is available for review. Use /channels to refresh.'
+CHANNEL_ACCESS_LOST = 'Playlist ingestion paused because my channel administrator access was removed. Use /channels to review the status and /connectchannel to reconnect for future posts.'
+PRIVACY += (' Connected playlist records store the channel identity, connection status, future audio-post identifiers '
+            'and weak playlist signals. Temporary connection codes are stored only as hashes and expire in ten minutes. '
+            '/forgetme also removes your channel links, posts, signals and pending codes. Shared track metadata stays. '
+            'Channel audio ingestion uses metadata only and does not download the audio.')
+FORGET_CONFIRM += ' This also removes your connected channels, imported post records, weak playlist signals and pending connection codes.'
+COMMAND_DESCRIPTIONS.update({'connectchannel': 'Connect a playlist channel', 'channels': 'Manage playlist channels',
+                             'disconnectchannel': 'Disconnect a playlist channel'})
+REC_PLAYLIST_REASONS = {
+    REC_SIMILAR_LIKE: 'Similar to a song in your saved playlist',
+    REC_TAGS: 'Matches several tags from a song in your saved playlist',
+    REC_SHARED_TAG: 'Shares a tag with a song in your saved playlist',
+    REC_TEMPO: 'Close in tempo to a song in your saved playlist',
+    REC_AUDIO: 'Shares audio characteristics with a song in your saved playlist',
+    REC_ARTIST: 'Same artist as a song in your saved playlist',
+    REC_RELATED_ARTIST: 'An artist connected to your playlist through similar-track metadata',
+    REC_TEMPO_TAGS: 'Close in tempo and shared tags to songs in your music profile',
 }

@@ -7,7 +7,7 @@ from sqlalchemy import func, or_, select, tuple_
 from sqlalchemy.dialects.sqlite import insert
 
 from ..matching import comparison_text, identity_key
-from ..models import AudioAnalysis, Rating, RecommendationHistory, SimilarTrack, Track, TrackExternalID, TrackTag, User, utc_now
+from ..models import AudioAnalysis, Rating, RecommendationHistory, SimilarTrack, Track, TrackExternalID, TrackTag, User, UserTrackSignal, utc_now
 from ..providers.common import TrackCandidate
 from . import settings as S
 from .scoring import tag_weight
@@ -75,10 +75,19 @@ async def load_profile(session, telegram_user_id, selected_track_id=None):
     if selected_track_id is not None and selected is None:
         return None
     positives = [(rating, track) for rating, track in rows if rating.value in {"love", "like"}] if selected is None else []
-    if not positives and selected is None:
+    implicit = []
+    if selected is None:
+        implicit = (await session.execute(select(Track, func.max(UserTrackSignal.weight))
+            .join(UserTrackSignal, UserTrackSignal.track_id == Track.id).where(
+                UserTrackSignal.user_id == user_id, UserTrackSignal.signal_type == "playlist_channel",
+                UserTrackSignal.weight > 0,
+                ~Track.id.in_(select(Rating.track_id).where(Rating.user_id == user_id)))
+            .group_by(Track.id).order_by(Track.id))).all()
+    if not positives and not implicit and selected is None:
         return None
     negatives = balanced_seeds(rows, {"dislike"}, S.MAX_NEGATIVE_SEEDS)
-    items = await load_items(session, [track for _, track in positives + negatives] + ([selected] if selected is not None else []))
+    items = await load_items(session, [track for _, track in positives + negatives] + [track for track, _ in implicit]
+                             + ([selected] if selected is not None else []))
     rated_aliases = set()
     for _, track in rows:
         rated_aliases.update(aliases(from_track(track).metadata))
@@ -99,7 +108,14 @@ async def load_profile(session, telegram_user_id, selected_track_id=None):
             key = ("id", row.provider, row.external_identifier)
             history_aliases[key] = max(history_aliases.get(key, history[row.track_id]), history[row.track_id])
     positive_seeds = [Seed(items[track.id], rating.value) for rating, track in positives]
+    positive_seeds += [Seed(items[track.id], "playlist_channel", weight) for track, weight in implicit
+                       if not items[track.id].identities & rated_aliases]
+    if not positive_seeds and selected is None:
+        return None
     excluded_ids = {track.id for _, track in rows}
+    for track, _ in implicit:
+        excluded_ids.add(track.id)
+        rated_aliases.update(items[track.id].identities)
     if selected is not None:
         positive_seeds = [Seed(items[selected.id], None)]
         # Exclude the focus track and its aliases even if it has never been rated.

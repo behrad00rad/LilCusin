@@ -7,7 +7,7 @@ from uuid import uuid4
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.dialects.sqlite import insert
 
-from .models import AudioAnalysis, ChatControl, IdentificationFlow, Rating, RecommendationHistory, SongSubmission, Track, User, utc_now
+from .models import AudioAnalysis, ChannelConnectionCode, ChannelPost, ChatControl, IdentificationFlow, PlaylistChannel, Rating, RecommendationHistory, SongSubmission, Track, User, UserTrackSignal, utc_now
 from .workflow import FlowError, owned_submission, save_rating
 
 CONTROL_TTL = timedelta(minutes=30)
@@ -25,7 +25,7 @@ class ChatService:
             await session.execute(insert(User).values(telegram_user_id=user.telegram_user_id, **fields)
                 .on_conflict_do_update(index_elements=["telegram_user_id"], set_=fields))
 
-    async def create_control(self, user_id, *, tracks=(), seed=None, kind="list", submitted=False):
+    async def create_control(self, user_id, *, tracks=(), seed=None, kind="list", submitted=False, links=()):
         token = uuid4().hex
         async with self.database.write() as session:
             internal = await session.scalar(select(User.id).where(User.telegram_user_id == user_id))
@@ -36,7 +36,7 @@ class ChatService:
             old = select(ChatControl.token).where(ChatControl.user_id == internal).order_by(ChatControl.expires_at.desc()).offset(19)
             await session.execute(delete(ChatControl).where(ChatControl.token.in_(old)))
             session.add(ChatControl(token=token, user_id=internal,
-                payload={"tracks": list(tracks), "seed": seed, "kind": kind, "used": [], "submitted": submitted},
+                payload={"tracks": list(tracks), "seed": seed, "kind": kind, "used": [], "submitted": submitted, "links": list(links)},
                 expires_at=utc_now() + CONTROL_TTL))
         return token
 
@@ -122,6 +122,7 @@ class ChatService:
         async with self.database.write() as session:
             ids = select(User.id).where(User.telegram_user_id == user_id)
             await session.execute(delete(ChatControl).where(ChatControl.user_id.in_(ids)))
+            await session.execute(delete(ChannelConnectionCode).where(ChannelConnectionCode.user_id.in_(ids)))
 
     async def forget(self, user_id, audio_analysis=None):
         # Private-chat middleware serializes updates; drain background work first.
@@ -132,6 +133,11 @@ class ChatService:
             if internal is None:
                 return
             submissions = select(SongSubmission.id).where(SongSubmission.user_id == internal)
+            links = select(PlaylistChannel.id).where(PlaylistChannel.user_id == internal)
+            await session.execute(delete(UserTrackSignal).where(UserTrackSignal.user_id == internal))
+            await session.execute(delete(ChannelPost).where(ChannelPost.channel_id.in_(links)))
+            await session.execute(delete(PlaylistChannel).where(PlaylistChannel.user_id == internal))
+            await session.execute(delete(ChannelConnectionCode).where(ChannelConnectionCode.user_id == internal))
             await session.execute(delete(AudioAnalysis).where(or_(
                 AudioAnalysis.requested_by == internal, AudioAnalysis.submission_id.in_(submissions))))
             await session.execute(delete(IdentificationFlow).where(IdentificationFlow.submission_id.in_(submissions)))

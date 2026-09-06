@@ -7,7 +7,7 @@ from pathlib import Path
 from sqlalchemy import func, or_, select, update
 
 from .. import messages
-from ..models import AudioAnalysis, SongSubmission, Track, User, utc_now
+from ..models import AudioAnalysis, ChannelPost, SongSubmission, Track, User, utc_now
 from .analyzer import analyse_audio
 from .common import ANALYZER_NAME, ANALYZER_VERSION, AudioError, Category, TOTAL_TIMEOUT
 from .download import download_audio, validate_metadata
@@ -38,6 +38,8 @@ class AudioAnalysisService:
         if self.closing or len(self.tasks) >= self.config.audio_analysis_concurrency * 2:
             return
         async with self.database.write() as session:
+            if await session.scalar(select(ChannelPost.id).where(ChannelPost.submission_id == submission_id)) is not None:
+                return  # Channel ingestion is metadata-only; no channel audio downloads.
             submission = await session.scalar(select(SongSubmission).join(User).where(
                 SongSubmission.id == submission_id, User.telegram_user_id == telegram_user_id,
             ))

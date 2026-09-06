@@ -15,7 +15,9 @@ from .enrichment import Enrichment
 from .providers.lastfm import LastFMClient
 from .providers.musicbrainz import MusicBrainzClient
 from .workflow import Workflow
-from .lifecycle import UpdateTasks, PrivateActions
+from .lifecycle import UpdateTasks, PrivateActions, ChannelUpdates
+from .channels import ChannelService
+from .channel_handlers import router as channel_router
 from .audio.service import AudioAnalysisService
 from .chat_service import ChatService
 from .recommendations import RecommendationService
@@ -61,6 +63,9 @@ async def main() -> None:
             audio_analysis = AudioAnalysisService(database, bot, config)
             stack.push_async_callback(audio_analysis.close)
             await audio_analysis.initialize()
+            workflow = Workflow(database, providers)
+            channels = ChannelService(database, workflow)
+            await channels.initialize()
             update_tasks = UpdateTasks()
             stack.push_async_callback(update_tasks.close)
             dispatcher = Dispatcher(disable_fsm=True)
@@ -68,6 +73,10 @@ async def main() -> None:
             private_actions = PrivateActions()
             dispatcher.message.outer_middleware(private_actions)
             dispatcher.callback_query.outer_middleware(private_actions)
+            channel_updates = ChannelUpdates(database, private_actions)
+            dispatcher.channel_post.outer_middleware(channel_updates)
+            dispatcher.my_chat_member.outer_middleware(channel_updates)
+            dispatcher.include_router(channel_router)
             dispatcher.include_router(router)
             await bot.set_my_commands([BotCommand(command=command, description=description)
                                       for command, description in messages.COMMAND_DESCRIPTIONS.items()],
@@ -77,10 +86,11 @@ async def main() -> None:
             await dispatcher.start_polling(
                 bot, allowed_updates=dispatcher.resolve_used_update_types(),
                 close_bot_session=False, handle_as_tasks=True, tasks_concurrency_limit=20,
-                submissions=SubmissionService(database), workflow=Workflow(database, providers),
+                submissions=SubmissionService(database), workflow=workflow,
                 enrichment=enrichment,
                 audio_analysis=audio_analysis,
                 chat_service=ChatService(database, RecommendationService(database, providers)),
+                channel_service=channels,
             )
     finally:
         logger.info("Bot stopped; handler tasks, provider sessions and database closed.")

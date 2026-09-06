@@ -61,6 +61,8 @@ def active(flow, revision=None):
 
 
 async def confirmed_result(session, submission):
+    from .channel_signals import learn_confirmed_channel_track
+    await learn_confirmed_channel_track(session, submission)
     track = await session.get(Track, submission.track_id)
     rating = await session.scalar(select(Rating.value).where(
         Rating.user_id == submission.user_id, Rating.track_id == track.id,
@@ -228,3 +230,30 @@ class Workflow:
                 raise FlowError("stale")
             await save_rating(session, submission.user_id, submission.track_id, value)
             return await confirmed_result(session, submission)
+
+    async def review_channel(self, submission_id, user_id):
+        """An explicit owner request reopens a stored channel item for correction."""
+        from .models import ChannelPost
+        async with self.database.write() as session:
+            submission = await owned_submission(session, submission_id, user_id)
+            post = await session.scalar(select(ChannelPost).where(ChannelPost.submission_id == submission_id))
+            if post is None or post.status == "identified":
+                raise FlowError("stale")
+            flow = await session.get(IdentificationFlow, submission_id)
+            if flow is not None:
+                flow.state, flow.attempts = "searching", 0
+                flow.expires_at = utc_now() + FLOW_TTL
+                flow.revision += 1
+                flow.prompt_message_id = None
+            post.status = "review"
+        if flow is None:
+            return await self.start(submission_id, user_id)
+        # Missing performer/title should ask for correction, not query empty metadata.
+        if not (submission.parsed_artist and submission.parsed_title):
+            async with self.database.write() as session:
+                flow = await session.get(IdentificationFlow, submission_id)
+                if flow is None:
+                    raise FlowError("stale")
+                flow.state = "correction"
+                return Result("missing", submission_id, flow.revision)
+        return await self.identify(submission_id, user_id)

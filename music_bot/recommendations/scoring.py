@@ -11,6 +11,8 @@ from .types import Item, Ranked, Seed
 
 
 def seed_weight(seed):
+    if seed.rating == "playlist_channel":
+        return min(S.PLAYLIST_CHANNEL_WEIGHT, max(0, seed.signal_weight or 0))
     return S.SELECTED_SEED_WEIGHT if seed.rating is None else S.RATING_WEIGHTS[seed.rating]
 
 
@@ -124,7 +126,7 @@ def rank_candidate(candidate, profile, related_artists, now):
     similar = signals["lastfm"]
     if similar is not None and similar > 0:
         reason = messages.REC_SIMILAR_LOVE if seed.rating == "love" else messages.REC_SIMILAR_LIKE
-    elif sum(row[4] and (row[3]["tags"] or 0) > 0 for row in evidence_rows) >= 2:
+    elif sum(row[4] and (row[3]["tags"] or 0) > 0 and row[1].rating in {"love", "like"} for row in evidence_rows) >= 2:
         reason = messages.REC_TEMPO_TAGS
     elif len(seed.item.tags.keys() & candidate.tags.keys()) >= 2:
         reason = messages.REC_TAGS
@@ -140,6 +142,8 @@ def rank_candidate(candidate, profile, related_artists, now):
         reason = messages.REC_SHARED_TAG
     if seed.rating is None:
         reason = messages.REC_SELECTED_REASONS[reason]
+    elif seed.rating == "playlist_channel":
+        reason = messages.REC_PLAYLIST_REASONS[reason]
     return Ranked(candidate, score, reason, seed.item.track_id, affinity)
 
 

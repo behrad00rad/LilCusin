@@ -19,6 +19,7 @@ class Item:
 class Seed:
     item: Item
     rating: str | None  # None is an explicitly selected seed, not an inferred rating.
+    signal_weight: float | None = None
 
 
 @dataclass

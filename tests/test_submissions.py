@@ -48,7 +48,7 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         async with self.database.sessions() as session:
             self.assertEqual(await session.scalar(select(func.count()).select_from(SongSubmission)), 1)
             self.assertEqual(await session.scalar(text("PRAGMA foreign_keys")), 1)
-            tables = set((await session.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))).scalars())
+            tables = set((await session.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"))).scalars())
             self.assertEqual(tables, set(Base.metadata.tables))
 
     async def test_text_audio_pending_and_user_upsert(self):
