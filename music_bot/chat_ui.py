@@ -81,7 +81,7 @@ def lil_bro_url(artist, title, username=None):
     username = normalized_lil_bro_username(username)
     if not artist or not title or not username:
         return None
-    query = quote(f'{artist} - {title}', safe='')
+    query = quote(f'{artist} {title}', safe='')
     return f"https://t.me/{username}?text={query}"
 
 
