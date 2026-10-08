@@ -1,109 +1,172 @@
-# LilCusin
+# LilCusin 🎵
 
-LilCusin is a Python Telegram bot for identifying songs from their metadata and
-building personal recommendations from ratings. The bot accepts Telegram audio
-or a text message such as `Artist - Song title`. It uses Last.fm and MusicBrainz
-metadata; it does **not** identify songs by listening to their audio.
+A Telegram bot that learns what music you like. Send it a song, rate the match,
+and ask for recommendations.
 
-## What it does
+> Try sending `Radiohead - Creep` in a private chat. You can also send or forward
+> Telegram audio that has an artist and title.
 
-- Asks you to confirm uncertain song matches and lets you correct them.
-- Saves Love, Like, Neutral, or Dislike ratings and recommends songs from them.
-- Supports private-chat recommendations and optional playlist-channel signals.
-- Stores data in a local SQLite database. Audio is not downloaded.
-- Provides `/privacy` and `/forgetme` controls in the bot.
+## What happens when you send a song
 
-## Requirements
-
-- Python 3.12 or newer
-- A Telegram bot token from [@BotFather](https://t.me/BotFather)
-- A [Last.fm API key](https://www.last.fm/api/account/create)
-- Network access to the Telegram Bot API, Last.fm, and MusicBrainz—or an
-  appropriately configured relay for services your host cannot reach
-
-## Set up
-
-From the repository root, create and activate a virtual environment, then install
-the dependencies:
-
-```bash
-python -m venv .venv
-source .venv/bin/activate       # Windows PowerShell: .venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
+```mermaid
+flowchart LR
+    A[Send a song] --> B[Check the match]
+    B --> C{Right song?}
+    C -->|Yes| D[Rate it]
+    C -->|No| E[Choose or correct it]
+    E --> D
+    D --> F[Get recommendations]
 ```
 
-Copy `.env.example` to `.env` and fill in the values:
+The bot looks up song **metadata** (artist and title). It does not listen to or
+download the audio. Ratings are ❤️ Love, 👍 Like, 😐 Neutral, and 👎 Dislike.
+Use **For You** for a list based on your taste, or **More Like This** to start
+from one song.
 
-```bash
-cp .env.example .env            # Windows PowerShell: Copy-Item .env.example .env
-```
+## Run your own bot
 
-Required settings:
+You need Python 3.12+, a [Telegram bot token from @BotFather](https://t.me/BotFather),
+and a [Last.fm API key](https://www.last.fm/api/account/create). Your computer
+or server must be able to reach the APIs described in [Network access](#network-access).
 
-| Variable | What to enter |
+1. **Install the Python packages.** From this repository's folder:
+
+   ```bash
+   python -m venv .venv
+   ```
+
+   Activate the environment, then install:
+
+   | System | Activate with |
+   | --- | --- |
+   | macOS / Linux | `source .venv/bin/activate` |
+   | Windows PowerShell | `.venv\Scripts\Activate.ps1` |
+
+   ```bash
+   python -m pip install -r requirements.txt
+   ```
+
+2. **Create your private configuration file.** Copy `.env.example` to `.env`,
+   then open `.env` and fill in the empty values. On macOS/Linux, use
+   `cp .env.example .env`; on Windows PowerShell, use
+   `Copy-Item .env.example .env`.
+
+   | Setting | Put this in `.env` |
+   | --- | --- |
+   | `TELEGRAM_BOT_TOKEN` | The token from BotFather |
+   | `LASTFM_API_KEY` | Your Last.fm API key |
+   | `TELEGRAM_API_BASE_URL` | `https://api.telegram.org` if reachable, or the HTTPS origin of your trusted Telegram relay |
+   | `LIL_BRO_BOT_USERNAME` | Optional username for the related bot; leave the example value unless you use a different bot |
+
+3. **Start the bot.**
+
+   ```bash
+   python -m music_bot
+   ```
+
+Open your bot in Telegram and send `/start`. Keep the process running to receive
+messages. LilCusin uses **polling**, so it needs no public inbound port. Run only
+one copy for a bot token, and do not set a webhook for the same bot. If the bot
+already runs on a VPS, stop that copy before starting another one.
+
+> **Keep secrets private:** `.env` and the local database are ignored by Git.
+> Never commit, screenshot, or paste real tokens, API keys, or user data. If a
+> secret was ever committed, rotate it; deleting a file does not erase Git history.
+
+## What can I do in Telegram?
+
+| Action | What happens |
 | --- | --- |
-| `TELEGRAM_BOT_TOKEN` | Your bot token from BotFather |
-| `LASTFM_API_KEY` | Your Last.fm API key |
-| `TELEGRAM_API_BASE_URL` | An HTTPS origin for Telegram's Bot API. Use the official API origin when reachable, or your own trusted relay origin. Do not include a path, query, or credentials. |
+| Send `Artist - Song title` or Telegram audio | The bot searches for the song and asks you to confirm uncertain matches. |
+| Rate a confirmed song | Love and Like teach **For You** your preferences. You can change a rating later. |
+| Tap **More Like This** | Find songs related to the selected song, even before rating it. |
+| `/taste` or `/profile` | See your taste summary or rating counts. |
+| `/connectchannel` | Optionally connect a playlist channel; new audio posts can become weak taste signals after identification. |
+| `/privacy` or `/forgetme` | Read what is stored or remove your personal records. |
 
-`LIL_BRO_BOT_USERNAME` is optional and defaults to `musicbehbot`.
+If a match is wrong, choose another candidate or reply to the correction prompt
+with `Artist - Song title`. `/cancel` closes an unfinished search. The match is
+based on metadata and can be wrong even when the names look similar.
 
-Keep `.env` private. Never put real tokens, API keys, relay secrets, database
-files, or user data in GitHub issues, commits, logs, or screenshots. `.env` and
-the bot's SQLite database are ignored by Git. If a credential was ever committed,
-revoke or rotate it; deleting the file in a later commit does not remove it from
-Git history.
+## Technical details
 
-## Run
+### Where requests and data go
 
-```bash
-python -m music_bot
+```mermaid
+flowchart LR
+    U[Telegram user] <-->|Messages| T[Telegram Bot API]
+    T <-->|Polling and replies| B[LilCusin]
+    B -->|Song metadata| L[Last.fm]
+    B -->|Extra matches when needed| M[MusicBrainz]
+    B <-->|Preferences and cache| D[(Local SQLite database)]
 ```
 
-Keep the process running to receive updates. Use only **one polling instance per
-bot token**, and do not configure a Telegram webhook for the same bot. Running a
-second copy can cause Telegram polling conflicts. Stopping the host or Codespace
-stops the bot; no public inbound port is required.
+`TELEGRAM_API_BASE_URL` changes only the **Telegram Bot API** origin. It must be
+an HTTPS origin such as `https://api.telegram.org`, with no path, query, or
+credentials. A trusted relay can be used when Telegram is blocked on the host.
 
-Users can start with `/start` or `/help`. Send or forward audio in a private chat,
-or send a title as `Artist - Song title`. For playlist-channel signals, use
-`/connectchannel` and follow the bot's instructions. The bot needs administrator
-status in that channel to verify membership; leave posting and other unnecessary
-permissions disabled.
+### Network access
 
-## Tests and checks
+The current repository calls Last.fm and MusicBrainz at their normal URLs.
+Changing `TELEGRAM_API_BASE_URL` does **not** route those two services. If your
+server cannot reach them, their provider clients need a separate relay or other
+network route. The bot's song lookup and enrichment depend on those services;
+Telegram connectivity alone is not enough.
 
-The automated tests use mocked provider and Telegram requests:
+### Data and privacy
+
+The bot creates `data/music_bot.sqlite3` when it starts. It stores Telegram user
+IDs and basic profile fields, song submissions and file identifiers, ratings,
+recommendation history, provider metadata, and short-lived button state. The
+optional channel feature also stores channel and new-post identifiers. Audio
+files are not downloaded, and old channel history is not imported.
+
+`/forgetme` removes the requesting user's profile and related personal records.
+Shared song metadata can remain for other users; messages already held by
+Telegram and provider-side records are outside this deletion. Read `/privacy`
+in the bot for the full in-app explanation. See [SECURITY.md](SECURITY.md) for
+reporting and local-data guidance.
+
+### Playlist channels
+
+To connect a channel, send `/connectchannel` privately, make the bot a channel
+administrator, and post the one-time code as a **new text post** in that channel.
+You must also be its creator or an administrator. Leave optional permissions
+such as posting, editing, deleting, and inviting disabled; the bot does not
+post there. Only eligible **future** audio posts are processed. Uncertain songs
+wait for private review in `/channels`. A channel post is a weak signal, not a
+claim that you listened to or liked the song.
+
+### Code map
+
+| Area | Where to look |
+| --- | --- |
+| Startup and polling | `music_bot/__main__.py` |
+| Configuration | `music_bot/config.py`, `.env.example` |
+| Song matching | `music_bot/workflow.py`, `music_bot/matching.py` |
+| Last.fm and MusicBrainz clients | `music_bot/providers/` |
+| Recommendations | `music_bot/recommendations/` |
+| Data storage | `music_bot/database.py`, `music_bot/models.py` |
+| Tests | `tests/` |
+
+### Tests and live checks
+
+Run the automated tests after installing `requirements.txt`:
 
 ```bash
 python -m unittest discover -v
 python -m compileall -q music_bot tests
 ```
 
-To make live metadata requests, run:
+To check the **real** Last.fm and MusicBrainz APIs, run
+`python -m music_bot.validate_sources`. This uses your Last.fm key and makes
+external requests, but sends no Telegram messages. Do not run multiple live
+validators at once.
 
-```bash
-python -m music_bot.validate_sources
-```
+### Limits and project status
 
-This uses your Last.fm key and makes requests to external providers. Do not run
-multiple live validators at the same time. The validator does not send Telegram
-messages.
-
-## Data and limitations
-
-The bot stores Telegram user IDs, submitted song metadata, ratings, recommendation
-history, and provider metadata in `data/music_bot.sqlite3`. For channel features,
-it also stores channel identifiers and metadata for eligible new audio posts. It
-does not download audio or import old channel history. `/forgetme` removes the
-requesting user's profile and related personal records; shared catalog and cache
-metadata may remain. See `/privacy` in the bot for details.
-
-Identification is a metadata match, not acoustic recognition. Results depend on
-provider catalog coverage and spelling; a missing match does not mean a song does
-not exist. Recommendations are explainable heuristics, not a guarantee of taste.
-
-## Project status
-
-This is a small, self-hosted project. There is no hosted service or uptime promise.
-No license is currently included; reuse permissions have not been specified.
+Identification is not acoustic recognition. Provider coverage and spelling
+affect results, including songs written in Persian. Recommendations are
+heuristics, not a guarantee that someone will like a song. This is a self-hosted
+project with no hosted-service uptime promise. No license is currently included;
+reuse permissions have not been specified.
