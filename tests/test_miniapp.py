@@ -11,7 +11,9 @@ from sqlalchemy import select
 
 from music_bot.chat_service import ChatService
 from music_bot.miniapp import create_app, validate_init_data
-from music_bot.models import Rating, Track
+from music_bot.models import Rating, Track, User, PlaylistChannel, ChannelConnectionCode, utc_now
+from music_bot.miniapp import track_json
+from music_bot.chat_ui import lil_bro_url
 from music_bot.submissions import Submitter
 from .support import ServiceTestCase
 
@@ -80,3 +82,49 @@ class MiniAppTests(ServiceTestCase):
             response = await self.client.post('/api/search', json=value,
                                               headers={'X-Telegram-Init-Data': signed()})
             self.assertEqual(response.status, 400)
+
+    async def test_listen_uses_existing_message_link(self):
+        async with self.database.sessions() as session:
+            track = await session.get(Track, self.track_id)
+            self.assertEqual(track_json(track)['listen_url'], lil_bro_url(track.display_artist or track.artist, track.display_title or track.title))
+
+    async def test_similar_requires_owned_displayed_song_without_rating(self):
+        grant = await self.chat.create_control(123, tracks=[self.track_id], kind='miniapp')
+        payload = dict(token=grant, track_id=self.track_id)
+        self.chat.recommendations.recommend_similar_to_track.return_value = type('Result', (), {'recommendations': [], 'status': 'no_candidates'})()
+        for user, track, status in [(456, self.track_id, 403), (123, 999, 403), (123, self.track_id, 200)]:
+            response = await self.client.post('/api/similar', json={**payload, 'track_id': track},
+                                             headers={'X-Telegram-Init-Data': signed(user)})
+            self.assertEqual(response.status, status)
+        self.chat.recommendations.recommend_similar_to_track.assert_awaited_once_with(123, self.track_id)
+        async with self.database.sessions() as session:
+            self.assertIsNone(await session.scalar(select(Rating.value)))
+
+    async def test_channels_owned_listing_disconnect_and_connection_code(self):
+        async with self.database.write() as session:
+            user = await session.scalar(select(User).where(User.telegram_user_id == 123))
+            channel = PlaylistChannel(user_id=user.id, telegram_chat_id=-100123, title='My playlist',
+                                      status='connected', connected_at=utc_now(), after_message_id=1)
+            session.add(channel)
+            await session.flush()
+            channel_id = channel.id
+        headers = {'X-Telegram-Init-Data': signed()}
+        response = await self.client.get('/api/channels', headers=headers)
+        self.assertEqual((await response.json())['channels'][0]['title'], 'My playlist')
+        response = await self.client.get('/api/channels', headers={'X-Telegram-Init-Data': signed(456)})
+        self.assertEqual((await response.json())['channels'], [])
+        payload = dict(channel_id=channel_id, remove_signals=False)
+        response = await self.client.post('/api/channels/disconnect', json=payload,
+                                         headers={'X-Telegram-Init-Data': signed(456)})
+        self.assertEqual(response.status, 409)
+        response = await self.client.post('/api/channels/disconnect', json={**payload, 'remove_signals': 'false'}, headers=headers)
+        self.assertEqual(response.status, 400)
+        response = await self.client.post('/api/channels/disconnect', json=payload, headers=headers)
+        self.assertEqual(response.status, 200)
+        response = await self.client.post('/api/channels/connect', json={}, headers=headers)
+        code = (await response.json())['code']
+        self.assertRegex(code, r'^PL-[a-f0-9]{48}$')
+        async with self.database.sessions() as session:
+            self.assertEqual((await session.get(PlaylistChannel, channel_id)).status, 'disconnected')
+            pending = await session.scalar(select(ChannelConnectionCode))
+            self.assertNotEqual(pending.code_hash, code)

@@ -12,11 +12,12 @@ from aiohttp import web
 from sqlalchemy import select
 
 from .catalog import canonical_track, IdentityConflict
-from .chat_ui import safe_url
+from .chat_ui import safe_url, lil_bro_url
+from .channels import ChannelService
 from .models import ChatControl, User, utc_now
 from .providers.common import ProviderError
 from .submissions import Submitter, parse_song, InvalidSubmission
-from .workflow import RATINGS, save_rating
+from .workflow import RATINGS, save_rating, FlowError
 
 ASSETS = Path(__file__).with_name('web')
 
@@ -48,12 +49,15 @@ def track_json(track, reason=None):
     return dict(id=track.track_id if hasattr(track, 'track_id') else track.id,
                 title=getattr(track, 'display_title', None) or track.title,
                 artist=getattr(track, 'display_artist', None) or track.artist,
-                artwork=safe_url(track.artwork_url, artwork=True), reason=reason)
+                artwork=safe_url(track.artwork_url, artwork=True), reason=reason,
+                listen_url=lil_bro_url(getattr(track, 'display_artist', None) or track.artist,
+                                       getattr(track, 'display_title', None) or track.title))
 
 
 def create_app(token, chat, workflow):
     # Limit simultaneous provider work; SQLite writes already serialize.
     capacity = asyncio.Semaphore(4)
+    channels = ChannelService(chat.database, workflow)
 
     @web.middleware
     async def security(request, handler):
@@ -68,6 +72,8 @@ def create_app(token, chat, workflow):
             response = web.json_response({'error': error.text}, status=error.status) if request.path.startswith('/api/') else error
         except (ProviderError, TimeoutError):
             response = web.json_response({'error': 'Music search is unavailable. Please try again.'}, status=503)
+        except FlowError:
+            response = web.json_response({'error': 'Refresh this page and try again.'}, status=409)
         except Exception:
             # Never echo request data, provider errors or secrets.
             response = web.json_response({'error': 'Something went wrong. Please try again.'}, status=500)
@@ -139,6 +145,36 @@ def create_app(token, chat, workflow):
             artists=[row[0] or row[1] for row in summary['artists']],
             tags=[row[0] or row[1] for row in summary['tags']]))
 
+    async def similar(request):
+        data = await body(request)
+        if type(data.get('track_id')) is not int or not isinstance(data.get('token'), str):
+            raise web.HTTPBadRequest(text='Choose a song first.')
+        async with chat.database.sessions() as session:
+            grant = await session.scalar(select(ChatControl).join(User).where(
+                ChatControl.token == data['token'], User.telegram_user_id == request['user']['id'],
+                ChatControl.expires_at > utc_now()))
+            if grant is None or grant.payload.get('kind') != 'miniapp' or data['track_id'] not in grant.payload.get('tracks', []):
+                raise web.HTTPForbidden(text='Refresh this song list first.')
+        async with capacity:
+            result = await chat.recommendations.recommend_similar_to_track(request['user']['id'], data['track_id'])
+        return await bundle(request['user']['id'], [track_json(row, row.reason) for row in result.recommendations], result.status)
+
+    async def channel_list(request):
+        rows = await channels.listing(request['user']['id'])
+        return web.json_response({'channels': [dict(id=row.id, title=row.title or 'Playlist channel',
+            status=row.status, learned=learned, review=review) for row, learned, review in rows]})
+
+    async def channel_connect(request):
+        code = await channels.new_code(request['user']['id'])
+        return web.json_response({'code': code, 'expires_in': 600})
+
+    async def channel_disconnect(request):
+        data = await body(request)
+        if type(data.get('channel_id')) is not int or type(data.get('remove_signals')) is not bool:
+            raise web.HTTPBadRequest(text='Choose whether to keep the channel’s learned taste.')
+        await channels.disconnect(request['user']['id'], data['channel_id'], data['remove_signals'])
+        return web.json_response({'saved': True})
+
     async def asset(request):
         name = request.match_info.get('name', 'index.html')
         if name not in {'index.html', 'app.js', 'style.css'}:
@@ -152,6 +188,10 @@ def create_app(token, chat, workflow):
     app.router.add_post('/api/recommendations', recommendations)
     app.router.add_post('/api/search', search)
     app.router.add_post('/api/rate', rate)
+    app.router.add_post('/api/similar', similar)
+    app.router.add_get('/api/channels', channel_list)
+    app.router.add_post('/api/channels/connect', channel_connect)
+    app.router.add_post('/api/channels/disconnect', channel_disconnect)
     return app
 
 

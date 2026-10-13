@@ -7,7 +7,9 @@ import re
 import aiohttp
 
 WORKER = 'https://lilcusin-ui.ghazanfaribehrad.workers.dev'
-ROUTES = {'/api/profile':'GET', '/api/recommendations':'POST', '/api/search':'POST', '/api/rate':'POST'}
+ROUTES = {'/api/profile':'GET', '/api/recommendations':'POST', '/api/search':'POST', '/api/rate':'POST',
+          '/api/similar':'POST', '/api/channels':'GET', '/api/channels/connect':'POST',
+          '/api/channels/disconnect':'POST'}
 
 
 async def answer(session, socket, message, capacity):

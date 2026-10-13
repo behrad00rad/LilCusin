@@ -67,3 +67,21 @@ sudo systemctl disable --now lilcusin-miniapp-connector lilcusin-miniapp
 Leave `lilcusin-music-bot`, Nginx, and website services running. No database restore
 is needed to disable the UI; restoring an old database would discard later user
 activity. Retain the bot backup for recovery and avoid printing credentials in logs.
+
+## Listening and channels update
+
+Song cards use the same Lil Bro prefilled song links as Telegram messages. Users
+press Send in Lil Bro and return to rate via “I’ve heard this.” Opening a link does
+not create a rating or mark listening as verified. Recent song lists are restored
+within the same browser session for up to 25 minutes.
+
+Channels lists only the signed-in user’s playlists, with learned/review counts,
+single-use connection codes and disconnect options to keep or remove playlist
+signals. Review remains in the bot’s existing private confirmation flow. Similar
+song requests require an owned, unexpired grant for a displayed song.
+
+The update passed 16 targeted API, connector and channel tests locally and in VPS
+staging. Worker route and hibernating socket tests passed. Only the two Mini App
+services were restarted; original polling bot, website processes and Nginx files
+were checked unchanged. Recovery snapshot:
+`/home/baharnaj/lilcusin-miniapp-backups/20261013T154453Z-ui-update`.

@@ -1,7 +1,8 @@
 // The binding is pinned to the bot's loopback HTTP service, never a caller URL.
 export const routes = new Map([
   ['/api/profile', 'GET'], ['/api/recommendations', 'POST'],
-  ['/api/search', 'POST'], ['/api/rate', 'POST'],
+  ['/api/search', 'POST'], ['/api/rate', 'POST'], ['/api/similar', 'POST'],
+  ['/api/channels', 'GET'], ['/api/channels/connect', 'POST'], ['/api/channels/disconnect', 'POST'],
 ]);
 export const headers = {
   'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow',
