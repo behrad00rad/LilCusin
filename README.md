@@ -90,6 +90,51 @@ based on metadata and can be wrong even when the names look similar.
 
 ## Technical details
 
+### Telegram Mini App
+
+Lil Cusin includes a mobile interface with **For You**, **Search**, and **My Taste**.
+It shares the bot's SQLite database and recommendation services. Song cards support
+Love, Like, Neutral, and Dislike; search uses `Artist - Song title`, and ratings
+apply only to the selected match. This is music discovery, not an audio player.
+Channels and personal-data commands remain available in the bot.
+
+To enable it, set `MINIAPP_URL=https://your-app.example` in `.env`. Forward that
+HTTPS origin to `127.0.0.1:8080` with your reverse proxy, including `/api/` paths,
+and run the bot normally. `MINIAPP_HOST` and `MINIAPP_PORT` change the bind address.
+The bot starts the web server and registers an **Open Lil Cusin** menu button.
+Keep the local port private behind the HTTPS proxy. No new Python packages are needed.
+An optional main app/profile launch button can also be configured in BotFather.
+
+API calls require Telegram-signed `initData`, checked on the server with a
+one-hour maximum age. Expired sessions must reopen the Mini App. Ratings require
+a user-owned, unexpired displayed-list token. Authentication data stays in memory
+and is never put in URLs or local storage; HTTP access logging is disabled.
+Opening the page outside Telegram shows clearly labeled sample data and never
+writes real ratings. For a local design preview only, run
+`python -m http.server 8080 --directory music_bot/web` and open `http://localhost:8080`.
+
+Leave `MINIAPP_URL` empty to keep running only the chat bot. If the menu button
+was previously enabled, reset it through BotFather when disabling the app.
+
+For the deployed `workers.dev` version, the interface lives in the separate
+`lilcusin-ui` Worker. The VPS runs `music_bot.miniapp_server` on loopback port
+8091 and `music_bot.miniapp_connector` as a separate outgoing HTTPS connection.
+The original Telegram polling process can keep running unchanged. The connector
+accepts only the four Mini App API routes and forwards only Telegram authentication
+and JSON bodies to that fixed local port. No website domain or Nginx route is needed.
+
+The Worker uses a SQLite-backed Durable Object to keep the connector available;
+it does not store song preferences in Cloudflare. Preference data stays in the
+existing bot database. Telegram authentication and rating ownership are still
+verified by the bot API. The connector credential is stored as a Worker secret
+and a private file on the VPS, never embedded in the interface.
+
+To rebuild the Worker from the UI assets, run `python worker/build.py`, then use
+the configuration in `worker/wrangler.jsonc` for deployment. Connector and API
+services should be supervised and started at boot. Keep the connector secret
+outside source control. See `MINIAPP_DEPLOYMENT.md` for this installation's
+service names and rollback instructions.
+
 ### Where requests and data go
 
 ```mermaid

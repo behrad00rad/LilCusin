@@ -6,7 +6,7 @@ from contextlib import AsyncExitStack
 from aiogram import Bot, Dispatcher
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.client.telegram import TelegramAPIServer
-from aiogram.types import BotCommand, BotCommandScopeAllPrivateChats
+from aiogram.types import BotCommand, BotCommandScopeAllPrivateChats, MenuButtonWebApp, WebAppInfo
 
 from .config import ConfigError, load_config
 from .database import Database
@@ -24,6 +24,7 @@ from .taste_ui import router as taste_router
 from .chat_service import ChatService
 from .recommendations import RecommendationService
 from . import messages
+from .miniapp import start_server
 
 logger = logging.getLogger("music_bot")
 
@@ -83,6 +84,13 @@ async def main() -> None:
             dispatcher.include_router(channel_router)
             dispatcher.include_router(taste_router)
             dispatcher.include_router(router)
+            chat_service = ChatService(database, RecommendationService(database, providers))
+            if config.miniapp_url:
+                miniapp = await start_server(config.telegram_bot_token, chat_service, workflow,
+                                            config.miniapp_host, config.miniapp_port)
+                stack.push_async_callback(miniapp.cleanup)
+                await bot.set_chat_menu_button(menu_button=MenuButtonWebApp(
+                    text='Open Lil Cusin', web_app=WebAppInfo(url=config.miniapp_url)))
             await bot.set_my_commands([BotCommand(command=command, description=description)
                                       for command, description in messages.COMMAND_DESCRIPTIONS.items()],
                                       scope=BotCommandScopeAllPrivateChats())
@@ -93,7 +101,7 @@ async def main() -> None:
                 close_bot_session=False, handle_as_tasks=True, tasks_concurrency_limit=20,
                 submissions=SubmissionService(database), workflow=workflow,
                 enrichment=enrichment,
-                chat_service=ChatService(database, RecommendationService(database, providers)),
+                chat_service=chat_service,
                 channel_service=channels,
             )
     finally:
