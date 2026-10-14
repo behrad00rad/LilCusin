@@ -7,6 +7,7 @@ from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery
 
 from . import messages
+from .i18n import menu_action
 
 
 class PrivateActions(BaseMiddleware):
@@ -23,7 +24,7 @@ class PrivateActions(BaseMiddleware):
         lock = self.locks.setdefault(user.id, asyncio.Lock())
         text = getattr(event, "text", None) or ""
         callback = getattr(event, "data", None) or ""
-        navigation = (text.split("@")[0] == "/recommend" or text == messages.MENU_FOR_YOU
+        navigation = (text.split("@")[0] == "/recommend" or menu_action(text) == 'recommend'
                       or callback.endswith((":next", ":foryou")) or ":more:" in callback)
         now = monotonic()
         if lock.locked() or navigation and now - self.recent.get(user.id, -10) < 3:

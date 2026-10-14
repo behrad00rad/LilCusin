@@ -6,6 +6,8 @@ from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.types import Message, InlineKeyboardMarkup
 
 from . import messages as M
+from .i18n import menu_action
+from .guidance import show_guide, language_picker
 from .chat_ui import button, card_keyboard, dismiss, main_menu, parse_control, show_card, show_recommendations
 from .submissions import Submitter
 from .workflow import FlowError, RATINGS
@@ -22,8 +24,7 @@ async def command(message, chat_service):
         await message.answer(M.PRIVATE_ONLY)
         return
     user = message.from_user
-    action = {M.MENU_SEND: 'send', M.MENU_FOR_YOU: 'recommend', M.MENU_PROFILE: 'taste',
-              M.MENU_SETTINGS: 'settings', M.MENU_HELP: 'help'}.get(message.text)
+    action = menu_action(message.text)
     if action is None:
         action = message.text.split()[0].split('@')[0].lstrip('/')
     if action in {'recommend', 'taste', 'forgetme'}:
@@ -46,7 +47,10 @@ async def command(message, chat_service):
         sent = await message.answer(M.FORGET_CONFIRM, reply_markup=keyboard)
         await chat_service.bind_control(token, sent.message_id)
     elif action == 'settings':
+        await language_picker(message)
         await message.answer(M.SETTINGS_TEXT, reply_markup=main_menu())
+    elif action == 'help':
+        await show_guide(message)
     else:
         await message.answer(M.HELP if action == 'help' else M.UNSUPPORTED, reply_markup=main_menu())
 

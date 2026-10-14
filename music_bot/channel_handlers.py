@@ -2,6 +2,7 @@
 
 import logging
 import re
+from contextlib import asynccontextmanager
 
 from aiogram import F, Router
 from aiogram.filters import Command
@@ -9,6 +10,8 @@ from aiogram.types import InlineKeyboardButton as Button, InlineKeyboardMarkup, 
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 
 from . import messages as M
+from .i18n import menu_labels, language
+from .preferences import preferences
 from .chat_ui import clean, main_menu
 from .interactions import present
 from .submissions import Submitter
@@ -16,6 +19,16 @@ from .workflow import FlowError
 
 router = Router()
 logger = logging.getLogger('music_bot')
+
+
+@asynccontextmanager
+async def owner_language(service, user_id):
+    saved = await preferences(service.database, user_id)
+    context = language.set(saved['language'])
+    try:
+        yield
+    finally:
+        language.reset(context)
 
 
 def button(token, action, index, text):
@@ -47,7 +60,7 @@ async def connect_prompt(message, user, channel_service, chat_service):
     await message.answer(M.CHANNEL_INSTRUCTIONS.format(code=code), parse_mode=None)
 
 
-@router.message(F.text.in_({M.MENU_CHANNELS}))
+@router.message(F.text.in_(menu_labels('MENU_CHANNELS')))
 @router.message(Command('connectchannel', 'channels', 'disconnectchannel'))
 async def command(message, channel_service, chat_service):
     if message.chat.type != 'private' or message.from_user is None or message.from_user.is_bot:
@@ -120,7 +133,8 @@ async def channel_post(message, bot, channel_service, workflow, enrichment, chat
         connection = await channel_service.connect(message, bot)
         if connection:
             user_id, outcome = connection
-            await bot.send_message(user_id, M.CHANNEL_OUTCOMES[outcome])
+            async with owner_language(channel_service, user_id):
+                await bot.send_message(user_id, M.CHANNEL_OUTCOMES[outcome])
             return
         imported = await channel_service.ingest(message)
         if imported is None:
@@ -129,8 +143,9 @@ async def channel_post(message, bot, channel_service, workflow, enrichment, chat
         if result.kind == 'confirmed':
             enrichment.schedule(result.track_id)
             return
-        anchor = await bot.send_message(user_id, M.CHANNEL_REVIEW_INTRO)
-        await present(anchor, result, user_id, workflow, enrichment, chat_service)
+        async with owner_language(channel_service, user_id):
+            anchor = await bot.send_message(user_id, M.CHANNEL_REVIEW_INTRO)
+            await present(anchor, result, user_id, workflow, enrichment, chat_service)
     except (TelegramBadRequest, TelegramForbiddenError, FlowError):
         pass  # Pending records remain available through /channels.
     except Exception:
@@ -143,6 +158,7 @@ async def membership(event, bot, channel_service):
         user_id = await channel_service.permission_change(event.chat.id, event.new_chat_member.status)
         if user_id is not None:
             try:
-                await bot.send_message(user_id, M.CHANNEL_ACCESS_LOST)
+                async with owner_language(channel_service, user_id):
+                    await bot.send_message(user_id, M.CHANNEL_ACCESS_LOST)
             except (TelegramBadRequest, TelegramForbiddenError):
                 pass

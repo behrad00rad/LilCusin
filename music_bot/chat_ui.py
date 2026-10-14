@@ -8,6 +8,7 @@ from urllib.parse import urlsplit
 from aiogram.types import InlineKeyboardButton as Button, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, LinkPreviewOptions
 
 from . import messages as M
+from .i18n import localized_reason
 from .matching import identity_key
 from .config import normalized_lil_bro_username
 from aiogram.exceptions import TelegramBadRequest
@@ -98,7 +99,7 @@ def list_content(rows, token, seed_track=None):
         entry = f'{index + 1}. {label}'
         if row.album:
             entry += '\n' + html.escape(M.ALBUM_LINE.format(album=clean(row.album, 85)))
-        entry += '\n' + html.escape(clean(row.reason, 120))
+        entry += '\n' + html.escape(clean(localized_reason(row.reason), 120))
         lines.append(entry)
         actions = [button(token, 'rate', M.RATE_NUMBER.format(number=index + 1), index),
                    button(token, 'more', M.SIMILAR_NUMBER.format(number=index + 1), index)]

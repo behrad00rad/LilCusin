@@ -7,6 +7,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery, InlineKeyboardButton as Button, InlineKeyboardMarkup, Message
 
 from . import messages as M
+from .i18n import tr
 from .chat_ui import clean, dismiss, main_menu
 from .workflow import FlowError, RATINGS
 
@@ -77,19 +78,19 @@ async def callback(query: CallbackQuery, chat_service):
                                             state={'view': 'overview'})
             await edit(query.message, overview(data), taste_keyboard(token))
         elif action == 'artists':
-            await edit(query.message, 'Explicit from ratings: ' + names(data['artists']) + '\n\nInferred from playlists: ' + names(data['inferred_artists']), back(token))
+            await edit(query.message, tr('from_ratings') + names(data['artists']) + '\n\n'+tr('from_playlists') + names(data['inferred_artists']), back(token))
         elif action == 'tags':
-            await edit(query.message, 'Explicit from ratings: ' + names(data['tags']) + '\n\nInferred from playlists: ' + names(data['inferred_tags']), back(token))
+            await edit(query.message, tr('from_ratings') + names(data['tags']) + '\n\n'+tr('from_playlists') + names(data['inferred_tags']), back(token))
         elif action == 'clusters':
             clusters = names(data['tags'][:3])
-            await edit(query.message, 'Current taste clusters: ' + clusters + '\n\n' + (M.TASTE_RELIABILITY_GOOD if data['reliable'] else M.TASTE_RELIABILITY_LOW), back(token))
+            await edit(query.message, tr('tags')+': ' + clusters + '\n\n' + (M.TASTE_RELIABILITY_GOOD if data['reliable'] else M.TASTE_RELIABILITY_LOW), back(token))
         elif action == 'recent':
             marks = {'love': '❤️', 'like': '👍', 'neutral': '😐', 'dislike': '👎'}
             rows = []
             for source, _, value, artist_display, artist, title_display, title in data['recent']:
                 marker = marks.get(value, '📻') if source == 'rating' else '📻'
                 rows.append(f"{marker} {clean(artist_display or artist, 70)} — {clean(title_display or title, 90)}")
-            await edit(query.message, 'Recent learning signals:\n' + ('\n'.join(rows) or M.UNKNOWN), back(token))
+            await edit(query.message, tr('recent')+':\n' + ('\n'.join(rows) or M.UNKNOWN), back(token))
         elif action == 'correct':
             targets = await chat_service.taste_targets(query.from_user.id)
             await chat_service.taste_control(token, query.from_user.id, query.message.message_id,

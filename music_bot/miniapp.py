@@ -14,6 +14,8 @@ from sqlalchemy import select
 from .catalog import canonical_track, IdentityConflict
 from .chat_ui import safe_url, lil_bro_url
 from .channels import ChannelService
+from .preferences import preferences, LANGUAGES
+from .i18n import language
 from .models import ChatControl, User, utc_now
 from .providers.common import ProviderError
 from .submissions import Submitter, parse_song, InvalidSubmission
@@ -67,7 +69,14 @@ def create_app(token, chat, workflow):
                 request['user'] = user
                 await chat.ensure_user(Submitter(user['id'], user.get('username'),
                                                 user.get('first_name'), user.get('language_code')))
-            response = await handler(request)
+                request['preferences'] = await preferences(chat.database, user['id'], user.get('language_code'))
+                locale_context = language.set(request['preferences']['language'])
+                try:
+                    response = await handler(request)
+                finally:
+                    language.reset(locale_context)
+            else:
+                response = await handler(request)
         except web.HTTPException as error:
             response = web.json_response({'error': error.text}, status=error.status) if request.path.startswith('/api/') else error
         except (ProviderError, TimeoutError):
@@ -93,14 +102,39 @@ def create_app(token, chat, workflow):
         except (ValueError, TypeError):
             raise web.HTTPBadRequest(text='Invalid request.') from None
 
-    async def bundle(user_id, tracks, status='ok'):
-        grant = await chat.create_control(user_id, tracks=[t['id'] for t in tracks], kind='miniapp')
+    async def bundle(user_id, tracks, status='ok', visible=(), expected_token=None):
+        grant = await chat.create_control(user_id, tracks=list(dict.fromkeys([t['id'] for t in tracks] + list(visible))), kind='miniapp', expected_token=expected_token)
         return web.json_response(dict(tracks=tracks, token=grant, status=status))
 
     async def recommendations(request):
+        data = await body(request)
+        replace = data.get('replace', False)
+        exclude = data.get('exclude', [])
+        current = data.get('current', [])
+        if (type(replace) is not bool or not isinstance(exclude, list) or len(exclude) > 20
+                or any(type(value) is not int or value <= 0 for value in exclude)
+                or not isinstance(current, list) or len(current) > 20 or (current and not replace)
+                or any(not isinstance(item, dict) or type(item.get('id')) is not int
+                       or not isinstance(item.get('token'), str) or item['id'] not in exclude for item in current)):
+            raise web.HTTPBadRequest(text='Invalid song list.')
+        # Renew only the user's still-visible, previously granted cards. This
+        # keeps long rating sessions usable without extending arbitrary IDs.
+        visible = []
+        expected_token = None
+        if current:
+            async with chat.database.sessions() as session:
+                for item in current:
+                    grant = await session.scalar(select(ChatControl).join(User).where(
+                        ChatControl.token == item['token'], User.telegram_user_id == request['user']['id'],
+                        ChatControl.expires_at > utc_now()))
+                    if grant is None or grant.payload.get('kind') != 'miniapp' or item['id'] not in grant.payload.get('tracks', []):
+                        raise web.HTTPForbidden(text='Refresh this song list first.')
+                    visible.append(item['id'])
+                    expected_token = grant.token
         async with capacity:
-            result = await chat.recommendations.recommend_for_user(request['user']['id'])
-        return await bundle(request['user']['id'], [track_json(row, row.reason) for row in result.recommendations], result.status)
+            result = await chat.recommendations.recommend_for_user(request['user']['id'], limit=20 if replace else 5)
+        rows = [track_json(row, row.reason) for row in result.recommendations if row.track_id not in exclude]
+        return await bundle(request['user']['id'], rows[:1] if replace else rows, result.status, visible, expected_token)
 
     async def search(request):
         data = await body(request)
@@ -175,16 +209,31 @@ def create_app(token, chat, workflow):
         await channels.disconnect(request['user']['id'], data['channel_id'], data['remove_signals'])
         return web.json_response({'saved': True})
 
+    async def get_preferences(request):
+        return web.json_response(request['preferences'])
+
+    async def set_preferences(request):
+        data = await body(request)
+        if (not data or set(data) - {'language', 'ui_guide_done'}
+                or ('language' in data and (not isinstance(data['language'], str) or data['language'] not in LANGUAGES))
+                or ('ui_guide_done' in data and data['ui_guide_done'] is not True)):
+            raise web.HTTPBadRequest(text='Invalid preferences.')
+        result = await preferences(chat.database, request['user']['id'], request['user'].get('language_code'),
+                                   language=data.get('language'), ui_done=data.get('ui_guide_done'))
+        return web.json_response(result)
+
     async def asset(request):
         name = request.match_info.get('name', 'index.html')
-        if name not in {'index.html', 'app.js', 'style.css'}:
+        if name not in {'index.html', 'app.js', 'style.css', 'locales.json', 'bot-logo.jpg', 'vazirmatn.woff2', 'Vazirmatn-OFL.txt'}:
             raise web.HTTPNotFound()
         return web.FileResponse(ASSETS / name)
 
     app = web.Application(middlewares=[security], client_max_size=16384)
     app.router.add_get('/', asset)
-    app.router.add_get('/{name:index.html|app.js|style.css}', asset)
+    app.router.add_get('/{name:index.html|app.js|style.css|locales.json|bot-logo.jpg|vazirmatn.woff2|Vazirmatn-OFL.txt}', asset)
     app.router.add_get('/api/profile', profile)
+    app.router.add_get('/api/preferences', get_preferences)
+    app.router.add_post('/api/preferences/update', set_preferences)
     app.router.add_post('/api/recommendations', recommendations)
     app.router.add_post('/api/search', search)
     app.router.add_post('/api/rate', rate)

@@ -27,6 +27,7 @@ class Database:
         self.sessions = async_sessionmaker(self.engine, expire_on_commit=False)
 
     async def initialize(self) -> None:
+        from .preferences import UserPreferences  # Register the additive preferences table.
         async with self.engine.begin() as connection:
             await connection.exec_driver_sql("BEGIN IMMEDIATE")
             await connection.run_sync(migrate)

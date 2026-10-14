@@ -25,11 +25,15 @@ class ChatService:
             await session.execute(insert(User).values(telegram_user_id=user.telegram_user_id, **fields)
                 .on_conflict_do_update(index_elements=["telegram_user_id"], set_=fields))
 
-    async def create_control(self, user_id, *, tracks=(), seed=None, kind="list", submitted=False, links=()):
+    async def create_control(self, user_id, *, tracks=(), seed=None, kind="list", submitted=False, links=(), expected_token=None):
         token = uuid4().hex
         async with self.database.write() as session:
             internal = await session.scalar(select(User.id).where(User.telegram_user_id == user_id))
             if internal is None:
+                raise FlowError("stale")
+            if expected_token is not None and await session.scalar(select(ChatControl.token).where(
+                    ChatControl.token == expected_token, ChatControl.user_id == internal,
+                    ChatControl.expires_at > utc_now())) is None:
                 raise FlowError("stale")
             await session.execute(delete(ChatControl).where(ChatControl.expires_at <= utc_now()))
             # Keep at most twenty active controls per user, with no unbounded UI state.

@@ -13,6 +13,8 @@ from .workflow import FlowError, Workflow
 from .enrichment import Enrichment
 from .interactions import parse_callback, present, rating_keyboard
 from . import chat_handlers
+from .guidance import show_guide
+from .i18n import menu_labels
 from .chat_ui import dismiss, main_menu
 
 router = Router()
@@ -26,19 +28,19 @@ async def start(message: Message, chat_service=None) -> None:
         return
     if chat_service is not None:
         await chat_service.ensure_user(submitter(message))
-    await message.answer(messages.START, reply_markup=main_menu())
+    await show_guide(message)
 
 
 @router.message(Command("help"))
 async def help_command(message: Message) -> None:
-    await message.answer(messages.HELP if message.chat.type == "private" else messages.PRIVATE_ONLY,
-                         reply_markup=main_menu() if message.chat.type == "private" else None)
+    if message.chat.type == 'private':
+        await show_guide(message)
+    else:
+        await message.answer(messages.PRIVATE_ONLY)
 
 
 router.message.register(chat_handlers.command, Command("recommend", "profile", "taste", "privacy", "forgetme"))
-router.message.register(chat_handlers.command, F.text.in_({messages.MENU_SEND, messages.MENU_FOR_YOU,
-                                                        messages.MENU_PROFILE, messages.MENU_SETTINGS,
-                                                        messages.MENU_HELP}))
+router.message.register(chat_handlers.command, F.text.in_(menu_labels('MENU_SEND','MENU_FOR_YOU','MENU_PROFILE','MENU_SETTINGS','MENU_HELP')))
 router.callback_query.register(chat_handlers.callback, F.data.startswith("q:"))
 
 

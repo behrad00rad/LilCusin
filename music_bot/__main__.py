@@ -25,6 +25,7 @@ from .chat_service import ChatService
 from .recommendations import RecommendationService
 from . import messages
 from .miniapp import start_server
+from .guidance import LanguageMiddleware, router as guidance_router, configure_commands
 
 logger = logging.getLogger("music_bot")
 
@@ -75,12 +76,16 @@ async def main() -> None:
             stack.push_async_callback(update_tasks.close)
             dispatcher = Dispatcher(disable_fsm=True)
             dispatcher.update.outer_middleware(update_tasks)
+            locale_middleware = LanguageMiddleware(database)
+            dispatcher.message.outer_middleware(locale_middleware)
+            dispatcher.callback_query.outer_middleware(locale_middleware)
             private_actions = PrivateActions()
             dispatcher.message.outer_middleware(private_actions)
             dispatcher.callback_query.outer_middleware(private_actions)
             channel_updates = ChannelUpdates(database, private_actions)
             dispatcher.channel_post.outer_middleware(channel_updates)
             dispatcher.my_chat_member.outer_middleware(channel_updates)
+            dispatcher.include_router(guidance_router)
             dispatcher.include_router(channel_router)
             dispatcher.include_router(taste_router)
             dispatcher.include_router(router)
@@ -91,9 +96,7 @@ async def main() -> None:
                 stack.push_async_callback(miniapp.cleanup)
                 await bot.set_chat_menu_button(menu_button=MenuButtonWebApp(
                     text='Open Lil Cusin', web_app=WebAppInfo(url=config.miniapp_url)))
-            await bot.set_my_commands([BotCommand(command=command, description=description)
-                                      for command, description in messages.COMMAND_DESCRIPTIONS.items()],
-                                      scope=BotCommandScopeAllPrivateChats())
+            await configure_commands(bot)
             logger.info("Bot initialized; starting long polling.")
             # aiogram handles SIGINT/SIGTERM; cleanup drains handlers first.
             await dispatcher.start_polling(

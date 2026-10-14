@@ -85,3 +85,35 @@ staging. Worker route and hibernating socket tests passed. Only the two Mini App
 services were restarted; original polling bot, website processes and Nginx files
 were checked unchanged. Recovery snapshot:
 `/home/baharnaj/lilcusin-miniapp-backups/20261013T154453Z-ui-update`.
+
+## Guided multilingual interface
+
+The bot and Mini App offer a three-step first-visit guide and an always-available
+help control. English, Persian, Arabic, Turkish, Russian, Spanish, French and German
+use a shared catalogue. Telegram language is the initial default; a manual choice
+persists in the additive `user_preferences` table, shared by both interfaces.
+Preferences and guide flags are removed with the account via the user foreign key.
+
+The UI uses the bot’s public owl profile photo, a monochrome/navy/burgundy palette,
+and self-hosted Vazirmatn for Persian/Arabic. The font is from
+https://github.com/rastikerdar/vazirmatn (v33.003); its SIL license is included in
+`music_bot/web/Vazirmatn-OFL.txt`. The language curtain reproduces the cover/reveal
+timing from the portfolio’s LanguageSwitch component. Reduced motion is respected.
+
+After a rating saves, only that card slides out and is replaced with a recommendation
+that excludes visible songs. Surviving cards receive a fresh owner-checked control;
+a cancelled/forgotten control cannot renew permissions. No new candidate shows a
+clear empty state, and failed replacement requests can retry without resaving ratings.
+
+Validation: 41 staged bot/API/privacy/guide/replacement checks passed, with the final
+owner-language channel notification test checked afterward. Worker route, font binary,
+locale asset and private socket tests passed. Live signed preference reads were checked
+only on VPS loopback; no real user profile was exported for external testing. Telegram
+command menus were verified in all eight languages. Live browser preview checks covered
+Persian text, guide navigation, language switching, and animated replacement. Narrow
+mobile layouts were checked for horizontal overflow.
+
+Recovery snapshot for the final deployment:
+`/home/baharnaj/lilcusin-miniapp-backups/20261014T102501Z-guides-languages`.
+The bot was restarted to load translated handlers and menus. Provider relay settings,
+credentials, website process IDs and Nginx routes were preserved.

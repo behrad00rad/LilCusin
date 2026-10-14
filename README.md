@@ -215,3 +215,12 @@ affect results, including songs written in Persian. Recommendations are
 heuristics, not a guarantee that someone will like a song. This is a self-hosted
 project with no hosted-service uptime promise. No license is currently included;
 reuse permissions have not been specified.
+
+### Guide and language
+
+New listeners get a short three-step guide in Telegram and the Mini App. Use `/help`
+to reopen it, `/language` to change language, or the language picker in the app.
+Eight languages are available, with Persian/Arabic RTL layout and bundled Vazirmatn.
+The app replaces rated song cards with new picks while keeping the rest of the list.
+Language, onboarding, and replacement checks live in `tests/test_guidance.py` and
+`tests/test_miniapp.py`.

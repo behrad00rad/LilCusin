@@ -113,7 +113,7 @@ class ChatFlowTests(ServiceTestCase):
         with patch.object(engine, 'recommend_similar_to_track', wraps=engine.recommend_similar_to_track) as similar:
             await self.click(listing, 0, 1)
             similar.assert_awaited_once_with(TELEGRAM_ID, seed, limit=5)
-        self.assertIn('More Like This', self.outgoing[-1][1])
+        self.assertIn(M.MORE_LIKE, self.outgoing[-1][1])
         async with self.database.sessions() as session:
             after = (await session.execute(select(Rating.track_id, Rating.value).order_by(Rating.id))).all()
         self.assertEqual(before, after)
@@ -132,7 +132,7 @@ class ChatFlowTests(ServiceTestCase):
         self.assertEqual(await self.count(Rating), 5)
         self.assertTrue(self.edit.call_args.kwargs['reply_markup'].inline_keyboard[0][3].text.startswith('✓'))
         await self.feed(message=self.message(text='/profile'))
-        self.assertIn('Disliked: 2', self.outgoing[-1][1])
+        self.assertIn('↓ 2', self.outgoing[-1][1])
         self.assertIn('Recommendations shown: 5', self.outgoing[-1][1])
 
     async def test_another_list_is_navigation_and_repeated_click_safe(self):
@@ -197,7 +197,7 @@ class ChatFlowTests(ServiceTestCase):
             dashboard = self.outgoing[-1]
             self.assertIn(M.TASTE_TITLE, dashboard[1])
             await self.click(dashboard)
-            self.assertIn('Explicit from ratings', edit_text.call_args.args[0])
+            self.assertIn('From your ratings', edit_text.call_args.args[0])
             for row, column in ((0, 1), (1, 0), (1, 1), (2, 0), (3, 0)):
                 await self.click(dashboard, row=row, column=column)
                 self.assertNotEqual(self.ack.call_args.args[0], M.STALE)

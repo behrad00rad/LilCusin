@@ -5,6 +5,7 @@ from aiogram import Bot
 from aiogram.types import Update
 
 from music_bot import messages
+from music_bot.i18n import tr
 from music_bot.submissions import InvalidSubmission
 from tests.support import dispatcher
 
@@ -40,17 +41,18 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
     async def test_commands_preserved_and_not_saved(self):
         for command, response in [("/start", messages.START), ("/help", messages.HELP)]:
             await self.send(text=command)
-            self.assertEqual(self.answer.call_args.args[0], response)
+            self.assertIn(tr('g1_title'), self.answer.call_args.args[0])
+            self.assertIn('guide:1', str(self.answer.call_args.kwargs['reply_markup']))
             self.assertIsNotNone(self.answer.call_args.kwargs.get("reply_markup"))
         await self.send(text="/unknown - song")
         self.service.submit_text.assert_not_called()
 
     async def test_text_dispatches_and_responds(self):
-        self.service.submit_text.return_value.parsed_artist = "گوگوش"
+        self.service.submit_text.return_value.parsed_artist = "Ú¯ÙˆÚ¯ÙˆØ´"
         self.service.submit_text.return_value.parsed_title = "Song"
-        await self.send(text="گوگوش — Song")
+        await self.send(text="Ú¯ÙˆÚ¯ÙˆØ´ â€” Song")
         self.service.submit_text.assert_awaited_once()
-        self.assertIn("گوگوش", self.answer.call_args.args[0])
+        self.assertIn("Ú¯ÙˆÚ¯ÙˆØ´", self.answer.call_args.args[0])
         self.assertIn(messages.PENDING, self.answer.call_args.args[0])
 
     async def test_bad_text_explains_format(self):

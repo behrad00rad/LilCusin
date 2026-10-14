@@ -4,6 +4,7 @@ import json
 from urllib.parse import urlencode
 from unittest import TestCase
 from unittest.mock import AsyncMock
+from types import SimpleNamespace
 
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
@@ -61,6 +62,46 @@ class MiniAppTests(ServiceTestCase):
         response = await self.client.get('/api/profile')
         self.assertEqual(response.status, 401)
         self.assertEqual((await self.client.get('/')).status, 200)
+
+    async def test_preferences_are_user_scoped_and_validate_language(self):
+        headers = {'X-Telegram-Init-Data': signed()}
+        response = await self.client.post('/api/preferences/update', json={'language': 'fa', 'ui_guide_done': True}, headers=headers)
+        self.assertEqual(response.status, 200)
+        self.assertEqual((await response.json())['language'], 'fa')
+        response = await self.client.get('/api/preferences', headers={'X-Telegram-Init-Data': signed(456)})
+        self.assertEqual((await response.json())['language'], 'en')
+        for payload in [{'language': 'xx'}, {'language': ['fa']}, {'user_id': 456, 'language': 'de'}, {'ui_guide_done': False}]:
+            response = await self.client.post('/api/preferences/update', json=payload, headers=headers)
+            self.assertEqual(response.status, 400)
+
+    async def test_replacement_excludes_visible_songs_and_grants_only_replacement(self):
+        async with self.database.write() as session:
+            next_track = Track(artist='Another', title='Next song', metadata_source='lastfm')
+            session.add(next_track)
+            await session.flush()
+            next_id = next_track.id
+        rows = [SimpleNamespace(track_id=value, title='Song', artist='Artist', artwork_url=None, reason='Similar')
+                for value in [self.track_id, next_id]]
+        self.chat.recommendations.recommend_for_user.return_value = SimpleNamespace(recommendations=rows, status='ok')
+        headers = {'X-Telegram-Init-Data': signed()}
+        response = await self.client.post('/api/recommendations', json={'replace': True, 'exclude': [self.track_id]}, headers=headers)
+        self.assertEqual(response.status, 200)
+        result = await response.json()
+        self.assertEqual([song['id'] for song in result['tracks']], [next_id])
+        self.chat.recommendations.recommend_for_user.assert_awaited_once_with(123, limit=20)
+        response = await self.client.post('/api/rate', json={'token': result['token'], 'track_id': self.track_id, 'value': 'like'}, headers=headers)
+        self.assertEqual(response.status, 403)
+        for payload in [{'replace': 'yes'}, {'exclude': [True]}, {'exclude': list(range(1, 23))}]:
+            response = await self.client.post('/api/recommendations', json=payload, headers=headers)
+            self.assertEqual(response.status, 400)
+        old = await self.chat.create_control(123, tracks=[self.track_id], kind='miniapp')
+        request = {'replace': True, 'exclude': [self.track_id], 'current': [{'id': self.track_id, 'token': old}]}
+        response = await self.client.post('/api/recommendations', json=request, headers={'X-Telegram-Init-Data': signed(456)})
+        self.assertEqual(response.status, 403)
+        response = await self.client.post('/api/recommendations', json=request, headers=headers)
+        renewed = (await response.json())['token']
+        response = await self.client.post('/api/rate', json={'token': renewed, 'track_id': self.track_id, 'value': 'like'}, headers=headers)
+        self.assertEqual(response.status, 200)
 
     async def test_rating_owner_and_display_grant(self):
         grant = await self.chat.create_control(123, tracks=[self.track_id], kind='miniapp')
