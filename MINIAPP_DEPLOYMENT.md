@@ -117,3 +117,26 @@ Recovery snapshot for the final deployment:
 `/home/baharnaj/lilcusin-miniapp-backups/20261014T102501Z-guides-languages`.
 The bot was restarted to load translated handlers and menus. Provider relay settings,
 credentials, website process IDs and Nginx routes were preserved.
+
+## Similar-song navigation and visual guide refresh
+
+Similar songs now have a dedicated heading and breadcrumb history, with Telegram
+back-button support. Restoring a page retains its song grants, search query and
+scroll position. Stale requests cannot navigate away from the current page.
+The guide has visual examples and revised Persian instructions in both interfaces.
+Song links use SVG icons; contrast and spacing replace decorative card borders.
+
+The language transition uses one non-modal top-layer overlay, stable scrollbar
+space, preserved focus/scroll, and suppressed card entrance animations during the
+switch. The curtain uses the app's navy palette with a burgundy accent.
+
+Validation: all 42 staged bot checks passed, plus Worker/connector checks and
+`node worker/test-ui-navigation.mjs`. Browser previews covered nested navigation,
+restored search, rating replacement, guide steps, and English/Persian layouts at
+390px and 320px. The 320px Persian layout had no horizontal overflow.
+
+Recovery snapshot:
+`/home/baharnaj/lilcusin-miniapp-backups/20261014T112154Z-guides-languages`.
+Worker version: `d1ec2f87-f282-40b6-9294-cc54f819ae21`.
+Only bot services and the existing `lilcusin-ui` Worker were updated; website
+process IDs, Nginx files, bot credentials and provider settings were verified unchanged.

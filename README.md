@@ -222,5 +222,9 @@ New listeners get a short three-step guide in Telegram and the Mini App. Use `/h
 to reopen it, `/language` to change language, or the language picker in the app.
 Eight languages are available, with Persian/Arabic RTL layout and bundled Vazirmatn.
 The app replaces rated song cards with new picks while keeping the rest of the list.
+“More like this” opens a song-specific page. Breadcrumbs and Telegram’s back button
+restore earlier lists, including search text, scroll position and song controls.
+The Mini App guide includes small visual examples of search, listening and rating.
 Language, onboarding, and replacement checks live in `tests/test_guidance.py` and
-`tests/test_miniapp.py`.
+`tests/test_miniapp.py`. Run `node worker/test-ui-navigation.mjs` for the page history
+and song-control restoration checks.
