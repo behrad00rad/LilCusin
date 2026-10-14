@@ -55,7 +55,7 @@ def safe_url(value, artwork=False):
         return None
     try:
         url = urlsplit(value)
-        hosts = {'lastfm.freetls.fastly.net', 'lastfm-img2.akamaized.net'} if artwork else {'www.last.fm', 'last.fm', 'musicbrainz.org'}
+        hosts = {'lastfm.freetls.fastly.net', 'lastfm-img.freetls.fastly.net', 'lastfm-img2.akamaized.net'} if artwork else {'www.last.fm', 'last.fm', 'musicbrainz.org'}
         if (url.scheme != 'https' or url.hostname not in hosts or url.username or url.password
                 or url.port not in (None, 443) or url.query or url.fragment or '\\' in value):
             return None

@@ -163,3 +163,29 @@ language changes finish with the overlay hidden and controls enabled. Direct
 authenticated preference checks stayed on VPS loopback; no user profile was exported.
 The user confirmed that both startup and language switching work in Telegram
 after fully closing and reopening the Mini App.
+
+## Channel library, artwork, and title search
+
+Connected channels now open a song list with All songs, Unrated, and Needs
+identification filters. An owner can identify a pending channel post in the Mini
+App, listen, and explicitly rate it; rating replaces the card within that
+channel. Channel pages use stable cursors and owner-bound short-lived grants.
+Only posts received after connection appear. The Telegram review button can be
+reused for successive pending posts.
+
+Missing album covers are loaded in the background from Last.fm and shown only
+when the returned song identity matches. The actual Last.fm artwork hostname is
+allowed by both the API and Worker image policies. Search accepts a title alone
+through the existing MusicBrainz relay, or artist and title for narrower matching.
+
+Validation: 56 staged channel/Mini App/search/artwork tests and 30 staged
+Telegram/channel/guide tests passed. A fixed public title lookup found Beach
+House's “Space Song” through the existing relay. Browser checks covered channel
+browsing and identification in English and Persian, covers, and title-only
+search. Worker navigation and recovery regressions passed. Bot-only backup:
+`/home/baharnaj/lilcusin-miniapp-backups/20261014T150619Z-channel-library`.
+The final copy update has a separate backup at
+`/home/baharnaj/lilcusin-miniapp-backups/20261014T151045Z-channel-ui-copy`.
+Worker version: `3bf217fb-5ffe-40d8-a238-e0d36b719ff8`.
+Website processes, Nginx routes, bot credentials, and provider relay settings
+were checked unchanged.

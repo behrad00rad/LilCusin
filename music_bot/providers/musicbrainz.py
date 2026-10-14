@@ -85,9 +85,9 @@ class MusicBrainzClient:
                 params={"fmt": "json", **params}, headers={"User-Agent": USER_AGENT},
             )
 
-    async def search_recordings(self, artist: str, title: str) -> list[TrackCandidate]:
+    async def search_recordings(self, artist: str, title: str, limit: int = 5) -> list[TrackCandidate]:
         payload = await self._request(
-            query=f"artist:{quoted_query(artist)} AND recording:{quoted_query(title)}", limit=5,
+            query=(f"artist:{quoted_query(artist)} AND " if artist.strip() else "") + f"recording:{quoted_query(title)}", limit=limit,
         )
         if "recordings" not in payload or not isinstance(payload["recordings"], list):
             raise ProviderError(Failure.INVALID_RESPONSE)

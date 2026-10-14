@@ -2,12 +2,13 @@
 
 from dataclasses import dataclass, field
 from datetime import timedelta
+from difflib import SequenceMatcher
 
 from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import insert
 
 from .catalog import IdentityConflict, canonical_track
-from .matching import confidence, decode_track, deduplicate, encode_track, similarities, match_decision, strong_match
+from .matching import confidence, decode_track, deduplicate, encode_track, similarities, match_decision, strong_match, match_text
 
 import logging
 
@@ -80,6 +81,19 @@ class Workflow:
     def __init__(self, database, providers):
         self.database = database
         self.providers = providers
+
+    async def search_title(self, title):
+        """Search a track name without inventing an artist for identity matching."""
+        try:
+            candidates = await self.providers.call("musicbrainz", "search_recordings", "", title, limit=15)
+        except ProviderError:
+            return [], True
+        wanted = match_text(title)
+        scored = [(SequenceMatcher(None, wanted, match_text(c.title)).ratio(), c)
+                  for c in deduplicate(candidates) if c.artist and c.title]
+        # Keep provider order among similarly good matches, so familiar songs stay near the top.
+        scored = [candidate for score, candidate in scored if score >= 0.55]
+        return scored[:10], False
 
     async def search(self, artist, title):
         candidates = []

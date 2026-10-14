@@ -44,6 +44,10 @@ async def canonical_track(session, candidate):
         )
         session.add(track)
         await session.flush()
+    else:
+        for field in ('album', 'artwork_url', 'duration'):
+            if getattr(track, field) is None and getattr(candidate, field) is not None:
+                setattr(track, field, getattr(candidate, field))
     await attach_ids(session, track.id, candidate.external_ids)
     return track
 

@@ -2,12 +2,12 @@
 export const routes = new Map([
   ['/api/preferences', 'GET'], ['/api/preferences/update', 'POST'], ['/api/profile', 'GET'], ['/api/recommendations', 'POST'],
   ['/api/search', 'POST'], ['/api/rate', 'POST'], ['/api/similar', 'POST'],
-  ['/api/channels', 'GET'], ['/api/channels/connect', 'POST'], ['/api/channels/disconnect', 'POST'],
+  ['/api/artwork', 'POST'], ['/api/channels/songs', 'POST'], ['/api/channels/review', 'POST'], ['/api/channels', 'GET'], ['/api/channels/connect', 'POST'], ['/api/channels/disconnect', 'POST'],
 ]);
 export const headers = {
   'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow',
   'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer',
-  'Content-Security-Policy': "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self'; img-src 'self' https://lastfm.freetls.fastly.net https://lastfm-img2.akamaized.net; connect-src 'self'; object-src 'none'; base-uri 'none'",
+  'Content-Security-Policy': "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self'; img-src 'self' https://lastfm.freetls.fastly.net https://lastfm-img.freetls.fastly.net https://lastfm-img2.akamaized.net; connect-src 'self'; object-src 'none'; base-uri 'none'",
 };
 export function error(message, status) {
   return Response.json({error:message},{status,headers});

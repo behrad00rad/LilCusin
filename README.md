@@ -92,11 +92,13 @@ based on metadata and can be wrong even when the names look similar.
 
 ### Telegram Mini App
 
-Lil Cusin includes a mobile interface with **For You**, **Search**, and **My Taste**.
+Lil Cusin includes a mobile interface with **For You**, **Search**, **Channels**, and **My Taste**.
 It shares the bot's SQLite database and recommendation services. Song cards support
-Love, Like, Neutral, and Dislike; search uses `Artist - Song title`, and ratings
-apply only to the selected match. This is music discovery, not an audio player.
-Channels and personal-data commands remain available in the bot.
+Love, Like, Neutral, and Dislike; search accepts a song title alone or
+`Artist - Song title`. Ratings apply only to the selected match after listening.
+Connected channel songs can be browsed, rated, and identified in the app.
+Posts start collecting after channel connection; older posts are not imported.
+Available album covers appear on song cards. This is music discovery, not an audio player.
 
 To enable it, set `MINIAPP_URL=https://your-app.example` in `.env`. Forward that
 HTTPS origin to `127.0.0.1:8080` with your reverse proxy, including `/api/` paths,
@@ -120,7 +122,7 @@ For the deployed `workers.dev` version, the interface lives in the separate
 `lilcusin-ui` Worker. The VPS runs `music_bot.miniapp_server` on loopback port
 8091 and `music_bot.miniapp_connector` as a separate outgoing HTTPS connection.
 The original Telegram polling process can keep running unchanged. The connector
-accepts only the four Mini App API routes and forwards only Telegram authentication
+accepts only the declared Mini App API routes and forwards only Telegram authentication
 and JSON bodies to that fixed local port. No website domain or Nginx route is needed.
 
 The Worker uses a SQLite-backed Durable Object to keep the connector available;

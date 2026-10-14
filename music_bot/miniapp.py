@@ -16,7 +16,9 @@ from .chat_ui import safe_url, lil_bro_url
 from .channels import ChannelService
 from .preferences import preferences, LANGUAGES
 from .i18n import language
-from .models import ChatControl, User, utc_now
+from .models import ChatControl, Track, User, utc_now
+from .artwork import ArtworkLoader
+from .channel_api import register_channel_api
 from .providers.common import ProviderError
 from .submissions import Submitter, parse_song, InvalidSubmission
 from .workflow import RATINGS, save_rating, FlowError
@@ -60,6 +62,7 @@ def create_app(token, chat, workflow):
     # Limit simultaneous provider work; SQLite writes already serialize.
     capacity = asyncio.Semaphore(4)
     channels = ChannelService(chat.database, workflow)
+    artwork = ArtworkLoader(chat.database, workflow.providers)
 
     @web.middleware
     async def security(request, handler):
@@ -90,7 +93,7 @@ def create_app(token, chat, workflow):
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['Referrer-Policy'] = 'no-referrer'
         response.headers['X-Robots-Tag'] = 'noindex, nofollow'
-        response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self'; img-src 'self' https://lastfm.freetls.fastly.net https://lastfm-img2.akamaized.net; connect-src 'self'; object-src 'none'; base-uri 'none'"
+        response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self'; img-src 'self' https://lastfm.freetls.fastly.net https://lastfm-img.freetls.fastly.net https://lastfm-img2.akamaized.net; connect-src 'self'; object-src 'none'; base-uri 'none'"
         return response
 
     async def body(request):
@@ -102,9 +105,27 @@ def create_app(token, chat, workflow):
         except (ValueError, TypeError):
             raise web.HTTPBadRequest(text='Invalid request.') from None
 
-    async def bundle(user_id, tracks, status='ok', visible=(), expected_token=None):
-        grant = await chat.create_control(user_id, tracks=list(dict.fromkeys([t['id'] for t in tracks] + list(visible))), kind='miniapp', expected_token=expected_token)
-        return web.json_response(dict(tracks=tracks, token=grant, status=status))
+    async def bundle(user_id, tracks, status='ok', visible=(), expected_token=None, links=(), extra=None):
+        grant = await chat.create_control(user_id, tracks=list(dict.fromkeys([t['id'] for t in tracks] + list(visible))), kind='miniapp', expected_token=expected_token, links=links)
+        for track in tracks:
+            if not track.get('artwork'):artwork.schedule(track['id'])
+        return web.json_response(dict(tracks=tracks, token=grant, status=status, **(extra or {})))
+
+    async def cover_art(request):
+        data=await body(request)
+        ids,token=data.get('track_ids'),data.get('token')
+        if (not isinstance(ids,list) or not 1<=len(ids)<=10 or any(type(i) is not int or i<=0 for i in ids) or not isinstance(token,str)):
+            raise web.HTTPBadRequest(text='Choose displayed songs.')
+        async with chat.database.sessions() as session:
+            grant=await session.scalar(select(ChatControl).join(User).where(ChatControl.token==token,
+                User.telegram_user_id==request['user']['id'],ChatControl.expires_at>utc_now()))
+            if grant is None or grant.payload.get('kind')!='miniapp' or any(i not in grant.payload.get('tracks',[]) for i in ids):
+                raise web.HTTPForbidden(text='Refresh this song list first.')
+            rows=(await session.scalars(select(Track).where(Track.id.in_(ids)))).all()
+            result={str(row.id):safe_url(row.artwork_url,artwork=True) for row in rows}
+        for track_id in ids:
+            if not result.get(str(track_id)):artwork.schedule(track_id)
+        return web.json_response({'artwork':result})
 
     async def recommendations(request):
         data = await body(request)
@@ -140,13 +161,15 @@ def create_app(token, chat, workflow):
         data = await body(request)
         query = data.get('query')
         if not isinstance(query, str) or not 3 <= len(query) <= 240:
-            raise web.HTTPBadRequest(text='Enter Artist - Song title (up to 240 characters).')
+            raise web.HTTPBadRequest(text='Enter a song title or Artist - Song title (up to 240 characters).')
         try:
             artist, title = parse_song(query)
         except InvalidSubmission:
-            raise web.HTTPBadRequest(text='Use Artist - Song title.') from None
+            artist, title = None, query.strip()
+            if not title or title.startswith('/'):
+                raise web.HTTPBadRequest(text='Enter a song title.') from None
         async with capacity:
-            candidates, failed = await workflow.search(artist, title)
+            candidates, failed = await (workflow.search(artist, title) if artist else workflow.search_title(title))
         if failed and not candidates:
             raise web.HTTPServiceUnavailable(text='Music search is unavailable. Try again shortly.')
         tracks = []
@@ -229,6 +252,7 @@ def create_app(token, chat, workflow):
         return web.FileResponse(ASSETS / name)
 
     app = web.Application(middlewares=[security], client_max_size=16384)
+    app.on_cleanup.append(lambda app: artwork.close())
     app.router.add_get('/', asset)
     app.router.add_get('/{name:index.html|app.js|style.css|locales.json|bot-logo.jpg|vazirmatn.woff2|Vazirmatn-OFL.txt}', asset)
     app.router.add_get('/api/profile', profile)
@@ -238,9 +262,11 @@ def create_app(token, chat, workflow):
     app.router.add_post('/api/search', search)
     app.router.add_post('/api/rate', rate)
     app.router.add_post('/api/similar', similar)
+    app.router.add_post('/api/artwork', cover_art)
     app.router.add_get('/api/channels', channel_list)
     app.router.add_post('/api/channels/connect', channel_connect)
     app.router.add_post('/api/channels/disconnect', channel_disconnect)
+    register_channel_api(app,chat,workflow,body,bundle,track_json,capacity)
     return app
 
 
