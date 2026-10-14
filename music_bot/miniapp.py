@@ -105,6 +105,15 @@ def create_app(token, chat, workflow):
         except (ValueError, TypeError):
             raise web.HTTPBadRequest(text='Invalid request.') from None
 
+    async def taste_setup(request):
+        from .taste_setup import read_setup,save_setup
+        if request.method=='POST':
+            data=await body(request)
+            if any(key not in {'style','mood','artist'} for key in data):raise web.HTTPBadRequest(text='Invalid taste setup.')
+            try:await save_setup(chat.database,request['user']['id'],**data)
+            except (ValueError,TypeError) as error:raise web.HTTPBadRequest(text='Choose a style, mood, and artist name.') from None
+        return web.json_response(await read_setup(chat.database,request['user']['id']))
+
     async def bundle(user_id, tracks, status='ok', visible=(), expected_token=None, links=(), extra=None):
         grant = await chat.create_control(user_id, tracks=list(dict.fromkeys([t['id'] for t in tracks] + list(visible))), kind='miniapp', expected_token=expected_token, links=links)
         for track in tracks:
@@ -260,6 +269,8 @@ def create_app(token, chat, workflow):
     app.router.add_post('/api/preferences/update', set_preferences)
     app.router.add_post('/api/recommendations', recommendations)
     app.router.add_post('/api/search', search)
+    app.router.add_get('/api/taste-setup', taste_setup)
+    app.router.add_post('/api/taste-setup/update', taste_setup)
     app.router.add_post('/api/rate', rate)
     app.router.add_post('/api/similar', similar)
     app.router.add_post('/api/artwork', cover_art)

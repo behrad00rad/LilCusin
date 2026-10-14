@@ -54,7 +54,7 @@ class PreferenceTests(ServiceTestCase):
         handler=AsyncMock()
         with patch('aiogram.types.Message.answer',new_callable=AsyncMock) as answer:
             await middleware(handler,message,{'chat_service':self.chat})
-            self.assertIn(CATALOGUE['fa']['g1_title'],answer.call_args.args[0])
+            self.assertIn(CATALOGUE['fa']['setup_q1'],answer.call_args.args[0])
             self.assertEqual(handler.await_count,1)
             await middleware(handler,message,{'chat_service':self.chat})
             self.assertEqual(answer.await_count,1)

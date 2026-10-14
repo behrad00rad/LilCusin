@@ -7,7 +7,7 @@ from sqlalchemy import func, or_, select, tuple_
 from sqlalchemy.dialects.sqlite import insert
 
 from ..matching import comparison_text, identity_key
-from ..models import Rating, RecommendationHistory, SimilarTrack, Track, TrackExternalID, TrackTag, User, UserTrackSignal, utc_now
+from ..models import Rating, RecommendationHistory, SimilarTrack, Track, TrackExternalID, TrackTag, User, UserTrackSignal, ChannelPost, PlaylistChannel, utc_now
 from ..providers.common import TrackCandidate
 from . import settings as S
 from .scoring import tag_weight
@@ -110,6 +110,12 @@ async def load_profile(session, telegram_user_id, selected_track_id=None):
     for track, _ in implicit:
         excluded_ids.add(track.id)
         rated_aliases.update(items[track.id].identities)
+    channel_tracks = (await session.scalars(select(Track).join(ChannelPost, ChannelPost.track_id == Track.id)
+        .join(PlaylistChannel, PlaylistChannel.id == ChannelPost.channel_id)
+        .where(PlaylistChannel.user_id == user_id).distinct())).all()
+    for item in (await load_items(session, channel_tracks)).values():
+        excluded_ids.add(item.track_id)
+        rated_aliases.update(item.identities)
     if selected is not None:
         positive_seeds = [Seed(items[selected.id], None)]
         # Exclude the focus track and its aliases even if it has never been rated.

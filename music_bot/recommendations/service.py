@@ -42,6 +42,9 @@ class RecommendationService:
         async with self.database.sessions() as session:
             profile = await load_profile(session, user_id, selected_track_id)
             if profile is None:
+                if selected_track_id is None:
+                    from .starter import starter_recommendations
+                    return await starter_recommendations(self.database,user_id,self.providers,limit)
                 return RecommendationResult("insufficient_preferences" if selected_track_id is None else "no_candidates")
             if for_display:
                 replay = await replay_batch(session, profile.user_id, batch_id, profile.rated_aliases, selected_track_id)

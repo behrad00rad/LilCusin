@@ -10,6 +10,17 @@ from .submissions import Submitter
 router = Router()
 APP_URL='https://lilcusin-ui.ghazanfaribehrad.workers.dev/'
 
+@router.message(Command('setup'))
+async def setup_command(message,chat_service):
+    if message.chat.type=='private' and message.from_user and not message.from_user.is_bot:
+        from .taste_setup_bot import show_setup
+        await show_setup(message,chat_service,restart=True)
+
+@router.callback_query(F.data.startswith('taste:'))
+async def taste_callback(query,chat_service):
+    from .taste_setup_bot import setup_callback
+    await setup_callback(query,chat_service)
+
 
 def guide_keyboard(step):
     keys=[]
@@ -22,7 +33,7 @@ def guide_keyboard(step):
 
 async def show_guide(message, step=0):
     n=step+1
-    text='🦉 '+tr('step',n=n)+'\n\n'+tr(f'g{n}_title')+'\n'+tr(f'bot_g{n}_text' if n>1 else 'g1_text')
+    text='🦉 '+tr('step',n=n)+'\n\n'+tr(f'g{n}_title')+'\n'+tr(f'bot_g{n}_text')
     if step==0:text+='\n\nRadiohead - Creep'
     await message.answer(text,reply_markup=guide_keyboard(step))
 
@@ -53,15 +64,18 @@ async def guide_callback(query,chat_service):
         await preferences(chat_service.database,query.from_user.id,language=code)
         language.set(code)
         await query.answer(tr('ok'))
-        await show_guide(query.message)
+        from .taste_setup_bot import show_setup
+        if not await show_setup(query.message,chat_service):await show_guide(query.message)
         from .chat_ui import main_menu
         await query.message.answer(tr('bot_MENU_PROMPT'),reply_markup=main_menu())
     elif data=='guide:language':
         await query.answer();await language_picker(query.message)
     elif data=='guide:done':
         await query.answer()
+        from .taste_setup_bot import show_setup
+        if await show_setup(query.message,chat_service):return
         from .chat_ui import main_menu
-        await query.message.answer(tr('g1_text')+'\n\nRadiohead - Creep',reply_markup=main_menu())
+        await query.message.answer(tr('bot_g1_text')+'\n\nRadiohead - Creep',reply_markup=main_menu())
     elif re.fullmatch(r'guide:[0-2]',data):
         await query.answer();await show_guide(query.message,int(data[-1]))
     else:await query.answer(tr('stale'))
@@ -84,7 +98,8 @@ class LanguageMiddleware(BaseMiddleware):
             if not prefs['bot_guide_seen']:
                 await preferences(self.database,user.id,bot_seen=True)
                 if isinstance(event,Message) and not (event.text or '').startswith(('/start','/help','/language')):
-                    await show_guide(event)
+                    from .taste_setup_bot import show_setup
+                    if not await show_setup(event,service):await show_guide(event)
             return await handler(event,data)
         finally:language.reset(context)
 
@@ -92,7 +107,7 @@ async def configure_commands(bot):
     from aiogram.types import BotCommand, BotCommandScopeAllPrivateChats
     keys={'start':'guide','recommend':'for_you','profile':'taste','taste':'taste','help':'guide',
           'language':'language','privacy':'privacy_hint','forgetme':'yes_delete','cancel':'cancel',
-          'connectchannel':'connect','channels':'channels','disconnectchannel':'disconnect'}
+          'connectchannel':'connect','channels':'channels','disconnectchannel':'disconnect','setup':'setup_title'}
     for code in LANGUAGES:
         context=language.set(code)
         try:

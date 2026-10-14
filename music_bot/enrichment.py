@@ -62,6 +62,9 @@ class Enrichment:
                 return  # Never enrich a different recording returned by autocorrect.
             for field in ("album", "duration", "artwork_url"):
                 if (value := getattr(candidate, field)) is not None:
+                    if field=='artwork_url':
+                        from .chat_ui import safe_url
+                        if not safe_url(value,artwork=True):continue
                     setattr(track, field, value)
             if candidate.artist and candidate.title:
                 track.display_artist, track.display_title = candidate.artist, candidate.title

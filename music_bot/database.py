@@ -28,6 +28,7 @@ class Database:
 
     async def initialize(self) -> None:
         from .preferences import UserPreferences  # Register the additive preferences table.
+        from .taste_setup import TasteSetup
         async with self.engine.begin() as connection:
             await connection.exec_driver_sql("BEGIN IMMEDIATE")
             await connection.run_sync(migrate)

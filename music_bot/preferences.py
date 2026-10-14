@@ -35,5 +35,8 @@ async def preferences(database, telegram_id, fallback=None, *, language=None, bo
             row.language = language
         if bot_seen is not None: row.bot_guide_seen = bot_seen
         if ui_done is not None: row.ui_guide_done = ui_done
-        return dict(language=row.language or normalize_language(fallback or user.language_code),
+        result=dict(language=row.language or normalize_language(fallback or user.language_code),
                     bot_guide_seen=row.bot_guide_seen, ui_guide_done=row.ui_guide_done)
+    from .taste_setup import needed
+    result['taste_setup_done']=not await needed(database,telegram_id)
+    return result

@@ -93,6 +93,10 @@ based on metadata and can be wrong even when the names look similar.
 ### Telegram Mini App
 
 Lil Cusin includes a mobile interface with **For You**, **Search**, **Channels**, and **My Taste**.
+New Telegram users get three short taste questions: style, mood, and an artist.
+These answers choose starter songs without creating ratings. `/setup` revisits
+the questions; users with existing music history can keep using their current taste.
+The corresponding Mini App setup screens are prepared but await Cloudflare publication.
 It shares the bot's SQLite database and recommendation services. Song cards support
 Love, Like, Neutral, and Dislike; search accepts a song title alone or
 `Artist - Song title`. Ratings apply only to the selected match after listening.

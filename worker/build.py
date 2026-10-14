@@ -12,10 +12,12 @@ assets['/bot-logo.jpg'] = [base64.b64encode((root.parent/'music_bot/web/bot-logo
 assets['/vazirmatn.woff2'] = [base64.b64encode((root.parent/'music_bot/web/vazirmatn.woff2').read_bytes()).decode(), 'font/woff2']
 source = (root/'proxy.mjs').read_text()
 source += '\n' + (root/'bridge.mjs').read_text()
+source += '\n' + (root/'artwork.mjs').read_text()
 source += '\nconst assets = ' + json.dumps(assets,ensure_ascii=False) + ';\n'
 source += '''export default {
   async fetch(request, env) {
     const path = new URL(request.url).pathname;
+    if (path === '/cover') return cover(request);
     if (path === '/connector') {
       if (!env.BOT_BRIDGE) return error('Connector is not configured.',503);
       return env.BOT_BRIDGE.get(env.BOT_BRIDGE.idFromName('lilcusin')).fetch(new Request('https://internal/connect',request));

@@ -28,6 +28,8 @@ async def start(message: Message, chat_service=None) -> None:
         return
     if chat_service is not None:
         await chat_service.ensure_user(submitter(message))
+        from .taste_setup_bot import show_setup
+        if await show_setup(message,chat_service):return
     await show_guide(message)
 
 

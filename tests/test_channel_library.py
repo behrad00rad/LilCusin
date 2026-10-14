@@ -134,6 +134,10 @@ class ChannelLibraryTests(ServiceTestCase):
         self.assertEqual(len(second['tracks']),3)
         self.assertIsNone(second['next_cursor'])
         self.assertFalse({t['id'] for t in first['tracks']} & {t['id'] for t in second['tracks']})
+        replacement=await self.page(filter='unrated',replace=True,cursor=first['next_cursor'],
+            exclude=[s['id'] for s in first['tracks']],current=[{'id':s['id'],'token':first['token']} for s in first['tracks'][1:]])
+        remaining=await self.page(cursor=replacement['next_cursor'])
+        self.assertFalse({s['id'] for s in first['tracks']+replacement['tracks']} & {s['id'] for s in remaining['tracks']})
 
     async def test_existing_canonical_song_keeps_new_cover_metadata(self):
         from music_bot.catalog import canonical_track
@@ -154,10 +158,32 @@ class ChannelLibraryTests(ServiceTestCase):
         self.assertEqual(response.status,200,await response.text())
         self.assertEqual([(t['artist'],t['title']) for t in (await response.json())['tracks']],
                          [('Beach House','Space Song')])
-        self.providers.call.assert_awaited_with('musicbrainz','search_recordings','', 'Space Song',limit=15)
+        self.providers.call.assert_awaited_with('musicbrainz','search_recordings','', 'Space Song')
+
+    async def test_hello_search_through_real_provider_cache(self):
+        from music_bot.cache import CachedProviders
+        lastfm, musicbrainz = AsyncMock(), AsyncMock()
+        musicbrainz.search_recordings.return_value = [TrackCandidate(title='Hello',artist='Adele',source='musicbrainz')]
+        lastfm.get_track_info.return_value = None
+        self.workflow.providers = CachedProviders(self.database,lastfm,musicbrainz)
+        response=await self.client.post('/api/search',json={'query':'hello'},headers=self.headers)
+        self.assertEqual(response.status,200,await response.text())
+        self.assertEqual((await response.json())['tracks'][0]['artist'],'Adele')
+        musicbrainz.search_recordings.assert_awaited_once_with('', 'hello')
 
     async def test_actual_lastfm_cover_host_is_allowed(self):
         from music_bot.chat_ui import safe_url
         url='https://lastfm-img.freetls.fastly.net/i/u/300x300/cover.png'
         self.assertEqual(safe_url(url,artwork=True),url)
         self.assertIsNone(safe_url('https://other.example/cover.png',artwork=True))
+        self.assertIsNone(safe_url('https://lastfm-img.freetls.fastly.net/i/u/300x300/2a96cbd8b46e442fc41c2b86b821562f.png',artwork=True))
+
+    async def test_placeholder_is_replaced_with_real_album_art(self):
+        async with self.database.write() as session:
+            (await session.get(Track,self.track_id)).artwork_url='https://lastfm-img.freetls.fastly.net/i/u/300x300/2a96cbd8b46e442fc41c2b86b821562f.png'
+        self.providers.call.return_value=TrackCandidate(title='Song',artist='Artist',source='lastfm',artwork_url='https://lastfm-img.freetls.fastly.net/i/u/300x300/real.png')
+        loader=ArtworkLoader(self.database,self.providers)
+        await loader.load(self.track_id)
+        async with self.database.sessions() as session:
+            self.assertTrue((await session.get(Track,self.track_id)).artwork_url.endswith('/real.png'))
+        await loader.close()

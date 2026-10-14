@@ -51,6 +51,8 @@ def parse_control(data):
 
 
 def safe_url(value, artwork=False):
+    if artwork and isinstance(value,str) and '2a96cbd8b46e442fc41c2b86b821562f' in value:
+        return None
     if not isinstance(value, str) or len(value) > 1000 or any(c.isspace() or ord(c) < 32 for c in value):
         return None
     try:

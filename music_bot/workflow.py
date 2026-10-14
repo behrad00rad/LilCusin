@@ -85,7 +85,7 @@ class Workflow:
     async def search_title(self, title):
         """Search a track name without inventing an artist for identity matching."""
         try:
-            candidates = await self.providers.call("musicbrainz", "search_recordings", "", title, limit=15)
+            candidates = await self.providers.call("musicbrainz", "search_recordings", "", title)
         except ProviderError:
             return [], True
         wanted = match_text(title)

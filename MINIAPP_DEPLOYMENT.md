@@ -189,3 +189,30 @@ The final copy update has a separate backup at
 Worker version: `3bf217fb-5ffe-40d8-a238-e0d36b719ff8`.
 Website processes, Nginx routes, bot credentials, and provider relay settings
 were checked unchanged.
+
+## Telegram setup and server fixes — October 15, 2026 (Asia/Tehran)
+
+The Telegram first-visit taste questions and `/setup` command are installed.
+Style, mood, and an optional artist provide starter recommendations without
+creating ratings. An additive `taste_setup` table is removed through the existing
+account-deletion cascade. Existing users with ratings or channel signals are not
+forced through first-visit setup.
+
+Server fixes remove an unsupported cache argument from title-only search,
+exclude owned channel songs in focused recommendations too, and treat Last.fm's
+generic image as missing artwork so a real-cover lookup can run. Staged tests:
+46 setup/channel/API/artwork/guide tests and 69 recommendation/Telegram tests
+passed. Worker route, bridge, artwork, navigation, paging, and recovery checks
+also passed. A fixed public artist-only lookup and Hello album-cover lookup
+worked through the real relay. The real title-only `hello` lookup still returned
+no retained results; this remains unresolved and must not be reported as fixed.
+
+The updated browser screens, image proxy, and channel replacement/page cursor
+fixes are committed for later publication. Cloudflare was not deployed because
+the user requested waiting for network access. Browser visual verification of
+these screens remains pending; the local browser could not reach the preview.
+The current public Worker is still `3bf217fb-5ffe-40d8-a238-e0d36b719ff8`.
+Bot-only recovery backup:
+`/home/baharnaj/lilcusin-miniapp-backups/20261014T205442Z-search-paging-taste`.
+Only bot services were restarted. Website processes, Nginx, bot credentials,
+and relay settings were verified unchanged.
