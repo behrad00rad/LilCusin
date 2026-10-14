@@ -228,3 +228,5 @@ The Mini App guide includes small visual examples of search, listening and ratin
 Language, onboarding, and replacement checks live in `tests/test_guidance.py` and
 `tests/test_miniapp.py`. Run `node worker/test-ui-navigation.mjs` for the page history
 and song-control restoration checks.
+Run `node worker/test-ui-recovery.mjs` for interrupted transitions, unavailable
+WebView features, stalled preference saves, and authenticated startup failures.

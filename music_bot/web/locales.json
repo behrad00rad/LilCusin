@@ -221,7 +221,9 @@
     "breadcrumb_label": "Page path",
     "guide_send": "Send in Lil Bro",
     "guide_return": "Back here to rate",
-    "guide_new_song": "Rate a song → get another pick"
+    "guide_new_song": "Rate a song → get another pick",
+    "startup_error": "Couldn’t connect. Check your connection and try again.",
+    "language_save_error": "The language changed, but couldn’t be saved. Please choose it again."
   },
   "fa": {
     "for_you": "برای تو",
@@ -445,7 +447,9 @@
     "breadcrumb_label": "مسیر صفحه",
     "guide_send": "توی Lil Bro، ارسال (Send) رو بزن",
     "guide_return": "برگرد و امتیاز بده",
-    "guide_new_song": "امتیاز که بدی، آهنگ بعدی میاد"
+    "guide_new_song": "امتیاز که بدی، آهنگ بعدی میاد",
+    "startup_error": "وصل نشد. اینترنتت رو چک کن و دوباره تلاش کن.",
+    "language_save_error": "زبان عوض شد، ولی ذخیره نشد. لطفاً دوباره انتخابش کن."
   },
   "ar": {
     "for_you": "لك",
@@ -669,7 +673,9 @@
     "breadcrumb_label": "مسار الصفحة",
     "guide_send": "اضغط إرسال في Lil Bro",
     "guide_return": "ارجع لتقييم الأغنية",
-    "guide_new_song": "قيّم الأغنية لتظهر أغنية أخرى"
+    "guide_new_song": "قيّم الأغنية لتظهر أغنية أخرى",
+    "startup_error": "تعذّر الاتصال. تحقّق من اتصالك وحاول مجددًا.",
+    "language_save_error": "تغيّرت اللغة، لكن لم تُحفظ. اخترها مجددًا."
   },
   "tr": {
     "for_you": "Senin için",
@@ -893,7 +899,9 @@
     "breadcrumb_label": "Sayfa yolu",
     "guide_send": "Lil Bro’da Gönder’e bas",
     "guide_return": "Puanlamak için geri dön",
-    "guide_new_song": "Puan ver, sıradaki şarkı gelsin"
+    "guide_new_song": "Puan ver, sıradaki şarkı gelsin",
+    "startup_error": "Bağlanılamadı. İnternet bağlantını kontrol edip tekrar dene.",
+    "language_save_error": "Dil değişti ama kaydedilemedi. Lütfen tekrar seç."
   },
   "ru": {
     "for_you": "Для вас",
@@ -1117,7 +1125,9 @@
     "breadcrumb_label": "Путь страницы",
     "guide_send": "Нажми «Отправить» в Lil Bro",
     "guide_return": "Вернись и оцени",
-    "guide_new_song": "Оцени песню — появится следующая"
+    "guide_new_song": "Оцени песню — появится следующая",
+    "startup_error": "Не удалось подключиться. Проверь интернет и попробуй ещё раз.",
+    "language_save_error": "Язык изменён, но не сохранён. Выбери его ещё раз."
   },
   "es": {
     "for_you": "Para ti",
@@ -1341,7 +1351,9 @@
     "breadcrumb_label": "Ruta de la página",
     "guide_send": "Pulsa Enviar en Lil Bro",
     "guide_return": "Vuelve para valorar",
-    "guide_new_song": "Valora una canción y descubre otra"
+    "guide_new_song": "Valora una canción y descubre otra",
+    "startup_error": "No se pudo conectar. Comprueba tu conexión e inténtalo otra vez.",
+    "language_save_error": "El idioma cambió, pero no se guardó. Vuelve a seleccionarlo."
   },
   "fr": {
     "for_you": "Pour vous",
@@ -1565,7 +1577,9 @@
     "breadcrumb_label": "Fil d’Ariane",
     "guide_send": "Appuie sur Envoyer dans Lil Bro",
     "guide_return": "Reviens donner ton avis",
-    "guide_new_song": "Note un titre pour en découvrir un autre"
+    "guide_new_song": "Note un titre pour en découvrir un autre",
+    "startup_error": "Connexion impossible. Vérifie ta connexion et réessaie.",
+    "language_save_error": "La langue a changé, mais n’a pas été enregistrée. Sélectionne-la à nouveau."
   },
   "de": {
     "for_you": "Für dich",
@@ -1789,6 +1803,8 @@
     "breadcrumb_label": "Seitenpfad",
     "guide_send": "In Lil Bro auf Senden tippen",
     "guide_return": "Zum Bewerten zurückkommen",
-    "guide_new_song": "Song bewerten und den nächsten entdecken"
+    "guide_new_song": "Song bewerten und den nächsten entdecken",
+    "startup_error": "Keine Verbindung. Prüfe dein Internet und versuche es erneut.",
+    "language_save_error": "Die Sprache wurde geändert, aber nicht gespeichert. Bitte wähle sie erneut."
   }
 }

@@ -15,11 +15,11 @@ const elements=Object.fromEntries(['content','query','breadcrumbs'].map(id=>[id,
 const cards=[{songData:{id:7,title:'Creep',artist:'Radiohead',token:'owned-grant'}}];
 elements.content.querySelectorAll=()=>cards;
 const context=vm.createContext({
-  window:{scrollY:280},navigator:{language:'en'},
-  document:{getElementById:id=>elements[id],createElement:()=>new Element(),createTextNode:text=>text,documentElement:{style:{setProperty(){}}}},
+  window:{scrollY:280,addEventListener(){}},navigator:{language:'en'},
+  document:{addEventListener(){},getElementById:id=>elements[id],createElement:()=>new Element(),createTextNode:text=>text,documentElement:{style:{setProperty(){}}}},
   fetch:()=>new Promise(()=>{}),setTimeout,clearTimeout,URL,console,
 });
-vm.runInContext(readFileSync(new URL('../music_bot/web/app.js',import.meta.url),'utf8'),context);
+vm.runInContext(readFileSync(new URL('../music_bot/web/app.js',import.meta.url),'utf8').replace(/\nboot\(\);\s*$/,'\n'),context);
 vm.runInContext(`
 catalogue={en:{for_you:'For you',search:'Search',more_title:'More like “{song}”',more_short:'Similar songs',breadcrumb_label:'Page path'}};
 view='search';lastResult={tracks:[]};$('query').value='Radiohead';

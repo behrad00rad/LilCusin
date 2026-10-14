@@ -140,3 +140,25 @@ Recovery snapshot:
 Worker version: `d1ec2f87-f282-40b6-9294-cc54f819ae21`.
 Only bot services and the existing `lilcusin-ui` Worker were updated; website
 process IDs, Nginx files, bot credentials and provider settings were verified unchanged.
+
+## WebView recovery fixes
+
+The language transition no longer awaits animation frames or a preference write.
+It uses a short fade, unconditional cleanup and an 1800ms safety timeout. Rejected
+popover calls, hidden pages and rendering errors release the overlay and controls.
+Preference writes remain authenticated and serialize in the background.
+
+The Telegram SDK loads asynchronously. Startup shows progress before authenticated
+preferences, which have an 8-second deadline. Failed startup leaves a visible retry;
+a missing SDK in a Telegram launch cannot silently become a preview session.
+Native Telegram UI calls and unavailable browser storage cannot abort startup.
+
+Regression coverage: `node worker/test-ui-recovery.mjs`, navigation checks, Worker
+and private connector checks, and shared translation consistency checks.
+Static assets were installed without restarting services. VPS recovery snapshot:
+`/home/baharnaj/lilcusin-miniapp-backups/20261014T114716Z-ui-recovery`.
+Cloudflare publication completed as Worker version
+`2361933b-757c-4810-bd17-b03aaead674a`. Live browser checks confirmed repeated
+language changes finish with the overlay hidden and controls enabled. Direct
+authenticated preference checks stayed on VPS loopback; no user profile was exported.
+Native Telegram client confirmation is still pending from the user.
