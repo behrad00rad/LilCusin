@@ -161,4 +161,5 @@ Cloudflare publication completed as Worker version
 `2361933b-757c-4810-bd17-b03aaead674a`. Live browser checks confirmed repeated
 language changes finish with the overlay hidden and controls enabled. Direct
 authenticated preference checks stayed on VPS loopback; no user profile was exported.
-Native Telegram client confirmation is still pending from the user.
+The user confirmed that both startup and language switching work in Telegram
+after fully closing and reopening the Mini App.
