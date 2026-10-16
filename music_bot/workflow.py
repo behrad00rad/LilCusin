@@ -88,7 +88,9 @@ class Workflow:
         from sqlalchemy import or_
         async with self.database.sessions() as session:
             rows=await session.scalars(select(Track).where(or_(Track.title.contains(title,autoescape=True),
-                Track.display_title.contains(title,autoescape=True))).limit(100))
+                Track.display_title.contains(title,autoescape=True),
+                Track.artist.contains(title,autoescape=True),
+                Track.display_artist.contains(title,autoescape=True))).limit(100))
             candidates=[from_track(track).metadata for track in rows]
         failed = False
         available = False
@@ -99,6 +101,9 @@ class Workflow:
         if getattr(self.providers, 'has_deezer', False) is True:
             calls.append(self.providers.call('deezer', 'search_tracks', artist, title) if artist
                          else self.providers.call('deezer', 'search_titles', title))
+        if getattr(self.providers, 'has_itunes', False) is True:
+            calls.append(self.providers.call('itunes', 'search_tracks', artist, title) if artist
+                         else self.providers.call('itunes', 'search_titles', title))
         for result in await asyncio.gather(*calls, return_exceptions=True):
             if isinstance(result, ProviderError):
                 failed = True
@@ -138,15 +143,20 @@ class Workflow:
                        and match_text(performer) in match_text(candidate.artist)
                        for performer, song in hints)
         wanted = match_text(title)
-        matches=[c for c in candidates if c.artist and c.title and (wanted in match_text(c.title) or hint_match(c))
+        def artist_match(candidate):
+            performer = match_text(candidate.artist)
+            return not artist and (performer == wanted or performer.startswith(wanted + ' '))
+        matches=[c for c in candidates if c.artist and c.title and (wanted in match_text(c.title) or hint_match(c) or artist_match(c))
                  and (not artist or match_text(artist) in match_text(c.artist))]
         # Within relevant prefix matches, popularity precedes literal title length.
         # Use one scale per search: Deezer rank when available, Last.fm listeners
         # otherwise. Missing popularity is unknown, never a fabricated count.
         has_rank = any((c.deezer_rank or 0) > 0 for c in matches)
+        artist_intent = not any(match_text(c.title) == wanted and (
+            (c.deezer_rank or 0) >= 400000 or (c.listeners or 0) >= 10000) for c in matches)
         def popularity(candidate):
             return (candidate.deezer_rank or 0) if has_rank else (candidate.listeners or 0)
-        matches.sort(key=lambda c:(not hint_match(c),not match_text(c.title).startswith(wanted),
+        matches.sort(key=lambda c:(not (artist_intent and artist_match(c)),not hint_match(c),not match_text(c.title).startswith(wanted),
                                    -popularity(c),match_text(c.title)!=wanted,len(match_text(c.title))))
         unique=[];seen=set()
         for candidate in matches:
@@ -183,6 +193,19 @@ class Workflow:
                 candidates += await self.providers.call("musicbrainz", "search_recordings", artist, title)
             except ProviderError:
                 failed = True
+        ranked = sorted(deduplicate(candidates), key=lambda c: confidence(artist, title, c), reverse=True)
+        if not strong_match(artist, title, ranked):
+            fallback = [provider for provider in ('deezer', 'itunes')
+                        if getattr(self.providers, 'has_' + provider, False) is True]
+            for result in await asyncio.gather(*[
+                self.providers.call(provider, 'search_tracks', artist, title) for provider in fallback
+            ], return_exceptions=True):
+                if isinstance(result, ProviderError):
+                    failed = True
+                elif isinstance(result, BaseException):
+                    raise result
+                else:
+                    candidates += result
         # Irrelevant matches are not useful choices; both fields must be plausible.
         candidates = [c for c in deduplicate(candidates) if min(similarities(artist, title, c)) >= 0.45]
         candidates.sort(key=lambda c: confidence(artist, title, c), reverse=True)

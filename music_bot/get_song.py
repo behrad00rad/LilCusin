@@ -66,6 +66,8 @@ class GetSong:
         self.fetcher = fetcher or configured_fetcher(self.settings, bot)
         self.artwork_loader = artwork_loader
         self.task = None
+        self.recognizer = None
+        self.art_attempted = set()
         self.delivery_locks = weakref.WeakValueDictionary()
         self.root = Path(tempfile.gettempdir()) / ('lilcusin-fetch-' + hashlib.sha256(str(database.engine.url).encode()).hexdigest()[:16])
 
@@ -92,7 +94,7 @@ class GetSong:
             self.task.cancel()
             await asyncio.gather(self.task, return_exceptions=True)
 
-    async def request(self, user_id, track_id):
+    async def request(self, user_id, track_id, *, other_versions=False):
         if not self.settings.enabled:
             raise FetchError('Get song is disabled. The operator must configure source permissions first.')
         async with self.db.write() as s:
@@ -104,7 +106,7 @@ class GetSong:
                 raise FetchError('This song exceeds the duration limit.')
             previous = await s.scalar(select(AudioRequest).join(FetchJob).where(AudioRequest.user_id == user.id,
                 FetchJob.track_id == track_id, AudioRequest.state.in_(('pending', 'choice', 'sending'))))
-            if previous:
+            if previous and not other_versions:
                 return previous.id
             await self.check_limits(s, user.id)
             selection = await s.scalar(select(AudioSelection).where(AudioSelection.user_id == user.id,
@@ -119,6 +121,14 @@ class GetSong:
                 metadata = source.fetch_metadata if source else {}
             elif selection:
                 metadata = {'force_choice': True}
+            if other_versions:
+                key, preferred = f'{track_id}:versions:{user.id}', None
+                metadata = {'force_choice': True, 'other_versions': True}
+                existing = await s.scalar(select(AudioRequest).join(FetchJob).where(
+                    AudioRequest.user_id == user.id, FetchJob.key == key,
+                    AudioRequest.state.in_(('pending', 'choice', 'sending'))))
+                if existing:
+                    return existing.id
             job = await s.scalar(select(FetchJob).where(FetchJob.key == key))
             if job is None:
                 job = FetchJob(id=uuid4().hex, track_id=track_id, key=key,
@@ -132,6 +142,22 @@ class GetSong:
             s.add(req)
             await s.flush()
             return req.id
+
+    async def request_recognized(self, user_id, artist, title, *, artwork_url=None, album=None):
+        """Queue an identified recording without inventing ratings or submissions."""
+        if not self.settings.enabled:
+            raise FetchError('Get song is disabled. The operator must configure source permissions first.')
+        from sqlalchemy.dialects.sqlite import insert
+        from .catalog import canonical_track
+        from .providers.common import TrackCandidate
+        from .chat_ui import safe_url
+        async with self.db.write() as session:
+            await session.execute(insert(User).values(telegram_user_id=user_id)
+                .on_conflict_do_nothing(index_elements=['telegram_user_id']))
+            track = await canonical_track(session, TrackCandidate(artist=artist, title=title, source='shazam',
+                artwork_url=safe_url(artwork_url, artwork=True), album=album))
+            track_id = track.id
+        return await self.request(user_id, track_id)
 
     async def check_limits(self, s, user_id):
         count = await s.scalar(select(func.count()).select_from(AudioRequest).where(AudioRequest.user_id == user_id,
@@ -204,18 +230,32 @@ class GetSong:
             video = job.candidates[index]['id']
             if not isinstance(video, str) or not VIDEO.fullmatch(video):
                 raise FlowError('stale')
+            target_track_id = job.track_id
+            if job.metadata_json.get('other_versions'):
+                from .catalog import canonical_track
+                from .providers.common import TrackCandidate
+                from .youtube_fetch import without_artist_credit
+                original = await s.get(Track, job.track_id)
+                row = job.candidates[index]
+                artist = original.display_artist or original.artist
+                title = row.get('recording_title') or without_artist_credit(row['title'], artist)
+                import re
+                title = re.sub(r'\s*[\[(](?:official\s+)?(?:audio|video|lyrics?)[\])]\s*', ' ', title, flags=re.I).strip()
+                target = await canonical_track(s, TrackCandidate(artist=artist, title=title,
+                    duration=row['duration'], source='youtube'))
+                target_track_id = target.id
             selection = await s.scalar(select(AudioSelection).where(AudioSelection.user_id == req.user_id,
-                                                                  AudioSelection.track_id == job.track_id))
+                                                                  AudioSelection.track_id == target_track_id))
             if selection and video in selection.rejected_ids:
                 raise FlowError('stale')
             if selection is None:
-                selection = AudioSelection(user_id=req.user_id, track_id=job.track_id, rejected_ids=[])
+                selection = AudioSelection(user_id=req.user_id, track_id=target_track_id, rejected_ids=[])
                 s.add(selection)
             selection.video_id, selection.updated_at = video, utc_now()
-            key = f'{job.track_id}:{video}'
+            key = f'{target_track_id}:{video}'
             selected = await s.scalar(select(FetchJob).where(FetchJob.key == key))
             if selected is None:
-                selected = FetchJob(id=uuid4().hex, key=key, track_id=job.track_id, video_id=video,
+                selected = FetchJob(id=uuid4().hex, key=key, track_id=target_track_id, video_id=video,
                                     candidates=[], metadata_json=job.candidates[index])
                 s.add(selected)
                 await s.flush()
@@ -223,6 +263,68 @@ class GetSong:
                 selected.state = 'queued'
                 selected.metadata_json = job.candidates[index]
             req.job_id, req.state = selected.id, 'pending'
+
+    async def other_versions(self, user_id, request_id, message_id):
+        async with self.db.sessions() as session:
+            req = await session.scalar(select(AudioRequest).join(User).where(
+                AudioRequest.id == request_id, User.telegram_user_id == user_id,
+                AudioRequest.message_id == message_id, AudioRequest.state.in_(('choice', 'done', 'reported')),
+                AudioRequest.created_at > utc_now() - timedelta(days=self.settings.retention_days)))
+            if req is None:
+                raise FlowError('stale')
+            track_id = (await session.get(FetchJob, req.job_id)).track_id
+        return await self.request(user_id, track_id, other_versions=True)
+
+    async def bind_recognition_versions(self, user_id, request_id, message):
+        from .chat_service import ChatService
+        from .chat_ui import button
+        async with self.db.sessions() as session:
+            request = await session.scalar(select(AudioRequest).join(User).where(
+                AudioRequest.id == request_id, User.telegram_user_id == user_id))
+            if request is None:
+                raise FlowError('stale')
+            track_id = (await session.get(FetchJob, request.job_id)).track_id
+        controls = ChatService(self.db, None)
+        token = await controls.create_control(user_id, tracks=[track_id], kind='card')
+        await message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            button(token, 'versions', 'Find other versions', 0)]]))
+        await controls.bind_control(token, message.message_id)
+
+    async def shazam_artwork(self, track, path, directory, alive, *, force=False):
+        """Identify downloaded audio for artwork when catalogue enrichment is missing."""
+        from .recognition import ffmpeg_executable
+        from .chat_ui import safe_url
+        from .youtube_fetch import artist_key, version_words
+        from .matching import match_text
+        from difflib import SequenceMatcher
+        try:
+            if len(self.art_attempted) >= 500:
+                self.art_attempted.pop()
+            self.art_attempted.add(track.id)
+            sample = Path(directory) / 'artwork-sample.wav'
+            await self.fetcher.process([ffmpeg_executable(), '-nostdin', '-v', 'error', '-y',
+                '-i', str(path), '-t', '12', '-vn', '-ac', '1', '-ar', '22050',
+                '-codec:a', 'pcm_s16le', str(sample)], directory, alive)
+            result = await self.recognizer.recognize(sample)
+            artist, title = track.display_artist or track.artist, track.display_title or track.title
+            if (not result or not safe_url(result.artwork_url, artwork=True)
+                    or artist_key(result.artist) != artist_key(artist)
+                    or version_words(result.title) != version_words(title)
+                    or SequenceMatcher(None, match_text(result.title), match_text(title)).ratio() < .9):
+                return
+            async with self.db.write() as session:
+                current = await session.get(Track, track.id)
+                if current and (force or not artwork_key(current)):
+                    current.artwork_url = result.artwork_url
+                    if not current.album:
+                        current.album = result.album
+                    track.artwork_url, track.album = current.artwork_url, current.album
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            pass  # Artwork is optional; never replace audio delivery with an art error.
+        finally:
+            (Path(directory) / 'artwork-sample.wav').unlink(missing_ok=True)
 
     async def cancel(self, user_id, forget=False):
         # Serialize with the final ownership check and Telegram send, avoiding post-forget delivery.
@@ -288,6 +390,7 @@ class GetSong:
             job = await s.get(FetchJob, job_id)
             track = await s.get(Track, job.track_id)
         await self.state(job_id, 'running')
+        phase = 'search'
         try:
             if self.artwork_loader and not artwork_key(track):
                 await self.artwork_loader.load(track.id)
@@ -302,7 +405,22 @@ class GetSong:
                 if shutil.disk_usage(directory).free < self.settings.disk_bytes:
                     raise FetchError('Temporary storage unavailable.')
                 if not job.video_id:
-                    rows = job.candidates or await self.fetcher.search(track, directory, lambda: self.alive(job_id))
+                    search_track = track
+                    if job.metadata_json.get('other_versions'):
+                        from types import SimpleNamespace
+                        from .youtube_fetch import base_title
+                        search_track = SimpleNamespace(artist=track.display_artist or track.artist,
+                            title=base_title(track.display_title or track.title), duration=None, allow_versions=True)
+                    rows = job.candidates
+                    if not rows:
+                        try:
+                            rows = await self.fetcher.search(search_track, directory, lambda: self.alive(job_id))
+                        except FetchError:
+                            if not await self.alive(job_id):
+                                return
+                            logger.warning('Audio source search failed; retrying once.')
+                            await asyncio.sleep(.5)
+                            rows = await self.fetcher.search(search_track, directory, lambda: self.alive(job_id))
                     async with self.db.sessions() as s:
                         selections = (await s.scalars(select(AudioSelection).where(AudioSelection.user_id.in_(
                             select(AudioRequest.user_id).where(AudioRequest.job_id == job_id,
@@ -322,6 +440,7 @@ class GetSong:
                         return
                     job.video_id, job.metadata_json = rows[0]['id'], rows[0]
                     await self.state(job_id, 'running', video_id=job.video_id, metadata_json=rows[0])
+                phase = 'download'
                 if isinstance(self.fetcher, LilBroFetcher):
                     async def persist(fields):
                         job.metadata_json = {**job.metadata_json, **fields}
@@ -329,9 +448,23 @@ class GetSong:
                     path = await self.fetcher.fetch_selected(job.video_id, directory, lambda: self.alive(job_id),
                                                             job.metadata_json, persist)
                 else:
-                    path = await self.fetcher.fetch(job.video_id, directory, lambda: self.alive(job_id))
+                    try:
+                        path = await self.fetcher.fetch(job.video_id, directory, lambda: self.alive(job_id))
+                    except FetchError:
+                        if not await self.alive(job_id):
+                            return
+                        logger.warning('Audio source download failed; retrying once.')
+                        await asyncio.sleep(.5)
+                        path = await self.fetcher.fetch(job.video_id, directory, lambda: self.alive(job_id))
+                phase = 'prepare'
+                if self.recognizer and not artwork_key(track):
+                    await self.shazam_artwork(track, path, directory, lambda: self.alive(job_id))
                 thumbnail, cover_key = await prepare_artwork(self.fetcher, track, path, directory,
                                                             lambda: self.alive(job_id))
+                if not thumbnail and self.recognizer and track.id not in self.art_attempted:
+                    await self.shazam_artwork(track, path, directory, lambda: self.alive(job_id), force=True)
+                    thumbnail, cover_key = await prepare_artwork(self.fetcher, track, path, directory,
+                                                                lambda: self.alive(job_id))
                 async with self.db.write() as s:
                     await s.execute(delete(AudioSource).where(AudioSource.track_id == track.id, AudioSource.video_id == job.video_id))
                     s.add(AudioSource(track_id=track.id, video_id=job.video_id,
@@ -339,13 +472,21 @@ class GetSong:
                                         'bytes': path.stat().st_size, 'container': path.suffix,
                                         'provider': 'youtube',
                                         'fetcher': 'lilbro' if isinstance(self.fetcher, LilBroFetcher) else 'yt-dlp'}))
+                phase = 'send'
                 await self.deliver(job, track, path, thumbnail, cover_key)
                 await self.state(job_id, 'done')
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception as error:
+            logger.warning('Audio delivery failed at %s (%s); details omitted for privacy.', phase, type(error).__name__)
+            if isinstance(error, FetchError):
+                known = {'Audio source unavailable.': 'source_unavailable', 'Request cancelled.': 'cancelled',
+                         'Audio unavailable or too large.': 'file_limit',
+                         'Fetched media is unsupported or exceeds limits.': 'validation',
+                         'Temporary storage limit reached.': 'storage_limit'}
+                logger.warning('Audio delivery failure category: %s.', known.get(str(error), 'other'))
             await self.state(job_id, 'failed')
-            await self.fail(job_id)
+            await self.fail(job_id, phase=phase)
 
     async def requests(self, job_id):
         async with self.db.sessions() as s:
@@ -363,9 +504,11 @@ class GetSong:
                 try:
                     keyboard = InlineKeyboardMarkup(inline_keyboard=[[
                         InlineKeyboardButton(text=f"{i+1}. {r['title'][:45]} — {r.get('artist', '')[:25]} ({int(r['duration'])}s)" +
+                            (' [' + (', '.join(r.get('version', [])).title() or 'Original / unlabelled') + ']') +
                             (' ⚠ duration differs' if r.get('duration_mismatch') else ''),
                             callback_data=f'g:{req.id}:{i}')]
                         for i, r in enumerate(rows)])
+                    keyboard.inline_keyboard.append([InlineKeyboardButton(text='Find other versions', callback_data=f'v:{req.id}')])
                     sent = await self.bot.send_message(user_id, 'Choose the recording you want, or /cancel.',
                                                        reply_markup=keyboard)
                     async with self.db.write() as s:
@@ -398,7 +541,8 @@ class GetSong:
                 sent = await self.bot.send_audio(user_id, audio=audio, title=track.display_title or track.title,
                     performer=track.display_artist or track.artist, request_timeout=self.settings.timeout,
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
-                        text='Wrong song', callback_data=f'w:{req.id}')]]), **extra)
+                        text='Wrong song', callback_data=f'w:{req.id}'), InlineKeyboardButton(
+                        text='Find other versions', callback_data=f'v:{req.id}')]]), **extra)
             except TelegramBadRequest:
                 await self.request_state(req.id, 'pending')
                 raise
@@ -429,6 +573,8 @@ class GetSong:
                     query = query.where(AudioDelivery.video_id == job.video_id)
                 cached = await s.scalar(query.order_by(AudioDelivery.created_at.desc()))
             if cached:
+                if self.recognizer and not artwork_key(track) and track.id not in self.art_attempted:
+                    continue  # Give a previously coverless delivery one Shazam artwork attempt.
                 if artwork_key(track) and cached.artwork_key != artwork_key(track):
                     continue  # Upgrade an old coverless file once; subsequent sends reuse it.
                 cached_job = FetchJob(id=job.id, track_id=track.id, video_id=cached.video_id)
@@ -450,7 +596,7 @@ class GetSong:
             except TelegramBadRequest:
                 await self.request_state(req.id, 'failed')
 
-    async def fail(self, job_id, alternatives=False):
+    async def fail(self, job_id, alternatives=False, phase=None):
         async with self.db.sessions() as s:
             job = await s.get(FetchJob, job_id)
             video = job.video_id if job else None
@@ -464,6 +610,7 @@ class GetSong:
                 try:
                     await self.bot.send_message(user_id,
                         ('No other matching recordings were found. Try Get song again later.' if alternatives else
+                         'Could not find an available recording. The song was identified, but source search failed. Try again later.' if phase == 'search' else
                          'Could not fetch this recording. Try Get song again later.') +
                         (' You can still listen using the link below.' if keyboard else ''),
                         reply_markup=keyboard)

@@ -27,6 +27,15 @@ def version_words(value):
     return words & VERSIONS
 
 
+def base_title(value):
+    """Remove edition labels, preserving ordinary titles such as Live Forever."""
+    value = re.sub(r'\([^()]*\)|\[[^\[\]]*\]',
+                   lambda m: '' if version_words(m[0]) else m[0], value)
+    value = re.sub(r'\s+[-–—]\s+(?:live|acoustic|remix|instrumental|remaster(?:ed)?|sped up|slowed)(?:\b.*)$',
+                   '', value, flags=re.I)
+    return value.strip() or value
+
+
 def song_title(value, target):
     noise = {'audio', 'visualizer', 'visualiser', 'hd', 'hq', '4k'} - set(match_text(target).split())
     return ' '.join(word for word in match_text(value).split() if word not in noise)
@@ -50,6 +59,7 @@ class FetchError(Exception):
 def rank_candidates(track, entries, max_duration):
     result = []
     wanted = version_words(track.title)
+    variants = getattr(track, 'allow_versions', False)
     for raw in entries:
         video = raw.get('id', '')
         title = str(raw.get('track') or raw.get('title') or '')[:200]
@@ -60,7 +70,8 @@ def rank_candidates(track, entries, max_duration):
             words |= version_words(title)
         if (not VIDEO.fullmatch(video) or raw.get('is_live') or raw.get('live_status') in {'is_live', 'is_upcoming'}
                 or (raw.get('live_status') == 'was_live' and 'live' not in wanted)
-                or words != wanted or not isinstance(duration, (int, float))
+                or (bool(words & {'cover', 'karaoke'}) if variants else words != wanted)
+                or not isinstance(duration, (int, float))
                 or not 0 < duration <= max_duration):
             continue
         if track.duration and abs(duration - track.duration) > max(12, track.duration * .08):
@@ -75,9 +86,15 @@ def rank_candidates(track, entries, max_duration):
         elif normalized != target:
             normalized = re.sub(r'(?<!\w)' + re.escape(artist_text) + r'(?!\w)', ' ', normalized)
             normalized = ' '.join(normalized.split())
+        if variants:
+            target = match_text(base_title(track.title))
+            recording = str(raw.get('track') or without_artist_credit(str(raw.get('title') or title), track.artist))
+            normalized = song_title(base_title(recording), base_title(track.title))
         context = match_text(artist + ' ' + title)
         a = 1.0 if (artist_key(artist) == wanted_artists or all(
             re.search(r'(?<!\w)' + re.escape(name) + r'(?!\w)', context) for name in wanted_artists)) else 0.0
+        if variants and a != 1:
+            continue
         t = SequenceMatcher(None, target, normalized).ratio()
         if raw.get('artist') and artist_key(str(raw['artist'])) != wanted_artists:
             continue
@@ -97,9 +114,14 @@ def rank_candidates(track, entries, max_duration):
         result.append(dict(id=video, title=title, artist=artist, duration=duration, score=score + preference,
                            exact=bool(duration_ok and (rich or (official and a == 1 and t == 1))),
                            identity_title=normalized, identity_artist='|'.join(wanted_artists) if a else match_text(artist),
-                           version=sorted(wanted)))
+                           version=sorted(words), recording_title=str(raw.get('track') or without_artist_credit(title, track.artist))))
     result.sort(key=lambda row: row['score'], reverse=True)
-    return list({r['id']: r for r in result}.values())[:3]
+    unique = list({r['id']: r for r in result}.values())
+    if variants:
+        diverse = list({tuple(row['version']): row for row in reversed(unique)}.values())
+        diverse.sort(key=lambda row: row['score'], reverse=True)
+        return diverse[:3]
+    return unique[:3]
 
 
 def confident(rows):
@@ -161,7 +183,10 @@ class YouTubeFetcher:
                 '--limit-rate', '2M', '--socket-timeout', '15', '--retries', '1', '--fragment-retries', '1', '--no-warnings', '--quiet']
 
     async def search(self, track, directory, alive):
-        query = ' '.join((track.artist + ' ' + track.title).split())[:300]
+        # Canonical DB keys remove punctuation; search with the original catalogue spelling.
+        artist = getattr(track, 'display_artist', None) or track.artist
+        title = getattr(track, 'display_title', None) or track.title
+        query = ' '.join((artist + ' ' + title).split())[:300]
         if not version_words(track.title):
             query += ' official audio'
         # Listing metadata must not require extracting every candidate's media formats.
@@ -232,3 +257,33 @@ class YouTubeFetcher:
         except (ValueError, KeyError, TypeError):
             raise FetchError('Fetched media is unsupported or exceeds limits.') from None
         return path
+
+    async def fetch_social(self, url, directory, alive):
+        from .recognition import social_url
+        safe = social_url(url)
+        if safe is None:
+            raise FetchError('Unsupported media link.')
+        from urllib.parse import urlsplit, urljoin
+        if urlsplit(safe).hostname in {'pin.it', 'on.soundcloud.com'}:
+            import aiohttp
+            try:
+                async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
+                    for _ in range(4):
+                        async with session.get(safe, allow_redirects=False) as response:
+                            if response.status not in (301, 302, 303, 307, 308):
+                                break
+                            safe = social_url(urljoin(safe, response.headers.get('Location', '')))
+                            if safe is None:
+                                raise FetchError('Unsupported post redirect.')
+            except (aiohttp.ClientError, TimeoutError):
+                raise FetchError('Public post unavailable.') from None
+        await self.process(self.base() + ['--use-extractors',
+            'TikTok.*,vm.tiktok,Instagram.*,Pinterest.*,Twitter.*,Soundcloud.*,Vimeo',
+            '--max-filesize', str(self.settings.max_bytes), '--playlist-end', '1',
+            '--match-filter', f'duration <= {self.settings.max_duration} & !is_live',
+            '-f', 'bestaudio/best', '-o', 'social.%(ext)s', '--', safe], directory, alive)
+        files = [p for p in Path(directory).glob('social.*')
+                 if p.suffix.lower() in {'.mp4', '.m4a', '.webm', '.mkv', '.mp3', '.ogg', '.wav', '.flac', '.aac'}]
+        if len(files) != 1 or not 0 < files[0].stat().st_size <= self.settings.max_bytes:
+            raise FetchError('Post has no supported playable audio/video.')
+        return files[0]

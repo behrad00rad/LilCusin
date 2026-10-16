@@ -153,7 +153,7 @@
     "bot_RATE_NUMBER": "Rate {number}",
     "bot_SIMILAR_NUMBER": "More like {number}",
     "bot_PROFILE_TEXT": "Ratings: ♥ {love} · ↑ {like} · – {neutral} · ↓ {dislike}\nRecommendations shown: {shown}",
-    "bot_PRIVACY": "We store your Telegram profile, song submissions, ratings, recommendations and connected playlists. Song metadata goes to Last.fm and MusicBrainz. Opening links never counts as a rating. New playlist posts provide weaker taste hints. /forgetme removes your personal bot records; shared music metadata and Telegram messages remain.",
+    "bot_PRIVACY": "We store your Telegram profile, song submissions, ratings, recommendations and connected playlists. Song metadata goes to Last.fm and MusicBrainz. Opening links never counts as a rating. New playlist posts provide weaker taste hints. /forgetme removes your personal bot records; shared music metadata and Telegram messages remain. Music recognition sends an audio fingerprint to Shazam. Temporary media is deleted after processing; results stay in memory for up to one hour.",
     "bot_FORGET_CONFIRM": "Delete your bot profile, submissions, ratings, history, playlists and language preference? Shared music metadata and Telegram messages stay.",
     "bot_FORGET_YES": "Yes, delete my data",
     "bot_FORGET_DONE": "Your personal bot data was deleted. Use /start to begin again.",
@@ -267,7 +267,8 @@
     "style_jazz": "Jazz",
     "style_classical": "Classical",
     "style_persian": "Persian music",
-    "bot_g1_text": "In chat or the app, type a song name and choose a result. You can also forward an audio file."
+    "bot_g1_text": "In chat or the app, type a song name and choose a result. You can also forward an audio file.",
+    "recognize_command": "Identify music from audio or video"
   },
   "fa": {
     "for_you": "برای تو",
@@ -423,7 +424,7 @@
     "bot_RATE_NUMBER": "امتیاز {number}",
     "bot_SIMILAR_NUMBER": "مشابه {number}",
     "bot_PROFILE_TEXT": "امتیازها: ♥ {love} · ↑ {like} · – {neutral} · ↓ {dislike}\nپیشنهادهای نمایش‌داده‌شده: {shown}",
-    "bot_PRIVACY": "پروفایل تلگرام، آهنگ‌های ارسالی، امتیازها، پیشنهادها و پلی‌لیست‌های متصل ذخیره می‌شوند. مشخصات آهنگ به Last.fm و MusicBrainz فرستاده می‌شود. باز کردن لینک امتیاز نیست. پست‌های جدید کانال نشانه‌های ضعیف‌تری از سلیقه‌اند. /forgetme داده‌های شخصی ربات را حذف می‌کند؛ فراداده مشترک موسیقی و پیام‌های تلگرام می‌مانند.",
+    "bot_PRIVACY": "پروفایل تلگرام، آهنگ‌های ارسالی، امتیازها، پیشنهادها و پلی‌لیست‌های متصل ذخیره می‌شوند. مشخصات آهنگ به Last.fm و MusicBrainz فرستاده می‌شود. باز کردن لینک امتیاز نیست. پست‌های جدید کانال نشانه‌های ضعیف‌تری از سلیقه‌اند. /forgetme داده‌های شخصی ربات را حذف می‌کند؛ فراداده مشترک موسیقی و پیام‌های تلگرام می‌مانند. برای تشخیص آهنگ، اثر انگشت صوتی برای Shazam فرستاده می‌شه. رسانهٔ موقت بعد از پردازش حذف می‌شه؛ نتیجه تا یک ساعت در حافظه می‌مونه.",
     "bot_FORGET_CONFIRM": "پروفایل، آهنگای ارسالی، امتیازها، تاریخچه، اتصال کانال‌ها و زبان انتخابیت پاک شن؟ اطلاعات مشترک آهنگ‌ها و پیام‌های توی تلگرام می‌مونن.",
     "bot_FORGET_YES": "آره، اطلاعاتم رو پاک کن",
     "bot_FORGET_DONE": "اطلاعات شخصیت از ربات پاک شد. خواستی دوباره شروع کنی، /start رو بزن.",
@@ -537,7 +538,8 @@
     "style_jazz": "جز",
     "style_classical": "کلاسیک",
     "style_persian": "موسیقی ایرانی",
-    "bot_g1_text": "توی چت یا برنامه اسم آهنگ رو بنویس و نتیجه درست رو انتخاب کن. فایل صوتی هم می‌تونی بفرستی."
+    "bot_g1_text": "توی چت یا برنامه اسم آهنگ رو بنویس و نتیجه درست رو انتخاب کن. فایل صوتی هم می‌تونی بفرستی.",
+    "recognize_command": "تشخیص آهنگ از صدا یا ویدیو"
   },
   "ar": {
     "for_you": "لك",
@@ -693,7 +695,7 @@
     "bot_RATE_NUMBER": "تقييم {number}",
     "bot_SIMILAR_NUMBER": "مثل {number}",
     "bot_PROFILE_TEXT": "التقييمات: ♥ {love} · ↑ {like} · – {neutral} · ↓ {dislike}\nاقتراحات عُرضت: {shown}",
-    "bot_PRIVACY": "نحفظ ملف تلغرام والأغاني المرسلة والتقييمات والاقتراحات والقوائم المرتبطة. تُرسل بيانات الأغاني إلى Last.fm وMusicBrainz. فتح الروابط ليس تقييمًا. منشورات القوائم الجديدة إشارات ذوق أضعف. /forgetme يحذف سجلاتك الشخصية في البوت؛ تبقى بيانات الموسيقى المشتركة ورسائل تلغرام.",
+    "bot_PRIVACY": "نحفظ ملف تلغرام والأغاني المرسلة والتقييمات والاقتراحات والقوائم المرتبطة. تُرسل بيانات الأغاني إلى Last.fm وMusicBrainz. فتح الروابط ليس تقييمًا. منشورات القوائم الجديدة إشارات ذوق أضعف. /forgetme يحذف سجلاتك الشخصية في البوت؛ تبقى بيانات الموسيقى المشتركة ورسائل تلغرام. Music recognition sends an audio fingerprint to Shazam. Temporary media is deleted after processing; results stay in memory for up to one hour.",
     "bot_FORGET_CONFIRM": "حذف ملفك والأغاني والتقييمات والسجل والقوائم وتفضيل اللغة؟ تبقى بيانات الموسيقى المشتركة ورسائل تلغرام.",
     "bot_FORGET_YES": "نعم، احذف بياناتي",
     "bot_FORGET_DONE": "حُذفت بياناتك الشخصية في البوت. استخدم /start للبدء من جديد.",
@@ -807,7 +809,8 @@
     "style_jazz": "جاز",
     "style_classical": "كلاسيكية",
     "style_persian": "موسيقى فارسية",
-    "bot_g1_text": "في المحادثة، أرسل الفنان - اسم الأغنية أو أعد توجيه ملف صوتي. في التطبيق يكفي اسم الأغنية أيضًا."
+    "bot_g1_text": "في المحادثة، أرسل الفنان - اسم الأغنية أو أعد توجيه ملف صوتي. في التطبيق يكفي اسم الأغنية أيضًا.",
+    "recognize_command": "Identify music from audio or video"
   },
   "tr": {
     "for_you": "Senin için",
@@ -963,7 +966,7 @@
     "bot_RATE_NUMBER": "Puanla {number}",
     "bot_SIMILAR_NUMBER": "Benzeri {number}",
     "bot_PROFILE_TEXT": "Puanlar: ♥ {love} · ↑ {like} · – {neutral} · ↓ {dislike}\nGösterilen öneriler: {shown}",
-    "bot_PRIVACY": "Telegram profilini, gönderdiğin şarkıları, puanlarını, önerileri ve bağlı listeleri saklarız. Şarkı bilgileri Last.fm ve MusicBrainz’e gider. Bağlantı açmak puan sayılmaz. Yeni liste gönderileri daha zayıf ipuçlarıdır. /forgetme kişisel bot kayıtlarını siler; ortak müzik verileri ve Telegram mesajları kalır.",
+    "bot_PRIVACY": "Telegram profilini, gönderdiğin şarkıları, puanlarını, önerileri ve bağlı listeleri saklarız. Şarkı bilgileri Last.fm ve MusicBrainz’e gider. Bağlantı açmak puan sayılmaz. Yeni liste gönderileri daha zayıf ipuçlarıdır. /forgetme kişisel bot kayıtlarını siler; ortak müzik verileri ve Telegram mesajları kalır. Music recognition sends an audio fingerprint to Shazam. Temporary media is deleted after processing; results stay in memory for up to one hour.",
     "bot_FORGET_CONFIRM": "Bot profilin, gönderilerin, puanların, geçmişin, listelerin ve dil tercihin silinsin mi? Ortak müzik verileri ve Telegram mesajları kalır.",
     "bot_FORGET_YES": "Evet, verilerimi sil",
     "bot_FORGET_DONE": "Kişisel bot verilerin silindi. Yeniden başlamak için /start kullan.",
@@ -1077,7 +1080,8 @@
     "style_jazz": "Caz",
     "style_classical": "Klasik",
     "style_persian": "İran müziği",
-    "bot_g1_text": "Sohbette Sanatçı - Şarkı adı yaz veya bir ses dosyası ilet. Uygulamada yalnızca şarkı adı da yeterli."
+    "bot_g1_text": "Sohbette Sanatçı - Şarkı adı yaz veya bir ses dosyası ilet. Uygulamada yalnızca şarkı adı da yeterli.",
+    "recognize_command": "Identify music from audio or video"
   },
   "ru": {
     "for_you": "Для вас",
@@ -1233,7 +1237,7 @@
     "bot_RATE_NUMBER": "Оценить {number}",
     "bot_SIMILAR_NUMBER": "Похожие {number}",
     "bot_PROFILE_TEXT": "Оценки: ♥ {love} · ↑ {like} · – {neutral} · ↓ {dislike}\nПоказано рекомендаций: {shown}",
-    "bot_PRIVACY": "Мы храним профиль Telegram, отправленные песни, оценки, рекомендации и подключённые плейлисты. Данные песен передаются Last.fm и MusicBrainz. Открытие ссылки не считается оценкой. Новые посты дают более слабые сигналы. /forgetme удаляет личные записи бота; общие музыкальные данные и сообщения Telegram остаются.",
+    "bot_PRIVACY": "Мы храним профиль Telegram, отправленные песни, оценки, рекомендации и подключённые плейлисты. Данные песен передаются Last.fm и MusicBrainz. Открытие ссылки не считается оценкой. Новые посты дают более слабые сигналы. /forgetme удаляет личные записи бота; общие музыкальные данные и сообщения Telegram остаются. Music recognition sends an audio fingerprint to Shazam. Temporary media is deleted after processing; results stay in memory for up to one hour.",
     "bot_FORGET_CONFIRM": "Удалить профиль, отправки, оценки, историю, плейлисты и язык? Общие музыкальные данные и сообщения Telegram останутся.",
     "bot_FORGET_YES": "Да, удалить мои данные",
     "bot_FORGET_DONE": "Личные данные бота удалены. Для начала используйте /start.",
@@ -1347,7 +1351,8 @@
     "style_jazz": "Джаз",
     "style_classical": "Классика",
     "style_persian": "Иранская музыка",
-    "bot_g1_text": "В чате отправь Исполнитель - Название или перешли аудиофайл. В приложении достаточно названия песни."
+    "bot_g1_text": "В чате отправь Исполнитель - Название или перешли аудиофайл. В приложении достаточно названия песни.",
+    "recognize_command": "Identify music from audio or video"
   },
   "es": {
     "for_you": "Para ti",
@@ -1503,7 +1508,7 @@
     "bot_RATE_NUMBER": "Valorar {number}",
     "bot_SIMILAR_NUMBER": "Similares a {number}",
     "bot_PROFILE_TEXT": "Valoraciones: ♥ {love} · ↑ {like} · – {neutral} · ↓ {dislike}\nRecomendaciones mostradas: {shown}",
-    "bot_PRIVACY": "Guardamos tu perfil de Telegram, canciones enviadas, valoraciones, recomendaciones y listas conectadas. Los metadatos van a Last.fm y MusicBrainz. Abrir enlaces no es valorar. Los nuevos posts son señales más débiles. /forgetme borra tus registros personales del bot; quedan los metadatos compartidos y mensajes de Telegram.",
+    "bot_PRIVACY": "Guardamos tu perfil de Telegram, canciones enviadas, valoraciones, recomendaciones y listas conectadas. Los metadatos van a Last.fm y MusicBrainz. Abrir enlaces no es valorar. Los nuevos posts son señales más débiles. /forgetme borra tus registros personales del bot; quedan los metadatos compartidos y mensajes de Telegram. Music recognition sends an audio fingerprint to Shazam. Temporary media is deleted after processing; results stay in memory for up to one hour.",
     "bot_FORGET_CONFIRM": "¿Borrar tu perfil, envíos, valoraciones, historial, listas e idioma? Quedan los metadatos compartidos y mensajes de Telegram.",
     "bot_FORGET_YES": "Sí, borrar mis datos",
     "bot_FORGET_DONE": "Se borraron tus datos personales del bot. Usa /start para empezar.",
@@ -1617,7 +1622,8 @@
     "style_jazz": "Jazz",
     "style_classical": "Clásica",
     "style_persian": "Música persa",
-    "bot_g1_text": "En el chat, envía Artista - Título o reenvía un archivo de audio. En la app también basta con el título."
+    "bot_g1_text": "En el chat, envía Artista - Título o reenvía un archivo de audio. En la app también basta con el título.",
+    "recognize_command": "Identify music from audio or video"
   },
   "fr": {
     "for_you": "Pour vous",
@@ -1773,7 +1779,7 @@
     "bot_RATE_NUMBER": "Noter {number}",
     "bot_SIMILAR_NUMBER": "Similaires à {number}",
     "bot_PROFILE_TEXT": "Notes : ♥ {love} · ↑ {like} · – {neutral} · ↓ {dislike}\nRecommandations affichées : {shown}",
-    "bot_PRIVACY": "Nous conservons votre profil Telegram, titres envoyés, notes, recommandations et playlists connectées. Les métadonnées vont à Last.fm et MusicBrainz. Ouvrir un lien n’est pas une note. Les nouveaux posts sont des indices plus faibles. /forgetme efface vos données personnelles du bot ; les métadonnées partagées et messages Telegram restent.",
+    "bot_PRIVACY": "Nous conservons votre profil Telegram, titres envoyés, notes, recommandations et playlists connectées. Les métadonnées vont à Last.fm et MusicBrainz. Ouvrir un lien n’est pas une note. Les nouveaux posts sont des indices plus faibles. /forgetme efface vos données personnelles du bot ; les métadonnées partagées et messages Telegram restent. Music recognition sends an audio fingerprint to Shazam. Temporary media is deleted after processing; results stay in memory for up to one hour.",
     "bot_FORGET_CONFIRM": "Supprimer profil, envois, notes, historique, playlists et langue ? Les métadonnées partagées et messages Telegram restent.",
     "bot_FORGET_YES": "Oui, effacer mes données",
     "bot_FORGET_DONE": "Vos données personnelles du bot sont effacées. Utilisez /start pour recommencer.",
@@ -1887,7 +1893,8 @@
     "style_jazz": "Jazz",
     "style_classical": "Classique",
     "style_persian": "Musique persane",
-    "bot_g1_text": "Dans le chat, envoie Artiste - Titre ou transfère un fichier audio. Dans l’appli, le titre seul suffit aussi."
+    "bot_g1_text": "Dans le chat, envoie Artiste - Titre ou transfère un fichier audio. Dans l’appli, le titre seul suffit aussi.",
+    "recognize_command": "Identify music from audio or video"
   },
   "de": {
     "for_you": "Für dich",
@@ -2043,7 +2050,7 @@
     "bot_RATE_NUMBER": "Bewerten {number}",
     "bot_SIMILAR_NUMBER": "Ähnlich wie {number}",
     "bot_PROFILE_TEXT": "Bewertungen: ♥ {love} · ↑ {like} · – {neutral} · ↓ {dislike}\nGezeigte Empfehlungen: {shown}",
-    "bot_PRIVACY": "Wir speichern dein Telegram-Profil, gesendete Songs, Bewertungen, Empfehlungen und verbundene Playlists. Songdaten gehen an Last.fm und MusicBrainz. Links öffnen zählt nicht als Bewertung. Neue Posts sind schwächere Hinweise. /forgetme löscht persönliche Bot-Daten; gemeinsame Musikdaten und Telegram-Nachrichten bleiben.",
+    "bot_PRIVACY": "Wir speichern dein Telegram-Profil, gesendete Songs, Bewertungen, Empfehlungen und verbundene Playlists. Songdaten gehen an Last.fm und MusicBrainz. Links öffnen zählt nicht als Bewertung. Neue Posts sind schwächere Hinweise. /forgetme löscht persönliche Bot-Daten; gemeinsame Musikdaten und Telegram-Nachrichten bleiben. Music recognition sends an audio fingerprint to Shazam. Temporary media is deleted after processing; results stay in memory for up to one hour.",
     "bot_FORGET_CONFIRM": "Bot-Profil, Einsendungen, Bewertungen, Verlauf, Playlists und Sprachwahl löschen? Gemeinsame Musikdaten und Telegram-Nachrichten bleiben.",
     "bot_FORGET_YES": "Ja, meine Daten löschen",
     "bot_FORGET_DONE": "Deine persönlichen Bot-Daten wurden gelöscht. Starte mit /start neu.",
@@ -2157,6 +2164,7 @@
     "style_jazz": "Jazz",
     "style_classical": "Klassik",
     "style_persian": "Persische Musik",
-    "bot_g1_text": "Schicke im Chat Künstler - Songtitel oder leite eine Audiodatei weiter. In der App reicht auch der Songtitel allein."
+    "bot_g1_text": "Schicke im Chat Künstler - Songtitel oder leite eine Audiodatei weiter. In der App reicht auch der Songtitel allein.",
+    "recognize_command": "Identify music from audio or video"
   }
 }

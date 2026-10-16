@@ -107,7 +107,8 @@ async def configure_commands(bot):
     from aiogram.types import BotCommand, BotCommandScopeAllPrivateChats
     keys={'start':'guide','recommend':'for_you','profile':'taste','taste':'taste','help':'guide',
           'language':'language','privacy':'privacy_hint','forgetme':'yes_delete','cancel':'cancel',
-          'connectchannel':'connect','channels':'channels','disconnectchannel':'disconnect','setup':'setup_title'}
+          'connectchannel':'connect','channels':'channels','disconnectchannel':'disconnect','setup':'setup_title',
+          'recognize':'recognize_command'}
     for code in LANGUAGES:
         context=language.set(code)
         try:

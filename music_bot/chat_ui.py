@@ -41,7 +41,7 @@ def button(token, action, text, index=None):
 def parse_control(data):
     if not isinstance(data, str) or len(data.encode()) > 64:
         return None
-    match = re.fullmatch(r'q:([a-f0-9]{32}):(get|rate|more|love|like|neutral|dislike):([0-4])', data)
+    match = re.fullmatch(r'q:([a-f0-9]{32}):(get|versions|rate|more|love|like|neutral|dislike):([0-4])', data)
     if match:
         return match[1], match[2], int(match[3])
     match = re.fullmatch(r'q:([a-f0-9]{32}):(next|foryou|menu|delete|keep)', data)
@@ -58,6 +58,8 @@ def safe_url(value, artwork=False):
     try:
         url = urlsplit(value)
         hosts = {'lastfm.freetls.fastly.net', 'lastfm-img.freetls.fastly.net', 'lastfm-img2.akamaized.net'} if artwork else {'www.last.fm', 'last.fm', 'musicbrainz.org'}
+        if artwork and re.fullmatch(r'is[1-5]-ssl\.mzstatic\.com', url.hostname or ''):
+            hosts.add(url.hostname)  # Apple image CDN used in Shazam recognition responses.
         if (url.scheme != 'https' or url.hostname not in hosts or url.username or url.password
                 or url.port not in (None, 443) or url.query or url.fragment or '\\' in value):
             return None
@@ -105,7 +107,7 @@ def list_content(rows, token, seed_track=None):
         lines.append(entry)
         actions = [button(token, 'rate', M.RATE_NUMBER.format(number=index + 1), index),
                    button(token, 'more', M.SIMILAR_NUMBER.format(number=index + 1), index),
-                   button(token, 'get', 'Get song', index)]
+                   button(token, 'get', 'Get song', index), button(token, 'versions', 'Other versions', index)]
         if art := safe_url(row.artwork_url, artwork=True):
             actions.append(Button(text=M.ARTWORK, url=art))
         keyboard.append(actions)
@@ -122,7 +124,7 @@ def card_keyboard(token, selected=None, submitted=False):
                 [button(token, 'more', M.MORE_LIKE, 0),
                  button(token, 'foryou' if submitted else 'next', M.AFTER_FOR_YOU if submitted else M.CONTINUE)],
                 [button(token, 'menu', M.DONE if submitted else M.MAIN_MENU)],
-                [button(token, 'get', 'Get song', 0)]]
+                [button(token, 'get', 'Get song', 0), button(token, 'versions', 'Find other versions', 0)]]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 

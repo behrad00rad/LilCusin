@@ -10,6 +10,7 @@ from aiogram.client.telegram import TelegramAPIServer
 from aiogram.types import BotCommand, BotCommandScopeAllPrivateChats, MenuButtonWebApp, WebAppInfo
 
 from .get_song import GetSong, FetchSettings
+from .recognition import Recognition, RecognitionSettings, ShazamProvider
 from .lilbro_fetch import LilBroInbound
 from .config import ConfigError, load_config
 from .database import Database
@@ -21,6 +22,7 @@ from .artwork import ArtworkLoader
 from .providers.lastfm import LastFMClient
 from .providers.musicbrainz import MusicBrainzClient
 from .providers.deezer import DeezerClient
+from .providers.itunes import ITunesClient
 from .workflow import Workflow
 from .lyrics_search import LyricsSearch, LyricsSettings
 from .lifecycle import UpdateTasks, PrivateActions, ChannelUpdates
@@ -73,13 +75,21 @@ async def main() -> None:
             stack.push_async_callback(database.close)
             await database.initialize()
             provider_session = await stack.enter_async_context(aiohttp.ClientSession())
+            recognition_settings = RecognitionSettings.environment()
+            recognition = Recognition(bot, ShazamProvider(provider_session) if recognition_settings.enabled else None,
+                                      enabled=recognition_settings.enabled)
+            recognition.check()
+            stack.push_async_callback(recognition.close)
             providers = CachedProviders(database, LastFMClient(provider_session, config.lastfm_api_key),
                                         MusicBrainzClient(provider_session),
-                                        DeezerClient(provider_session) if config.search_deezer_enabled else None)
+                                        DeezerClient(provider_session) if config.search_deezer_enabled else None,
+                                        itunes=ITunesClient(provider_session))
             song_artwork = ArtworkLoader(database, providers)
             stack.push_async_callback(song_artwork.close)
             get_song = GetSong(database, bot, fetch_settings, artwork_loader=song_artwork)
+            get_song.recognizer = ShazamProvider(provider_session)
             await get_song.start()
+            recognition.delivery = get_song
             stack.push_async_callback(get_song.close)
             enrichment = Enrichment(database, providers)
             stack.push_async_callback(enrichment.close)
@@ -126,6 +136,7 @@ async def main() -> None:
                 chat_service=chat_service,
                 channel_service=channels,
                 get_song=get_song,
+                recognition=recognition,
             )
     finally:
         logger.info("Bot stopped; handler tasks, provider sessions and database closed.")

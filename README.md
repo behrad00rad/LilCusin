@@ -18,7 +18,9 @@ flowchart LR
     D --> F[Get recommendations]
 ```
 
-Identification uses song **metadata** (artist and title), without listening to audio.
+By default identification uses song **metadata** (artist and title). Optional
+[music recognition](RECOGNITION.md) listens to samples from audio, video, voice
+messages and supported YouTube links through ShazamIO (no API key). Set `RECOGNITION_ENABLED=false` to disable it.
 An optional **Get song** button can fetch a permitted individual recording and send
 a playable private Telegram music message. It is disabled by default; see
 [Get song setup, permissions and verification](GET_SONG.md). Ratings are ❤️ Love, 👍 Like, 😐 Neutral, and 👎 Dislike.
@@ -309,3 +311,21 @@ The two metrics are stored separately in cached metadata. No schema migration is
 needed; old cache rows still decode. Deezer recording IDs use their own namespace.
 Catalogue availability and territorial differences can still affect discovery.
 This change does not enable Deezer audio downloads or change source permissions.
+
+## Artist names and short lyric hints
+
+Chat and the Mini App accept artist names (for example `deftones`) as well as song
+titles. Short lyric/artist hints such as `someday kanye` can use discovery and then
+independent catalogue validation; results always require a choice. No phrase is
+hard-coded to a particular song. Artist matches are retained, while popular exact
+titles keep precedence when an artist name is ambiguous. Deezer and iTunes metadata
+provide additional catalogue paths when Last.fm or MusicBrainz are unavailable.
+Install `requirements-audio.txt` for YouTube-based lyric discovery and social links.
+Discovery is best-effort and does not establish that lyrics were verified.
+
+## Development record
+
+The recognition/discovery case study is documented in
+[case study](docs/case-study.md), [decisions](docs/decisions.md), and
+[verification evidence](docs/evidence.md). These distinguish local tests and
+user confirmations from production deployment and remaining unverified behavior.

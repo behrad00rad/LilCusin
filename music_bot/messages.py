@@ -140,6 +140,7 @@ BACK = '‹ Back'
 CANCEL = 'Cancel'
 RESET_CONFIRM = 'Yes, reset'
 PRIVACY = (
+    'Music recognition sends an audio fingerprint to Shazam. Temporary media is deleted after processing; results may be cached in memory for one hour. '
     'I store your Telegram user ID and basic profile fields, song submissions, explicit ratings, '
     'recommendation history, and music metadata. Short-lived button state '
     'keeps your controls private. Song artist/title metadata is sent to Last.fm and sometimes MusicBrainz '

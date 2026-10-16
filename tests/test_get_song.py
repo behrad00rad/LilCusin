@@ -55,6 +55,135 @@ class GetSongTests(ServiceTestCase):
         self.assertEqual(self.bot.send_audio.call_args.kwargs['audio'], 'telegram-file')
         self.assertEqual(list(self.service.root.iterdir()), [])
 
+    async def test_recognized_identity_is_deduplicated_without_ratings(self):
+        from music_bot.models import Rating, SongSubmission
+        first = await self.service.request_recognized(123, 'Artist', 'Song')
+        second = await self.service.request_recognized(123, 'Artist', 'Song')
+        self.assertEqual(first, second)
+        async with self.database.sessions() as session:
+            self.assertEqual(len((await session.scalars(select(Track))).all()), 1)
+            self.assertIsNone(await session.scalar(select(Rating)))
+            self.assertIsNone(await session.scalar(select(SongSubmission)))
+
+    async def test_shazam_art_fills_existing_coverless_track(self):
+        art = 'https://is1-ssl.mzstatic.com/image/thumb/Music/test/400x400cc.jpg'
+        await self.service.request_recognized(123, 'Artist', 'Song', artwork_url=art, album='Album')
+        async with self.database.sessions() as session:
+            track = await session.get(Track, self.track_id)
+            self.assertEqual(track.artwork_url, art)
+            self.assertEqual(track.album, 'Album')
+
+    async def test_other_version_choice_has_separate_identity_and_owner_checks(self):
+        async with self.database.write() as session:
+            original = await session.get(Track, self.track_id)
+            original.title, original.display_title = 'Song (Live)', 'Song (Live)'
+        self.fetcher.search.return_value = [dict(id=VIDEO, title='Artist - Song (Official Audio)',
+            recording_title='Song', artist='Artist', duration=200, score=1, exact=True, version=[])]
+        req = await self.service.request(123, self.track_id, other_versions=True)
+        await self.service.execute((await self.job(req))[0])
+        self.assertTrue(self.fetcher.search.await_args.args[0].allow_versions)
+        self.assertEqual(self.fetcher.search.await_args.args[0].title, 'Song')
+        self.assertEqual((await self.job(req))[1], 'choice')
+        await self.service.choose(123, req, 9, 0)
+        async with self.database.sessions() as session:
+            request = await session.get(AudioRequest, req)
+            selected = await session.get(FetchJob, request.job_id)
+            track = await session.get(Track, selected.track_id)
+            self.assertNotEqual(track.id, self.track_id)
+            self.assertEqual(track.display_title, 'Song')
+        await self.service.execute((await self.job(req))[0])
+        self.assertEqual((await self.job(req))[1], 'done')
+        with self.assertRaises(FlowError):
+            await self.service.other_versions(456, req, 8)
+        with self.assertRaises(FlowError):
+            await self.service.other_versions(123, req, 99)
+        await self.service.other_versions(123, req, 8)
+
+    async def test_recognition_versions_control_is_bound_to_owner_and_message(self):
+        message = NS(message_id=55, edit_reply_markup=AsyncMock())
+        request = await self.service.request(123, self.track_id)
+        await self.service.bind_recognition_versions(123, request, message)
+        keyboard = message.edit_reply_markup.await_args.kwargs['reply_markup']
+        from music_bot.chat_ui import parse_control
+        token, action, index = parse_control(keyboard.inline_keyboard[0][0].callback_data)
+        self.assertEqual(action, 'versions')
+        await self.chat.control(token, 123, 55, action, index)
+        for user, message_id in ((456, 55), (123, 99)):
+            with self.assertRaises(FlowError):
+                await self.chat.control(token, user, message_id, action, index)
+
+    async def test_downloaded_audio_shazam_artwork_matches_selected_recording(self):
+        from music_bot.recognition import RecognizedSong
+        art = 'https://is1-ssl.mzstatic.com/image/thumb/Music/test/400x400cc.jpg'
+        self.service.recognizer = NS(recognize=AsyncMock(return_value=RecognizedSong(
+            'Artist', 'Song', artwork_url=art, album='Album')))
+        self.fetcher.process = AsyncMock()
+        async with self.database.sessions() as session:
+            track = await session.get(Track, self.track_id)
+        with patch('music_bot.recognition.ffmpeg_executable', return_value='ffmpeg'):
+            await self.service.shazam_artwork(track, Path(self.temp.name)/'test.m4a',
+                self.temp.name, AsyncMock(return_value=True))
+        self.assertEqual(track.artwork_url, art)
+        self.assertEqual(track.album, 'Album')
+        self.assertIn(track.id, self.service.art_attempted)
+
+    async def test_shazam_artwork_rejects_wrong_version(self):
+        from music_bot.recognition import RecognizedSong
+        art = 'https://is1-ssl.mzstatic.com/image/thumb/Music/test/400x400cc.jpg'
+        self.service.recognizer = NS(recognize=AsyncMock(return_value=RecognizedSong(
+            'Artist', 'Song (Live)', artwork_url=art)))
+        self.fetcher.process = AsyncMock()
+        async with self.database.sessions() as session:
+            track = await session.get(Track, self.track_id)
+        with patch('music_bot.recognition.ffmpeg_executable', return_value='ffmpeg'):
+            await self.service.shazam_artwork(track, Path(self.temp.name)/'test.m4a',
+                self.temp.name, AsyncMock(return_value=True))
+        self.assertIsNone(track.artwork_url)
+
+    async def test_unreachable_existing_cover_can_be_replaced_with_verified_shazam_art(self):
+        from music_bot.recognition import RecognizedSong
+        art = 'https://is1-ssl.mzstatic.com/image/thumb/Music/test/400x400cc.jpg'
+        async with self.database.write() as session:
+            track = await session.get(Track, self.track_id)
+            track.artwork_url = 'https://lastfm.freetls.fastly.net/i/u/cover.jpg'
+        self.service.recognizer = NS(recognize=AsyncMock(return_value=RecognizedSong(
+            'Artist', 'Song', artwork_url=art)))
+        self.fetcher.process = AsyncMock()
+        with patch('music_bot.recognition.ffmpeg_executable', return_value='ffmpeg'):
+            await self.service.shazam_artwork(track, Path(self.temp.name)/'test.m4a', self.temp.name,
+                AsyncMock(return_value=True), force=True)
+        self.assertEqual(track.artwork_url, art)
+
+    async def test_transient_search_failure_retries_once(self):
+        row = dict(id=VIDEO, title='Song', artist='Artist', duration=200, score=1, exact=True)
+        self.fetcher.search.side_effect = [FetchError('Audio source unavailable.'), [row]]
+        req = await self.service.request(123, self.track_id)
+        await self.service.execute((await self.job(req))[0])
+        self.assertEqual((await self.job(req))[1], 'done')
+        self.assertEqual(self.fetcher.search.await_count, 2)
+
+    async def test_transient_download_failure_retries_once(self):
+        attempts = 0
+        async def fetch(*args):
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                raise FetchError('Audio source unavailable.')
+            return await self.audio(*args)
+        self.fetcher.fetch.side_effect = fetch
+        req = await self.service.request(123, self.track_id)
+        await self.service.execute((await self.job(req))[0])
+        self.assertEqual((await self.job(req))[1], 'done')
+        self.assertEqual(attempts, 2)
+
+    async def test_search_failure_is_bounded_and_explained(self):
+        self.fetcher.search.side_effect = FetchError('Audio source unavailable.')
+        req = await self.service.request(123, self.track_id)
+        await self.service.execute((await self.job(req))[0])
+        self.assertEqual((await self.job(req))[1], 'failed')
+        self.assertEqual(self.fetcher.search.await_count, 2)
+        self.assertIn('source search failed', self.bot.send_message.await_args.args[1])
+
     async def test_wrong_button_is_bound_to_delivered_request_and_message(self):
         req = await self.service.request(123, self.track_id)
         await self.service.execute((await self.job(req))[0])

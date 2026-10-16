@@ -71,9 +71,9 @@ class ChatService:
                     raise FlowError("stale")
             key = f"{action}:{index}"
             if rating is None:
-                if action != "get" and key in payload["used"]:
+                if action not in {"get", "versions"} and key in payload["used"]:
                     raise FlowError("stale")
-                if action != "get":
+                if action not in {"get", "versions"}:
                     payload["used"] = [*payload["used"], key]
                 row.payload = payload
                 if action in {"delete", "keep"}:

@@ -80,14 +80,17 @@ async def callback(query, chat_service, get_song=None, workflow=None):
                 await query.message.edit_reply_markup(reply_markup=card_keyboard(token, action, payload.get('submitted', False)))
             except TelegramBadRequest:
                 pass
-        elif action == 'get':
+        elif action in {'get', 'versions'}:
             from .youtube_fetch import FetchError
             if get_song is None:
                 await query.message.answer('Get song is unavailable.')
             else:
                 await query.message.answer('Finding your song... You can /cancel while waiting.')
                 try:
-                    await get_song.request(query.from_user.id, track.id)
+                    if action == 'versions':
+                        await get_song.request(query.from_user.id, track.id, other_versions=True)
+                    else:
+                        await get_song.request(query.from_user.id, track.id)
                 except FetchError as error:
                     await query.message.answer(str(error))
         elif action == 'rate':

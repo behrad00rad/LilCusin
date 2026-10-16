@@ -64,6 +64,28 @@ async def get_song_choice(query: CallbackQuery, get_song=None):
     await query.message.answer('Your song is queued. Use /cancel to cancel.')
 
 
+@router.callback_query(F.data.startswith('v:'))
+async def other_versions(query: CallbackQuery, get_song=None):
+    import re
+    from .youtube_fetch import FetchError
+    match = re.fullmatch(r'v:([a-f0-9]{32})', query.data or '')
+    if (not match or get_song is None or not isinstance(query.message, Message)
+            or query.message.chat.type != 'private' or query.message.chat.id != query.from_user.id
+            or query.from_user.is_bot):
+        await query.answer(messages.STALE)
+        return
+    try:
+        await get_song.other_versions(query.from_user.id, match[1], query.message.message_id)
+    except FlowError:
+        await query.answer(messages.STALE)
+        return
+    except FetchError as error:
+        await query.answer(str(error))
+        return
+    await query.answer(messages.WORKING)
+    await query.message.answer('Looking for other versions… Choose a recording, or /cancel.')
+
+
 @router.callback_query(F.data.startswith('w:'))
 async def wrong_song(query: CallbackQuery, get_song=None):
     import re
@@ -87,10 +109,12 @@ async def wrong_song(query: CallbackQuery, get_song=None):
 
 
 @router.message(Command("cancel"))
-async def cancel(message: Message, workflow: Workflow, chat_service=None, get_song=None) -> None:
+async def cancel(message: Message, workflow: Workflow, chat_service=None, get_song=None, recognition=None) -> None:
     if message.chat.type != "private" or submitter(message) is None:
         await message.answer(messages.PRIVATE_ONLY)
         return
+    if recognition is not None:
+        await recognition.cancel(message.from_user.id)
     if get_song is not None:
         await get_song.cancel(message.from_user.id)
     await workflow.cancel(message.from_user.id)
@@ -106,9 +130,26 @@ def submitter(message: Message) -> Submitter | None:
     return Submitter(user.id, user.username, user.full_name, user.language_code)
 
 
+@router.message(Command('recognize'))
+async def recognize_command(message: Message, recognition=None):
+    if recognition is not None:
+        await recognition.submit(message, message.reply_to_message or message)
+
+
+@router.message(F.video | F.voice | F.video_note | F.document)
+async def recognize_media(message: Message, recognition=None):
+    if recognition is not None:
+        await recognition.submit(message)
+    else:
+        await message.answer(messages.UNSUPPORTED)
+
+
 @router.message(F.audio)
 async def audio_submission(message: Message, submissions: SubmissionService,
-                           workflow: Workflow, enrichment: Enrichment, chat_service=None) -> None:
+                           workflow: Workflow, enrichment: Enrichment, chat_service=None, recognition=None) -> None:
+    if recognition is not None and recognition.enabled:
+        await recognition.submit(message)
+        return
     if message.chat.type != "private":
         await message.answer(messages.PRIVATE_ONLY)
         return
@@ -137,13 +178,16 @@ async def audio_submission(message: Message, submissions: SubmissionService,
 
 @router.message(F.text, ~F.text.lstrip().startswith("/"))
 async def text_submission(message: Message, submissions: SubmissionService,
-                          workflow: Workflow, enrichment: Enrichment, chat_service=None) -> None:
+                          workflow: Workflow, enrichment: Enrichment, chat_service=None, recognition=None) -> None:
     if message.chat.type != "private":
         await message.answer(messages.PRIVATE_ONLY)
         return
     user = submitter(message)
     if user is None:
         await message.answer(messages.NO_USER)
+        return
+    if recognition is not None and message.text.strip().lower().startswith(('https://', 'http://')):
+        await recognition.submit(message)
         return
     try:
         if message.reply_to_message is not None:

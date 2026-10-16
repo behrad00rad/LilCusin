@@ -41,12 +41,14 @@ def needs_lyrics(query, candidates):
     """Avoid extra work for titles and title/artist combinations already found."""
     normalized = match_text(query)
     words = normalized.split()
-    if not 3 <= len(words) <= 40 or len(query) > 240:
+    if not 2 <= len(words) <= 40 or len(query) > 240:
         return False
     for candidate in candidates:
         if not candidate.title or not candidate.artist:
             continue
         title_words = match_text(candidate.title).split()
+        if normalized == match_text(candidate.artist):
+            return False
         if normalized == match_text(candidate.title) and ((candidate.listeners or 0) >= 10000
                                                          or (candidate.deezer_rank or 0) >= 400000):
             return False
@@ -146,9 +148,14 @@ class LyricsSearch:
             try:
                 async with self.capacity, asyncio.timeout(22):
                     hints = await self.discover(phrase)
+                    catalogue = [('lastfm', 'search_tracks'), ('musicbrainz', 'search_recordings')]
+                    if getattr(self.providers, 'has_deezer', False) is True:
+                        catalogue.append(('deezer', 'search_tracks'))
+                    if getattr(self.providers, 'has_itunes', False) is True:
+                        catalogue.append(('itunes', 'search_tracks'))
                     calls = [(artist, title, provider, method)
                              for artist, title in hints[:3]
-                             for provider, method in [('lastfm', 'search_tracks'), ('musicbrainz', 'search_recordings')]]
+                             for provider, method in catalogue]
                     results = await asyncio.gather(*[
                         self.providers.call(provider, method, artist, title)
                         for artist, title, provider, method in calls

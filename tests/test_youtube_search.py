@@ -8,6 +8,26 @@ from music_bot.youtube_fetch import YouTubeFetcher, FetchError, confident, rank_
 
 
 class YouTubeSearchTests(unittest.IsolatedAsyncioTestCase):
+    def test_other_versions_offer_diversity_without_covers_or_wrong_artists(self):
+        from music_bot.youtube_fetch import base_title
+        self.assertEqual(base_title('Song (Live)'), 'Song')
+        self.assertEqual(base_title('Live Forever'), 'Live Forever')
+        track = NS(artist='Artist', title='Song', duration=None, allow_versions=True)
+        entries = [dict(id='abcdefghij' + str(i), title='Artist - Song' + suffix,
+                        artist=artist, duration=200) for i, (suffix, artist) in enumerate([
+            ('', 'Artist'), (' (Live)', 'Artist'), (' (Acoustic)', 'Artist'),
+            (' (Cover)', 'Artist'), ('', 'Other')])]
+        rows = rank_candidates(track, entries, 900)
+        self.assertEqual({tuple(r['version']) for r in rows}, {(), ('live',), ('acoustic',)})
+
+    async def test_search_keeps_catalogue_punctuation(self):
+        fetcher = YouTubeFetcher(FetchSettings())
+        fetcher.process = AsyncMock(return_value=b'{"entries": []}')
+        await fetcher.search(NS(artist='artist', title='untitled 02 l 06 23 2014', duration=None,
+            display_artist='Artist', display_title='untitled 02 l 06.23.2014.'), '.', AsyncMock())
+        query = fetcher.process.await_args.args[0][-1]
+        self.assertEqual(query, 'ytsearch8:Artist untitled 02 l 06.23.2014. official audio')
+
     async def test_clip_duration_requires_choice_and_excludes_other_versions(self):
         fetcher = YouTubeFetcher(FetchSettings())
         rows = [dict(id='abcdefghijk', title='Kendrick Lamar - DNA.', uploader='Kendrick Lamar', duration=187),
