@@ -12,6 +12,8 @@ def migrate(connection) -> None:
     for table, names in {
         "tracks": ("display_artist", "display_title"),
         "track_tags": ("display_name",),
+        "audio_deliveries": ("artwork_key",),
+        "audio_requests": ("delivered_video_id",),
     }.items():
         if not inspector.has_table(table):
             continue

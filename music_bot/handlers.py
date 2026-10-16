@@ -46,11 +46,53 @@ router.message.register(chat_handlers.command, F.text.in_(menu_labels('MENU_SEND
 router.callback_query.register(chat_handlers.callback, F.data.startswith("q:"))
 
 
+@router.callback_query(F.data.startswith('g:'))
+async def get_song_choice(query: CallbackQuery, get_song=None):
+    import re
+    match = re.fullmatch(r'g:([a-f0-9]{32}):([0-2])', query.data or '')
+    if (get_song is None or not match or not isinstance(query.message, Message)
+            or query.message.chat.type != 'private' or query.message.chat.id != query.from_user.id
+            or query.from_user.is_bot):
+        await query.answer(messages.STALE)
+        return
+    try:
+        await get_song.choose(query.from_user.id, match[1], query.message.message_id, int(match[2]))
+    except FlowError:
+        await query.answer(messages.STALE)
+        return
+    await query.answer(messages.WORKING)
+    await query.message.answer('Your song is queued. Use /cancel to cancel.')
+
+
+@router.callback_query(F.data.startswith('w:'))
+async def wrong_song(query: CallbackQuery, get_song=None):
+    import re
+    from .youtube_fetch import FetchError
+    match = re.fullmatch(r'w:([a-f0-9]{32})', query.data or '')
+    if (get_song is None or not match or not isinstance(query.message, Message)
+            or query.message.chat.type != 'private' or query.message.chat.id != query.from_user.id
+            or query.from_user.is_bot):
+        await query.answer(messages.STALE)
+        return
+    await query.answer(messages.WORKING)
+    try:
+        await get_song.wrong(query.from_user.id, match[1], query.message.message_id)
+    except FlowError:
+        await query.message.answer(messages.STALE)
+        return
+    except FetchError as error:
+        await query.message.answer(str(error))
+        return
+    await query.message.answer('Looking for another recording... You can /cancel while waiting.')
+
+
 @router.message(Command("cancel"))
-async def cancel(message: Message, workflow: Workflow, chat_service=None) -> None:
+async def cancel(message: Message, workflow: Workflow, chat_service=None, get_song=None) -> None:
     if message.chat.type != "private" or submitter(message) is None:
         await message.answer(messages.PRIVATE_ONLY)
         return
+    if get_song is not None:
+        await get_song.cancel(message.from_user.id)
     await workflow.cancel(message.from_user.id)
     if chat_service is not None:
         await chat_service.cancel_controls(message.from_user.id)
@@ -109,7 +151,7 @@ async def text_submission(message: Message, submissions: SubmissionService,
             await present(message, result, user.telegram_user_id, workflow, enrichment, chat_service)
             await dismiss(message.reply_to_message)
             return
-        saved = await submissions.submit_text(user, message.text)
+        saved = await submissions.submit_search(user, message.text)
     except InvalidSubmission:
         await message.answer(messages.INVALID_TEXT)
         return
@@ -120,7 +162,8 @@ async def text_submission(message: Message, submissions: SubmissionService,
         logger.error("Could not persist text submission.")
         await message.answer(messages.SAVE_FAILED)
         return
-    pending = await message.answer(messages.text_received(saved.parsed_artist, saved.parsed_title))
+    pending = await message.answer(messages.text_received(saved.parsed_artist, saved.parsed_title)
+                                   if saved.parsed_artist else messages.PENDING)
     try:
         result = await workflow.start(saved.id, user.telegram_user_id)
         await present(message, result, user.telegram_user_id, workflow, enrichment, chat_service)

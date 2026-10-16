@@ -93,6 +93,15 @@ class MusicBrainzClient:
             raise ProviderError(Failure.INVALID_RESPONSE)
         return [normalize_recording(item) for item in items(payload["recordings"])]
 
+    async def search_titles_by_artist(self, artist: str, title: str) -> list[TrackCandidate]:
+        """Broader catalogue browsing for a possibly partial artist hint."""
+        return await self.search_recordings(artist, title, limit=100)
+
+    async def search_titles(self, title: str) -> list[TrackCandidate]:
+        payload = await self._request(query=f"recording:{quoted_query(title)}",limit=100)
+        if not isinstance(payload.get('recordings'),list):raise ProviderError(Failure.INVALID_RESPONSE)
+        return [normalize_recording(item) for item in items(payload['recordings'])]
+
     async def get_recording(self, recording_id: str) -> TrackCandidate:
         # Identifiers form a URL path; never allow arbitrary paths or query strings.
         if not re.fullmatch(r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}", recording_id):

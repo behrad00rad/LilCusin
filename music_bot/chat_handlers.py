@@ -40,7 +40,15 @@ async def command(message, chat_service):
         counts, shown = await chat_service.profile(user.id)
         await message.answer(M.PROFILE_TEXT.format(**{value: counts.get(value, 0) for value in RATINGS}, shown=shown), reply_markup=main_menu())
     elif action == 'privacy':
-        await message.answer(M.PRIVACY, reply_markup=main_menu())
+        await message.answer(M.PRIVACY + '\n\nSearch text is sent to music catalogues (Last.fm, MusicBrainz and Deezer), without Telegram identifiers. '
+            'Weak lyric-fragment searches may also send the phrase to YouTube or the configured lyrics provider. '
+            'Existing private search input is removed by /forgetme; transient phrase results expire within 15 minutes. '
+            'Get song sends artist/title searches to YouTube and temporarily downloads audio. '
+            'When the operator enables the Lil Bro source, the confirmed YouTube link is sent to @musicbehbot; '
+            'that provider may retain its copy and request history. '
+            'Private job records and Telegram audio references expire by the configured retention period (default 7 days). '
+            'Your chosen and rejected recordings are also saved privately for that period. '
+            '/forgetme removes these personal records and cancels pending deliveries; shared source metadata and Telegram messages may remain.', reply_markup=main_menu())
     elif action == 'forgetme':
         token = await chat_service.create_control(user.id, kind='forget')
         keyboard = InlineKeyboardMarkup(inline_keyboard=[[button(token, 'delete', M.FORGET_YES), button(token, 'keep', M.FORGET_NO)]])
@@ -55,7 +63,7 @@ async def command(message, chat_service):
         await message.answer(M.HELP if action == 'help' else M.UNSUPPORTED, reply_markup=main_menu())
 
 
-async def callback(query, chat_service):
+async def callback(query, chat_service, get_song=None, workflow=None):
     acknowledged = False
     try:
         data = parse_control(query.data)
@@ -72,6 +80,16 @@ async def callback(query, chat_service):
                 await query.message.edit_reply_markup(reply_markup=card_keyboard(token, action, payload.get('submitted', False)))
             except TelegramBadRequest:
                 pass
+        elif action == 'get':
+            from .youtube_fetch import FetchError
+            if get_song is None:
+                await query.message.answer('Get song is unavailable.')
+            else:
+                await query.message.answer('Finding your song... You can /cancel while waiting.')
+                try:
+                    await get_song.request(query.from_user.id, track.id)
+                except FetchError as error:
+                    await query.message.answer(str(error))
         elif action == 'rate':
             await show_card(query.message, chat_service, query.from_user.id, track, payload['seed'])
         elif action in {'next', 'more', 'foryou'}:
@@ -82,7 +100,11 @@ async def callback(query, chat_service):
         elif action == 'menu':
             await dismiss(query.message)
         elif action == 'delete':
+            if get_song is not None:
+                await get_song.cancel(query.from_user.id, forget=True)
             await chat_service.forget(query.from_user.id)
+            if workflow is not None and workflow.lyrics is not None:
+                workflow.lyrics.clear()
             await query.message.answer(M.FORGET_DONE, reply_markup=main_menu())
         else:
             await query.message.answer(M.FORGET_CANCELLED if action == 'keep' else M.MAIN_MENU, reply_markup=main_menu())

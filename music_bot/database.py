@@ -1,3 +1,5 @@
+import asyncio
+import aiosqlite
 from pathlib import Path
 from contextlib import asynccontextmanager
 
@@ -13,9 +15,11 @@ DEFAULT_PATH = Path(__file__).resolve().parent.parent / "data" / "music_bot.sqli
 class Database:
     def __init__(self, path: Path = DEFAULT_PATH):
         path.parent.mkdir(parents=True, exist_ok=True)
+        self._closing = False
+        self._driver_connections = {}
         self.engine = create_async_engine(
             URL.create("sqlite+aiosqlite", database=str(path)),
-            echo=False, hide_parameters=True, connect_args={"timeout": 10},
+            echo=False, hide_parameters=True, async_creator=lambda: self._connect(path),
         )
 
         @event.listens_for(self.engine.sync_engine, "connect")
@@ -26,7 +30,30 @@ class Database:
 
         self.sessions = async_sessionmaker(self.engine, expire_on_commit=False)
 
+    async def _connect(self, path):
+        if self._closing:
+            raise RuntimeError('Database is closed')
+        driver = aiosqlite.connect(str(path), timeout=10)
+        original_close = driver.close
+        closing = None
+        async def close_driver():
+            nonlocal closing
+            if closing is None:
+                closing = asyncio.create_task(original_close())
+            await asyncio.shield(closing)
+            self._driver_connections.pop(driver, None)
+        driver.close = close_driver
+        opening = asyncio.ensure_future(driver)
+        self._driver_connections[driver] = opening
+        try:
+            return await asyncio.shield(opening)
+        except BaseException:
+            await asyncio.gather(opening, return_exceptions=True)
+            await close_driver()
+            raise
+
     async def initialize(self) -> None:
+        from . import fetch_models  # Additive Get song tables.
         from .preferences import UserPreferences  # Register the additive preferences table.
         from .taste_setup import TasteSetup
         async with self.engine.begin() as connection:
@@ -48,4 +75,7 @@ class Database:
                 raise
 
     async def close(self) -> None:
+        self._closing = True
+        await asyncio.gather(*self._driver_connections.values(), return_exceptions=True)
         await self.engine.dispose()
+        await asyncio.gather(*(driver.close() for driver in list(self._driver_connections)), return_exceptions=True)

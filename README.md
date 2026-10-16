@@ -18,8 +18,10 @@ flowchart LR
     D --> F[Get recommendations]
 ```
 
-The bot looks up song **metadata** (artist and title). It does not listen to or
-download the audio. Ratings are ❤️ Love, 👍 Like, 😐 Neutral, and 👎 Dislike.
+Identification uses song **metadata** (artist and title), without listening to audio.
+An optional **Get song** button can fetch a permitted individual recording and send
+a playable private Telegram music message. It is disabled by default; see
+[Get song setup, permissions and verification](GET_SONG.md). Ratings are ❤️ Love, 👍 Like, 😐 Neutral, and 👎 Dislike.
 Use **For You** for a list based on your taste, or **More Like This** to start
 from one song.
 
@@ -55,7 +57,7 @@ or server must be able to reach the APIs described in [Network access](#network-
    | --- | --- |
    | `TELEGRAM_BOT_TOKEN` | The token from BotFather |
    | `LASTFM_API_KEY` | Your Last.fm API key |
-   | `TELEGRAM_API_BASE_URL` | `https://api.telegram.org` if reachable, or the HTTPS origin of your trusted Telegram relay |
+   | `TELEGRAM_API_BASE_URL` | `https://api.telegram.org` (default, direct access). Override only when a relay is explicitly required. |
    | `LIL_BRO_BOT_USERNAME` | Optional username for the related bot; leave the example value unless you use a different bot |
 
 3. **Start the bot.**
@@ -77,7 +79,7 @@ already runs on a VPS, stop that copy before starting another one.
 
 | Action | What happens |
 | --- | --- |
-| Send `Artist - Song title` or Telegram audio | The bot searches for the song and asks you to confirm uncertain matches. |
+| Type a song name, optionally `Artist - Song title`, or send Telegram audio | Title-only chat search uses the same search as the Mini App and lets you choose the right recording. |
 | Rate a confirmed song | Love and Like teach **For You** your preferences. You can change a rating later. |
 | Tap **More Like This** | Find songs related to the selected song, even before rating it. |
 | `/taste` or `/profile` | See your taste summary or rating counts. |
@@ -85,8 +87,20 @@ already runs on a VPS, stop that copy before starting another one.
 | `/privacy` or `/forgetme` | Read what is stored or remove your personal records. |
 
 If a match is wrong, choose another candidate or reply to the correction prompt
-with `Artist - Song title`. `/cancel` closes an unfinished search. The match is
+with a song name (the artist is optional). `/cancel` closes an unfinished search. The match is
 based on metadata and can be wrong even when the names look similar.
+
+Normal private messages accept a song title alone, such as `hello`, `Creep`, or
+`همسفر` (2–240 characters). Chat and the Mini App share the same query parser and
+title-search service. It combines Last.fm, MusicBrainz and optional Deezer metadata. Relevant title-prefix matches use Deezer popularity rank when available, otherwise public Last.fm listener counts. Popular longer titles can rank above obscure exact titles. Other partial matches
+remain available below them. Title-only searches show up to 20 results and require a choice
+before confirming a song; they never create a rating automatically. Corrections
+also accept a title without an artist. Existing owner checks, expiry, search-attempt
+limits and `/cancel` apply, with no extra configuration or database migration.
+The full isolated Linux suite passed 231 tests, including title search, relevance,
+provider fallback and owner checks. A live `hello` search ranked Adele's exact
+title first, followed by other exact-title matches. The user verified title-only
+chat search and selection; production deployment remains deferred.
 
 ## Technical details
 
@@ -236,3 +250,62 @@ Language, onboarding, and replacement checks live in `tests/test_guidance.py` an
 and song-control restoration checks.
 Run `node worker/test-ui-recovery.mjs` for interrupted transitions, unavailable
 WebView features, stalled preference saves, and authenticated startup failures.
+
+
+### Search by remembered lyrics
+
+Send a short lyric fragment (at least three words), just as you would a song title.
+Short queries (under three words), popular exact titles (at least 10,000 public Last.fm listeners or Deezer rank 400,000), and successful title/artist hints skip the fallback. Longer exact titles without popularity evidence can still receive phrase suggestions, since a lyric fragment often coincides with an obscure song title. Weak phrase
+queries additionally discover up to three artist/title hints and validate them against
+Last.fm and MusicBrainz. Results require explicit selection before the normal song
+card and Get song action; guesses never become automatic ratings or downloads.
+
+`LYRICS_SEARCH_PROVIDER=youtube` is the default free, account-free option. Install
+`requirements-audio.txt` (yt-dlp) for this mode; FFmpeg is needed for Get song audio,
+not phrase discovery. This searches YouTube's video metadata/search index with the
+phrase plus “lyrics”; it is **not a full-text lyrics database or verified lyric match**.
+Coverage, spelling tolerance and hosting/IP availability vary. No login, cookies,
+challenge solving or access-control bypass is used. The ordinary title search works
+if yt-dlp is missing or this optional fallback fails.
+
+For a dedicated lyrics index, set `LYRICS_SEARCH_PROVIDER=musixmatch` and configure
+`MUSIXMATCH_API_KEY` privately. This uses the documented `track.search` / `q_lyrics`
+API, not full-lyrics downloads. Access, quota and licensing depend on the operator's
+API agreement; no free entitlement is assumed. Use `off` to disable phrase discovery.
+No new paid service or AI-token dependency is required for the YouTube mode.
+
+Discovery is asynchronous, capped at two simultaneous searches, with a 22-second
+budget (12 seconds for the metadata subprocess), at most five video results, three
+hints, bounded subprocess output and a 60-second failure cooldown. Generated temporary
+directories are removed on success, failure and cancellation. Repeated successful
+queries share a bounded in-memory cache for 15 minutes (128 entries); empty results
+cache for one minute. Neither raw lyric phrases nor search-page/video payloads are
+added to the shared persistent provider cache; only ordinary artist/title catalogue
+metadata uses that existing cache. Existing private submissions still contain the
+user's input and are removed by `/forgetme`, along with their identification flow;
+forgetting also clears the transient phrase cache. Search services receive the
+phrase without Telegram identifiers and may retain their own request history.
+No full lyrics are fetched, displayed, or republished. Respect each source's terms;
+lyric identification does not grant permission to download or redistribute audio.
+
+
+### Popularity and partial titles
+
+`SEARCH_DEEZER_ENABLED=true` (default) adds anonymous Deezer catalogue **metadata**
+to the existing title search; no new account, API key, dependency, previews or audio
+are used. Set it to `false` to keep the previous two-provider discovery.
+The provider fetches at most 100 results and follows at most one popular longer title
+to discover other artists' versions (for example, a short repeated-word title can
+complete to its full title). Requests are serialized at one start per second and
+use the existing eight-second provider budget, 15-minute search cache and bounded
+stale-result fallback. An optional completion failure preserves the original results.
+
+The requesting user's artist hint takes priority. Within relevant title-prefix
+matches, popularity precedes exact title length; unrelated titles remain excluded.
+When available, one provider's Deezer rank is used consistently for the search;
+otherwise Last.fm listener counts are used. Unknown ranks sort after known ranks;
+these are provider-specific signals, not an exact universal measure of popularity.
+The two metrics are stored separately in cached metadata. No schema migration is
+needed; old cache rows still decode. Deezer recording IDs use their own namespace.
+Catalogue availability and territorial differences can still affect discovery.
+This change does not enable Deezer audio downloads or change source permissions.

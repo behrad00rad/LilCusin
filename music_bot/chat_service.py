@@ -71,9 +71,10 @@ class ChatService:
                     raise FlowError("stale")
             key = f"{action}:{index}"
             if rating is None:
-                if key in payload["used"]:
+                if action != "get" and key in payload["used"]:
                     raise FlowError("stale")
-                payload["used"] = [*payload["used"], key]
+                if action != "get":
+                    payload["used"] = [*payload["used"], key]
                 row.payload = payload
                 if action in {"delete", "keep"}:
                     await session.delete(row)

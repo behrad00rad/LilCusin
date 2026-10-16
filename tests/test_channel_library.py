@@ -158,18 +158,35 @@ class ChannelLibraryTests(ServiceTestCase):
         self.assertEqual(response.status,200,await response.text())
         self.assertEqual([(t['artist'],t['title']) for t in (await response.json())['tracks']],
                          [('Beach House','Space Song')])
-        self.providers.call.assert_awaited_with('musicbrainz','search_recordings','', 'Space Song')
+        self.providers.call.assert_any_await('musicbrainz','search_titles','Space Song')
 
     async def test_hello_search_through_real_provider_cache(self):
         from music_bot.cache import CachedProviders
         lastfm, musicbrainz = AsyncMock(), AsyncMock()
-        musicbrainz.search_recordings.return_value = [TrackCandidate(title='Hello',artist='Adele',source='musicbrainz')]
+        musicbrainz.search_titles.return_value = [TrackCandidate(title='Hello, Hello, Hello',artist='New England',source='musicbrainz'),
+            TrackCandidate(title='Hello',artist='Adele',source='musicbrainz'),
+            TrackCandidate(title='Say Hello to Heaven',artist='Temple of the Dog',source='musicbrainz'),
+            TrackCandidate(title='Hello',artist='Adele',source='musicbrainz',external_ids={'musicbrainz':'duplicate-recording'}),
+            TrackCandidate(title='Goodbye',artist='Other',source='musicbrainz')]
+        lastfm.search_tracks.return_value = []
+        lastfm.search_titles.return_value = []
         lastfm.get_track_info.return_value = None
         self.workflow.providers = CachedProviders(self.database,lastfm,musicbrainz)
         response=await self.client.post('/api/search',json={'query':'hello'},headers=self.headers)
         self.assertEqual(response.status,200,await response.text())
-        self.assertEqual((await response.json())['tracks'][0]['artist'],'Adele')
-        musicbrainz.search_recordings.assert_awaited_once_with('', 'hello')
+        songs=(await response.json())['tracks']
+        self.assertEqual(songs[0]['artist'],'Adele')
+        self.assertEqual({s['title'] for s in songs},{'Hello','Hello, Hello, Hello','Say Hello to Heaven'})
+        musicbrainz.search_titles.assert_awaited_once_with('hello')
+
+    async def test_local_title_matches_survive_provider_failure(self):
+        from music_bot.providers.common import ProviderError,Failure
+        async with self.database.write() as session:
+            session.add(Track(artist='Local artist',title='Hello from the Other Side',display_title='Hello from the Other Side',metadata_source='fixture'))
+        self.providers.call.side_effect=ProviderError(Failure.NETWORK)
+        response=await self.client.post('/api/search',json={'query':'hello'},headers=self.headers)
+        self.assertEqual(response.status,200)
+        self.assertEqual((await response.json())['tracks'][0]['title'],'Hello from the Other Side')
 
     async def test_actual_lastfm_cover_host_is_allowed(self):
         from music_bot.chat_ui import safe_url

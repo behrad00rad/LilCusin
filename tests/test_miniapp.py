@@ -119,7 +119,7 @@ class MiniAppTests(ServiceTestCase):
             self.assertEqual(await session.scalar(select(Rating.value)), 'love')
 
     async def test_bad_json_and_search_query(self):
-        for value in [[], {'query': 'no'}, {'query': '/start'}, {'query': 5}]:
+        for value in [[], {'query': 'h'}, {'query': '/start'}, {'query': 5}]:
             response = await self.client.post('/api/search', json=value,
                                               headers={'X-Telegram-Init-Data': signed()})
             self.assertEqual(response.status, 400)

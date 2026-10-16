@@ -45,19 +45,19 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn('guide:1', str(self.answer.call_args.kwargs['reply_markup']))
             self.assertIsNotNone(self.answer.call_args.kwargs.get("reply_markup"))
         await self.send(text="/unknown - song")
-        self.service.submit_text.assert_not_called()
+        self.service.submit_search.assert_not_called()
 
     async def test_text_dispatches_and_responds(self):
-        self.service.submit_text.return_value.parsed_artist = "Ú¯ÙˆÚ¯ÙˆØ´"
-        self.service.submit_text.return_value.parsed_title = "Song"
+        self.service.submit_search.return_value.parsed_artist = "Ú¯ÙˆÚ¯ÙˆØ´"
+        self.service.submit_search.return_value.parsed_title = "Song"
         await self.send(text="Ú¯ÙˆÚ¯ÙˆØ´ â€” Song")
-        self.service.submit_text.assert_awaited_once()
+        self.service.submit_search.assert_awaited_once()
         self.assertIn("Ú¯ÙˆÚ¯ÙˆØ´", self.answer.call_args.args[0])
         self.assertIn(messages.PENDING, self.answer.call_args.args[0])
 
-    async def test_bad_text_explains_format(self):
-        self.service.submit_text.side_effect = InvalidSubmission()
-        await self.send(text="invalid")
+    async def test_invalid_text_explains_search(self):
+        self.service.submit_search.side_effect = InvalidSubmission()
+        await self.send(text="x" * 241)
         self.answer.assert_called_with(messages.INVALID_TEXT)
 
     async def test_forwarded_audio_without_metadata(self):

@@ -49,10 +49,12 @@ def decode(payload):
 
 
 class CachedProviders:
-    def __init__(self, database, lastfm, musicbrainz):
+    def __init__(self, database, lastfm, musicbrainz, deezer=None):
         self.database = database
         self.lastfm = lastfm
         self.musicbrainz = musicbrainz
+        self.deezer = deezer
+        self.has_deezer = deezer is not None
         self._locks = weakref.WeakValueDictionary()
 
     async def call(self, provider: str, method: str, *arguments: str):
@@ -64,7 +66,9 @@ class CachedProviders:
             now = utc_now()
             if cached and cached.expires_at > now:
                 return decode(cached.payload)
-            client = self.lastfm if provider == "lastfm" else self.musicbrainz
+            client = {'lastfm': self.lastfm, 'musicbrainz': self.musicbrainz, 'deezer': self.deezer}.get(provider)
+            if client is None:
+                raise ProviderError(Failure.REQUEST)
             try:
                 async with asyncio.timeout(8):
                     value = await getattr(client, method)(*arguments)

@@ -10,7 +10,7 @@ from . import messages
 def parse_callback(data):
     if not isinstance(data, str) or len(data.encode()) > 64:
         return None
-    match = re.fullmatch(r"c:([1-9][0-9]{0,17}):([0-9]{1,8}):([0-4])", data)
+    match = re.fullmatch(r"c:([1-9][0-9]{0,17}):([0-9]{1,8}):([0-9]|1[0-9])", data)
     if match:
         return "choose", *(int(value) for value in match.groups())
     match = re.fullmatch(r"n:([1-9][0-9]{0,17}):([0-9]{1,8})", data)

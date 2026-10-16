@@ -13,7 +13,7 @@ class IdentityConflict(ValueError):
 
 async def attach_ids(session, track_id, identifiers):
     for provider, identifier in identifiers.items():
-        if provider not in ("lastfm", "musicbrainz") or not identifier:
+        if provider not in ("lastfm", "musicbrainz", "deezer") or not identifier:
             continue
         # An identifier already attached elsewhere is never reassigned.
         await session.execute(insert(TrackExternalID).values(

@@ -109,7 +109,7 @@ class FlowHandlerTests(ServiceTestCase):
         self.assertEqual(self.outgoing[-1][0], messages.STALE)
 
     async def test_malformed_and_stale_callbacks_answered(self):
-        for data in ("", "r:1:skip", "r:999:love", "c:1:-1:0", "c:1:0:9", "user text" * 20):
+        for data in ("", "r:1:skip", "r:999:love", "c:1:-1:0", "c:1:0:20", "user text" * 20):
             if data != "r:999:love":
                 self.assertIsNone(parse_callback(data))
             await self.callback(data)

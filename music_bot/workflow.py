@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass, field
 from datetime import timedelta
-from difflib import SequenceMatcher
 
 from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import insert
@@ -11,11 +10,11 @@ from .catalog import IdentityConflict, canonical_track
 from .matching import confidence, decode_track, deduplicate, encode_track, similarities, match_decision, strong_match, match_text
 
 import logging
+import asyncio
 
 logger = logging.getLogger("music_bot")
 from .models import IdentificationFlow, Rating, SongSubmission, Track, User, utc_now
 from .providers.common import ProviderError, TrackCandidate
-from .submissions import parse_song
 
 FLOW_TTL = timedelta(minutes=30)
 MAX_ATTEMPTS = 3
@@ -78,22 +77,91 @@ async def confirmed_result(session, submission):
 
 
 class Workflow:
-    def __init__(self, database, providers):
+    def __init__(self, database, providers, lyrics=None):
         self.database = database
         self.providers = providers
+        self.lyrics = lyrics
 
-    async def search_title(self, title):
-        """Search a track name without inventing an artist for identity matching."""
-        try:
-            candidates = await self.providers.call("musicbrainz", "search_recordings", "", title)
-        except ProviderError:
-            return [], True
+    async def search_title(self, title, artist=None):
+        """Browse titles and bounded title/artist hints; require explicit selection."""
+        from .recommendations.repository import from_track
+        from sqlalchemy import or_
+        async with self.database.sessions() as session:
+            rows=await session.scalars(select(Track).where(or_(Track.title.contains(title,autoescape=True),
+                Track.display_title.contains(title,autoescape=True))).limit(100))
+            candidates=[from_track(track).metadata for track in rows]
+        failed = False
+        available = False
+        calls = [self.providers.call('lastfm', 'search_tracks', artist, title) if artist
+                 else self.providers.call('lastfm', 'search_titles', title),
+                 self.providers.call('musicbrainz', 'search_recordings', artist, title) if artist
+                 else self.providers.call('musicbrainz', 'search_titles', title)]
+        if getattr(self.providers, 'has_deezer', False) is True:
+            calls.append(self.providers.call('deezer', 'search_tracks', artist, title) if artist
+                         else self.providers.call('deezer', 'search_titles', title))
+        for result in await asyncio.gather(*calls, return_exceptions=True):
+            if isinstance(result, ProviderError):
+                failed = True
+            elif isinstance(result, BaseException):
+                raise result
+            else:
+                available = True
+                candidates += result
+        # Keep the literal query, but also try a few title + artist boundaries.
+        # These are catalogue searches, never automatic identity confirmations.
+        hints = []
+        if not artist:
+            words = title.split()
+            if 2 <= len(words) <= 8:
+                for boundary in range(1, min(len(words), 4)):
+                    song = ' '.join(words[:boundary])
+                    performer = ' '.join(words[boundary:])
+                    if performer.casefold().startswith('by '):
+                        performer = performer[3:].strip()
+                    if performer:
+                        hints.append((performer, song))
+            for result in await asyncio.gather(*[
+                self.providers.call(provider, method, performer, song)
+                for performer, song in hints
+                for provider, method in [('lastfm', 'search_tracks'),
+                                         ('musicbrainz', 'search_titles_by_artist')]
+            ], return_exceptions=True):
+                if isinstance(result, ProviderError):
+                    failed = True
+                elif isinstance(result, BaseException):
+                    raise result
+                else:
+                    available = True
+                    candidates += result
+        def hint_match(candidate):
+            return any(match_text(song) == match_text(candidate.title)
+                       and match_text(performer) in match_text(candidate.artist)
+                       for performer, song in hints)
         wanted = match_text(title)
-        scored = [(SequenceMatcher(None, wanted, match_text(c.title)).ratio(), c)
-                  for c in deduplicate(candidates) if c.artist and c.title]
-        # Keep provider order among similarly good matches, so familiar songs stay near the top.
-        scored = [candidate for score, candidate in scored if score >= 0.55]
-        return scored[:10], False
+        matches=[c for c in candidates if c.artist and c.title and (wanted in match_text(c.title) or hint_match(c))
+                 and (not artist or match_text(artist) in match_text(c.artist))]
+        # Within relevant prefix matches, popularity precedes literal title length.
+        # Use one scale per search: Deezer rank when available, Last.fm listeners
+        # otherwise. Missing popularity is unknown, never a fabricated count.
+        has_rank = any((c.deezer_rank or 0) > 0 for c in matches)
+        def popularity(candidate):
+            return (candidate.deezer_rank or 0) if has_rank else (candidate.listeners or 0)
+        matches.sort(key=lambda c:(not hint_match(c),not match_text(c.title).startswith(wanted),
+                                   -popularity(c),match_text(c.title)!=wanted,len(match_text(c.title))))
+        unique=[];seen=set()
+        for candidate in matches:
+            key=(match_text(candidate.artist),match_text(candidate.title))
+            if key not in seen:unique.append(candidate);seen.add(key)
+        if not artist and self.lyrics is not None:
+            from .lyrics_search import needs_lyrics
+            if needs_lyrics(title, unique):
+                discovered, lyrics_failed = await self.lyrics.search(title)
+                if discovered:
+                    # A phrase match is discovery only; the caller still requires choice.
+                    unique = deduplicate(discovered + unique)
+                    available = True
+                failed = failed or lyrics_failed
+        return unique[:20],failed and not available
 
     async def search(self, artist, title):
         candidates = []
@@ -131,7 +199,8 @@ class Workflow:
             flow = IdentificationFlow(submission_id=submission_id, expires_at=utc_now() + FLOW_TTL)
             session.add(flow)
             await session.flush()
-            if not (submission.parsed_artist or "").strip() or not (submission.parsed_title or "").strip():
+            if (not (submission.parsed_title or "").strip()
+                    or (not (submission.parsed_artist or "").strip() and submission.submission_type != 'text')):
                 flow.state = "correction"
                 return Result("missing", submission_id, flow.revision)
         return await self.identify(submission_id, user_id)
@@ -144,7 +213,7 @@ class Workflow:
             if flow.attempts >= MAX_ATTEMPTS:
                 flow.state = "exhausted"
                 return Result("limit", submission_id)
-            artist = flow.corrected_artist or submission.parsed_artist
+            artist = flow.corrected_artist if flow.corrected_artist is not None else submission.parsed_artist
             title = flow.corrected_title or submission.parsed_title
             flow.attempts += 1
             flow.revision += 1
@@ -152,7 +221,8 @@ class Workflow:
             flow.state = "searching"
             flow.prompt_message_id = None
             flow.candidates = []
-        candidates, failed = await self.search(artist, title)
+        title_only = not artist
+        candidates, failed = await self.search_title(title) if title_only else await self.search(artist, title)
         async with self.database.write() as session:
             submission = await owned_submission(session, submission_id, user_id)
             flow = await session.get(IdentificationFlow, submission_id)
@@ -160,7 +230,8 @@ class Workflow:
             if flow.state != "searching":
                 raise FlowError("stale")
             flow.candidates = [encode_track(candidate) for candidate in candidates]
-            accepted, reason, metrics = match_decision(artist, title, candidates)
+            accepted, reason, metrics = ((False, 'title_search_requires_choice', (0, 0, 0, 0)) if title_only
+                                         else match_decision(artist, title, candidates))
             logger.info("Identification decision: accepted=%s reason=%s artist=%.3f title=%.3f combined=%.3f margin=%.3f",
                         accepted, reason, *metrics)
             if accepted:
@@ -222,7 +293,8 @@ class Workflow:
             flow.prompt_message_id = message_id
 
     async def correct(self, user_id, reply_message_id, text):
-        artist, title = parse_song(text)
+        from .submissions import parse_search_query
+        artist, title = parse_search_query(text)
         async with self.database.write() as session:
             flow = await session.scalar(select(IdentificationFlow).join(
                 SongSubmission, SongSubmission.id == IdentificationFlow.submission_id,
@@ -232,7 +304,7 @@ class Workflow:
             active(flow)
             if flow.state != "correction":
                 raise FlowError("stale")
-            flow.corrected_artist, flow.corrected_title = artist, title
+            flow.corrected_artist, flow.corrected_title = artist or '', title
             flow.state = "searching"
             flow.prompt_message_id = None
             submission_id = flow.submission_id

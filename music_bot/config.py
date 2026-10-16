@@ -23,6 +23,7 @@ class Config:
     miniapp_url: str | None = field(default=None, repr=False)
     miniapp_host: str = field(default='127.0.0.1', repr=False)
     miniapp_port: int = field(default=8080, repr=False)
+    search_deezer_enabled: bool = field(default=True, repr=False)
 
 
 _LIL_BRO_USERNAME = re.compile(r"[A-Za-z0-9_]{5,32}\Z")
@@ -46,7 +47,7 @@ def required_variable(name: str) -> str:
 
 
 def telegram_api_base_url() -> str:
-    value = required_variable("TELEGRAM_API_BASE_URL").rstrip("/")
+    value = (os.environ.get("TELEGRAM_API_BASE_URL", "").strip() or "https://api.telegram.org").rstrip("/")
     try:
         parsed = urlsplit(value)
         if parsed.scheme == "https" and parsed.hostname and not parsed.username and not parsed.password and not parsed.path and not parsed.query and not parsed.fragment:
@@ -80,4 +81,5 @@ def load_config() -> Config:
     except ValueError:
         raise ConfigError('MINIAPP_PORT must be between 1 and 65535') from None
     return Config(token, lastfm_key, api_base_url, username, miniapp_url,
-                  os.environ.get('MINIAPP_HOST', '127.0.0.1'), port)
+                  os.environ.get('MINIAPP_HOST', '127.0.0.1'), port,
+                  os.getenv('SEARCH_DEEZER_ENABLED', 'true').strip().lower() == 'true')

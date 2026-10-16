@@ -43,6 +43,7 @@ def normalize_track(raw: dict) -> TrackCandidate:
         external_ids=identifiers,
         tags=normalize_tags(tags.get("tag")) if isinstance(tags, dict) else (),
         score=number(raw.get("match")),
+        listeners=number(raw.get('listeners')),
         releases=(Release(text(album.get("title")), "lastfm", text(album.get("mbid"))),) if album else (),
     )
 
@@ -53,11 +54,11 @@ class LastFMClient:
         self._api_key = api_key
 
     async def _request(self, method: str, artist: str, title: str, **params) -> dict | None:
-        if not artist.strip() or not title.strip():
+        if not title.strip() or (not artist.strip() and method != 'track.search'):
             raise ProviderError(Failure.REQUEST)
         payload = await request_json(self.session, API_URL, params={
             "method": method, "api_key": self._api_key, "format": "json",
-            "artist": artist, "track": title, **params,
+            **({'artist': artist} if artist.strip() else {}), "track": title, **params,
         })
         if "error" in payload:
             code = number(payload["error"])
@@ -72,8 +73,8 @@ class LastFMClient:
             raise ProviderError(reason)
         return payload
 
-    async def search_tracks(self, artist: str, title: str) -> list[TrackCandidate]:
-        payload = await self._request("track.search", artist, title, limit=5)
+    async def search_tracks(self, artist: str, title: str, limit: int = 5) -> list[TrackCandidate]:
+        payload = await self._request("track.search", artist, title, limit=limit)
         if payload is None:
             return []
         results = payload.get("results")
@@ -85,6 +86,9 @@ class LastFMClient:
         if not isinstance(matches, dict) or "track" not in matches:
             raise ProviderError(Failure.INVALID_RESPONSE)
         return [normalize_track(track) for track in items(matches["track"])]
+
+    async def search_titles(self, title: str) -> list[TrackCandidate]:
+        return await self.search_tracks('', title, limit=50)
 
     async def get_track_info(self, artist: str, title: str) -> TrackCandidate | None:
         payload = await self._request("track.getInfo", artist, title, autocorrect=1)

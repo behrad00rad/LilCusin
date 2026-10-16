@@ -20,7 +20,7 @@ from .models import ChatControl, Track, User, utc_now
 from .artwork import ArtworkLoader
 from .channel_api import register_channel_api
 from .providers.common import ProviderError
-from .submissions import Submitter, parse_song, InvalidSubmission
+from .submissions import Submitter, parse_search_query, InvalidSubmission
 from .workflow import RATINGS, save_rating, FlowError
 
 ASSETS = Path(__file__).with_name('web')
@@ -169,16 +169,12 @@ def create_app(token, chat, workflow):
     async def search(request):
         data = await body(request)
         query = data.get('query')
-        if not isinstance(query, str) or not 3 <= len(query) <= 240:
-            raise web.HTTPBadRequest(text='Enter a song title or Artist - Song title (up to 240 characters).')
         try:
-            artist, title = parse_song(query)
+            artist, title = parse_search_query(query)
         except InvalidSubmission:
-            artist, title = None, query.strip()
-            if not title or title.startswith('/'):
-                raise web.HTTPBadRequest(text='Enter a song title.') from None
+            raise web.HTTPBadRequest(text='Enter a song title or Artist - Song title (up to 240 characters).') from None
         async with capacity:
-            candidates, failed = await (workflow.search(artist, title) if artist else workflow.search_title(title))
+            candidates, failed = await workflow.search_title(title, artist=artist)
         if failed and not candidates:
             raise web.HTTPServiceUnavailable(text='Music search is unavailable. Try again shortly.')
         tracks = []

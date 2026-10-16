@@ -4,19 +4,25 @@ import aiohttp
 from contextlib import AsyncExitStack
 
 from aiogram import Bot, Dispatcher
+from aiogram.exceptions import TelegramNetworkError, TelegramRetryAfter
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.client.telegram import TelegramAPIServer
 from aiogram.types import BotCommand, BotCommandScopeAllPrivateChats, MenuButtonWebApp, WebAppInfo
 
+from .get_song import GetSong, FetchSettings
+from .lilbro_fetch import LilBroInbound
 from .config import ConfigError, load_config
 from .database import Database
 from .handlers import router
 from .submissions import SubmissionService
 from .cache import CachedProviders
 from .enrichment import Enrichment
+from .artwork import ArtworkLoader
 from .providers.lastfm import LastFMClient
 from .providers.musicbrainz import MusicBrainzClient
+from .providers.deezer import DeezerClient
 from .workflow import Workflow
+from .lyrics_search import LyricsSearch, LyricsSettings
 from .lifecycle import UpdateTasks, PrivateActions, ChannelUpdates
 from .channels import ChannelService
 from .channel_handlers import router as channel_router
@@ -52,6 +58,8 @@ def configure_logging() -> None:
 
 async def main() -> None:
     config = load_config()
+    fetch_settings = FetchSettings.environment()
+    lyrics_settings = LyricsSettings.environment()
     try:
         async with AsyncExitStack() as stack:
             bot = Bot(
@@ -66,15 +74,23 @@ async def main() -> None:
             await database.initialize()
             provider_session = await stack.enter_async_context(aiohttp.ClientSession())
             providers = CachedProviders(database, LastFMClient(provider_session, config.lastfm_api_key),
-                                        MusicBrainzClient(provider_session))
+                                        MusicBrainzClient(provider_session),
+                                        DeezerClient(provider_session) if config.search_deezer_enabled else None)
+            song_artwork = ArtworkLoader(database, providers)
+            stack.push_async_callback(song_artwork.close)
+            get_song = GetSong(database, bot, fetch_settings, artwork_loader=song_artwork)
+            await get_song.start()
+            stack.push_async_callback(get_song.close)
             enrichment = Enrichment(database, providers)
             stack.push_async_callback(enrichment.close)
-            workflow = Workflow(database, providers)
+            workflow = Workflow(database, providers, LyricsSearch(provider_session, providers, lyrics_settings))
             channels = ChannelService(database, workflow)
             await channels.initialize()
             update_tasks = UpdateTasks()
             stack.push_async_callback(update_tasks.close)
             dispatcher = Dispatcher(disable_fsm=True)
+            dispatcher.message.outer_middleware(LilBroInbound(get_song))
+            dispatcher.edited_message.outer_middleware(LilBroInbound(get_song))
             dispatcher.update.outer_middleware(update_tasks)
             locale_middleware = LanguageMiddleware(database)
             dispatcher.message.outer_middleware(locale_middleware)
@@ -96,16 +112,20 @@ async def main() -> None:
                 stack.push_async_callback(miniapp.cleanup)
                 await bot.set_chat_menu_button(menu_button=MenuButtonWebApp(
                     text='Open Lil Cusin', web_app=WebAppInfo(url=config.miniapp_url)))
-            await configure_commands(bot)
+            try:
+                await configure_commands(bot)
+            except (TelegramNetworkError, TelegramRetryAfter):
+                logger.warning('Command menu refresh unavailable; continuing to polling.')
             logger.info("Bot initialized; starting long polling.")
             # aiogram handles SIGINT/SIGTERM; cleanup drains handlers first.
             await dispatcher.start_polling(
-                bot, allowed_updates=dispatcher.resolve_used_update_types(),
+                bot, allowed_updates=sorted(set(dispatcher.resolve_used_update_types()) | {'edited_message'}),
                 close_bot_session=False, handle_as_tasks=True, tasks_concurrency_limit=20,
                 submissions=SubmissionService(database), workflow=workflow,
                 enrichment=enrichment,
                 chat_service=chat_service,
                 channel_service=channels,
+                get_song=get_song,
             )
     finally:
         logger.info("Bot stopped; handler tasks, provider sessions and database closed.")
@@ -120,8 +140,8 @@ def run() -> int:
         return 1
     except KeyboardInterrupt:
         pass
-    except Exception:
-        logger.error("Unexpected application error; details omitted for privacy.")
+    except Exception as error:
+        logger.error("Unexpected application error (%s); details omitted for privacy.", type(error).__name__)
         return 1
     return 0
 

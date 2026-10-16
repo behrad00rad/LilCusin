@@ -3,18 +3,18 @@
 START = (
     "🎵 Welcome to Lil Cousin\n\n"
     "Send a song, tell me how you feel about it, and discover your next favourite.\n\n"
-    "Forward an audio file or type Artist - Song title to begin."
+    "Forward an audio file or type a song name or a short lyric fragment to begin."
 )
 HELP = (
     "🎵 Send or forward a song, then choose Love, Like, Neutral or Dislike.\n\n"
     "✨ Recommendations finds songs for you. More Like This starts from one song.\n"
     "🧠 My Taste shows what I’ve learned.\n\n"
-    "Need to correct a match? Reply to the correction prompt with Artist - Song title. "
+    "Need to correct a match? Reply to the correction prompt with a song name. "
     "Use /cancel to stop, /privacy to review stored data, or /forgetme to remove it."
 )
 
-INVALID_TEXT = "Use this format: Artist - Song title"
-UNSUPPORTED = "Send a Telegram audio message or text as Artist - Song title."
+INVALID_TEXT = "Type a song name or a short lyric fragment (2–240 characters). You can optionally add the artist: Radiohead - Creep."
+UNSUPPORTED = "Send a Telegram audio message or type a song name."
 NO_USER = "Please submit songs from your personal Telegram account."
 SAVE_FAILED = "Could not save your submission. Please try again."
 PENDING = "🔎 Finding your song…"
@@ -45,7 +45,7 @@ def text_received(artist: str, title: str) -> str:
 PRIVATE_ONLY = "Please send songs and use these buttons in a private chat with me."
 CHOOSE = "🎵 I found a few possible matches. Which one is yours?"
 NONE = "None of these"
-CORRECTION = "Reply here with Artist - Song title, or use /cancel to stop."
+CORRECTION = "Reply here with a song name, optionally Artist - Song title, or use /cancel to stop."
 MISSING = "The audio needs an artist and title. " + CORRECTION
 NOT_FOUND = "No suitable match found. " + CORRECTION
 PROVIDER_FAILED = "Music metadata is temporarily unavailable. You can retry with a correction. " + CORRECTION
@@ -95,7 +95,7 @@ MENU_PROFILE = '🧠 My Taste'
 MENU_CHANNELS = '📻 Playlist Channels'
 MENU_SETTINGS = '⚙️ Settings'
 MENU_HELP = 'ℹ️ Help'
-SEND_SONG_PROMPT = 'Send or forward a Telegram audio file, or type Artist - Song title.'
+SEND_SONG_PROMPT = 'Type a song name, or send or forward a Telegram audio file.'
 MORE_LIKE = '🎯 More Like This'
 AFTER_FOR_YOU = '✨ Recommendations for You'
 DONE = 'Done'

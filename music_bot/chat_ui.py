@@ -41,7 +41,7 @@ def button(token, action, text, index=None):
 def parse_control(data):
     if not isinstance(data, str) or len(data.encode()) > 64:
         return None
-    match = re.fullmatch(r'q:([a-f0-9]{32}):(rate|more|love|like|neutral|dislike):([0-4])', data)
+    match = re.fullmatch(r'q:([a-f0-9]{32}):(get|rate|more|love|like|neutral|dislike):([0-4])', data)
     if match:
         return match[1], match[2], int(match[3])
     match = re.fullmatch(r'q:([a-f0-9]{32}):(next|foryou|menu|delete|keep)', data)
@@ -104,7 +104,8 @@ def list_content(rows, token, seed_track=None):
         entry += '\n' + html.escape(clean(localized_reason(row.reason), 120))
         lines.append(entry)
         actions = [button(token, 'rate', M.RATE_NUMBER.format(number=index + 1), index),
-                   button(token, 'more', M.SIMILAR_NUMBER.format(number=index + 1), index)]
+                   button(token, 'more', M.SIMILAR_NUMBER.format(number=index + 1), index),
+                   button(token, 'get', 'Get song', index)]
         if art := safe_url(row.artwork_url, artwork=True):
             actions.append(Button(text=M.ARTWORK, url=art))
         keyboard.append(actions)
@@ -120,7 +121,8 @@ def card_keyboard(token, selected=None, submitted=False):
                  for value in ('love', 'like', 'neutral', 'dislike')],
                 [button(token, 'more', M.MORE_LIKE, 0),
                  button(token, 'foryou' if submitted else 'next', M.AFTER_FOR_YOU if submitted else M.CONTINUE)],
-                [button(token, 'menu', M.DONE if submitted else M.MAIN_MENU)]]
+                [button(token, 'menu', M.DONE if submitted else M.MAIN_MENU)],
+                [button(token, 'get', 'Get song', 0)]]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 

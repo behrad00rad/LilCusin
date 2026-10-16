@@ -64,6 +64,15 @@ class NormalizationTests(unittest.TestCase):
 
 
 class ProviderTests(unittest.IsolatedAsyncioTestCase):
+    async def test_lastfm_title_search_omits_artist_and_keeps_public_popularity(self):
+        session=mock_session({'results':{'trackmatches':{'track':[{'name':'Hello','artist':'Adele','listeners':'5000000'}]}}})
+        matches=await LastFMClient(session,'private-key').search_titles('hello')
+        params=session.get.call_args.kwargs['params']
+        self.assertNotIn('artist',params)
+        self.assertEqual(params['track'],'hello')
+        self.assertEqual(params['limit'],50)
+        self.assertEqual(matches[0].listeners,5000000)
+
     async def test_lastfm_search_empty_and_singleton(self):
         for raw, count in [( [], 0), ("", 0), ({"name": "Song", "artist": "Artist"}, 1)]:
             with self.subTest(raw=raw):
@@ -71,6 +80,12 @@ class ProviderTests(unittest.IsolatedAsyncioTestCase):
                 matches = await LastFMClient(session, "secret").search_tracks("Artist", "Song")
                 self.assertEqual(len(matches), count)
                 self.assertFalse(session.get.call_args.kwargs["allow_redirects"])
+
+    async def test_title_search_requests_a_browsable_catalogue_page(self):
+        client=MusicBrainzClient(mock_session({'recordings':[]}))
+        with patch('music_bot.providers.musicbrainz.shared_limiter',return_value=RateLimiter(clock=lambda:10,sleep=AsyncMock())):
+            self.assertEqual(await client.search_titles('hello'),[])
+            self.assertEqual(client.session.get.call_args.kwargs['params']['limit'],100)
 
     async def test_lastfm_missing_track_and_optional_collections(self):
         client = LastFMClient(mock_session({"error": 6, "message": "Track not found"}), "secret")
