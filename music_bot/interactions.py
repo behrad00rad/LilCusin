@@ -53,11 +53,12 @@ async def present(message, result, user_id, workflow, enrichment, chat_service=N
         if chat_service is not None:
             rows.append([InlineKeyboardButton(text=copy('close'),
                          callback_data=f'close:{result.submission_id}:{result.revision}', style='danger')])
+        heading = messages.CHOOSE + ('\n\n' + copy('search_refine') if chat_service is not None else '')
         if status_message is not None:
-            await status_message.edit_text(messages.CHOOSE, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+            await status_message.edit_text(heading, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
             sent = status_message
         else:
-            sent = await message.answer(messages.CHOOSE, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+            sent = await message.answer(heading, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
         if chat_service is not None:
             await workflow.bind_candidates(result, user_id, sent.message_id)
     elif result.kind == "limit":

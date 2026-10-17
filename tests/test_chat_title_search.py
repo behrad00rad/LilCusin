@@ -13,6 +13,16 @@ from music_bot.handlers import text_submission
 
 
 class SearchInputTests(unittest.TestCase):
+    def test_masked_catalogue_titles_are_search_aliases_only(self):
+        from music_bot.matching import title_query_match, identity_key, strong_match
+        self.assertTrue(title_query_match('niggas in paris', 'Ni**as in Paris', exact=True))
+        self.assertTrue(title_query_match('Ni**as in Paris', 'Niggas in Paris', exact=True))
+        for title in ['****** in Paris', 'Ni**as in London', 'Paris', 'Ni**as in Paris Remix']:
+            self.assertFalse(title_query_match('niggas in paris', title, exact=True))
+        self.assertNotEqual(identity_key('Artist', 'Ni**as in Paris'), identity_key('Artist', 'Niggas in Paris'))
+        self.assertFalse(strong_match('Artist', 'abcdefgh', [
+            TrackCandidate(artist='Artist', title='ab**gh', source='itunes')]))
+
     def test_same_query_forms_for_chat_and_ui(self):
         for query, expected in [('  hello ', (None, 'hello')), ('همسفر', (None, 'همسفر')),
                                 ('Radiohead - Creep', ('Radiohead','Creep'))]:
@@ -25,6 +35,55 @@ class SearchInputTests(unittest.TestCase):
 
 
 class ChatTitleSearchTests(ServiceTestCase):
+    async def test_unknown_popularity_catalogue_is_not_hidden_by_twenty_ranked_versions(self):
+        expected = TrackCandidate(artist='Kanye West & JAY-Z', title='Ni**as in Paris', source='itunes')
+        variant = TrackCandidate(artist='Bass Boosted', title='N****s in Paris', source='itunes')
+        self.providers.has_itunes = True
+        async def search(provider, method, *args):
+            if provider == 'itunes':
+                return [expected, variant]
+            if provider == 'lastfm':
+                return [TrackCandidate(artist=f'Cover Artist {i}', title='Niggas in Paris',
+                                       source='lastfm', listeners=10000 + i) for i in range(25)]
+            return []
+        self.providers.call.side_effect = search
+        rows, failed = await self.workflow.search_title('niggas in paris')
+        self.assertFalse(failed)
+        self.assertEqual(len(rows), 20)
+        self.assertIn(expected, rows[:5])
+
+    async def test_censored_joint_artist_recording_survives_title_filter(self):
+        expected = TrackCandidate(artist='Kanye West & JAY-Z', title='Ni**as in Paris', source='itunes')
+        self.providers.has_itunes = True
+        async def search(provider, method, *args):
+            return [expected] if provider == 'itunes' else []
+        self.providers.call.side_effect = search
+        saved = await self.submissions.submit_search(self.user, 'niggas in paris')
+        result = await self.workflow.start(saved.id, 123, fast=True)
+        self.assertEqual(result.kind, 'candidates')
+        self.assertIn(expected, result.candidates)
+        async with self.database.sessions() as session:
+            self.assertIsNone((await session.get(SongSubmission, saved.id)).track_id)
+
+    async def test_common_title_refines_to_unreleased_artist_without_guessing(self):
+        other = TrackCandidate(artist='Other Artist', title='Prayer', source='musicbrainz')
+        expected = TrackCandidate(artist='Kendrick Lamar', title='Prayer', source='musicbrainz')
+        async def search(provider, method, *args):
+            if provider == 'lastfm':
+                raise ProviderError(Failure.AUTH)
+            return [expected] if method == 'search_recordings' and args == ('Kendrick Lamar', 'Prayer') else [other]
+        self.providers.call.side_effect = search
+        saved = await self.submissions.submit_search(self.user, 'prayer')
+        first = await self.workflow.start(saved.id, 123, fast=True)
+        self.assertEqual(first.candidates, [other])
+        await self.workflow.bind_candidates(first, 123, 100)
+        with self.assertRaises(FlowError):
+            await self.workflow.correct(456, 100, 'Kendrick Lamar - Prayer', fast=True)
+        refined = await self.workflow.correct(123, 100, 'Kendrick Lamar - Prayer', fast=True)
+        self.assertEqual((refined.kind, refined.artist, refined.title), ('confirmed', 'Kendrick Lamar', 'Prayer'))
+        with self.assertRaises(FlowError):
+            await self.workflow.select(saved.id, 123, first.revision, 0)
+
     async def test_title_uses_ui_search_and_waits_for_choice_even_for_one_match(self):
         candidate=TrackCandidate(artist='Adele',title='Hello',source='musicbrainz')
         self.providers.call.return_value=[candidate]

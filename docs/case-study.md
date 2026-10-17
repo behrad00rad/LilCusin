@@ -61,3 +61,10 @@ The subsequent exact-song diagnosis exposed expanded performer credits as the
 remaining retrieval issue. Title-only recovery now offers plausible exact-title
 matches for confirmation. iTunes supplied the user's expected song in a live
 metadata check; MusicBrainz's first title page did not.
+# 2026-10-17 — Search aliases and refinement
+
+User-reported omissions exposed censored catalogue spelling and provider ranking
+that suppressed unknown-popularity exact matches. Search now supports bounded
+masked-title aliases and catalogue diversity. Common-title results can be refined
+directly with an artist; unreleased catalogue entries remain eligible, while
+intended-artist inference and universal coverage are not claimed.

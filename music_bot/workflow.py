@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import insert
 
 from .catalog import IdentityConflict, canonical_track
-from .matching import confidence, decode_track, deduplicate, encode_track, similarities, match_decision, strong_match, match_text
+from .matching import confidence, decode_track, deduplicate, encode_track, similarities, match_decision, strong_match, match_text, title_query_match
 
 import logging
 import asyncio
@@ -190,14 +190,14 @@ class Workflow:
                     available = True
                     candidates += result
         def hint_match(candidate):
-            return any(match_text(song) == match_text(candidate.title)
+            return any(title_query_match(song, candidate.title, exact=True)
                        and match_text(performer) in match_text(candidate.artist)
                        for performer, song in hints)
         wanted = match_text(title)
         def artist_match(candidate):
             performer = match_text(candidate.artist)
             return not artist and (performer == wanted or performer.startswith(wanted + ' '))
-        matches=[c for c in candidates if c.artist and c.title and (wanted in match_text(c.title) or hint_match(c) or artist_match(c))
+        matches=[c for c in candidates if c.artist and c.title and (title_query_match(title, c.title) or hint_match(c) or artist_match(c))
                  and (not artist or match_text(artist) in match_text(c.artist))]
         # Within relevant prefix matches, popularity precedes literal title length.
         # Use one scale per search: Deezer rank when available, Last.fm listeners
@@ -207,8 +207,10 @@ class Workflow:
             (c.deezer_rank or 0) >= 400000 or (c.listeners or 0) >= 10000) for c in matches)
         def popularity(candidate):
             return (candidate.deezer_rank or 0) if has_rank else (candidate.listeners or 0)
-        matches.sort(key=lambda c:(not (artist_intent and artist_match(c)),not hint_match(c),not match_text(c.title).startswith(wanted),
-                                   -popularity(c),match_text(c.title)!=wanted,len(match_text(c.title))))
+        matches.sort(key=lambda c:(not (artist_intent and artist_match(c)),not hint_match(c),
+                                   not (match_text(c.title).startswith(wanted) or title_query_match(title, c.title, exact=True)),
+                                   -popularity(c),not title_query_match(title, c.title, exact=True),
+                                   0 if title_query_match(title, c.title, exact=True) else len(match_text(c.title))))
         unique=[];seen=set()
         for candidate in matches:
             key=(match_text(candidate.artist),match_text(candidate.title))
@@ -226,7 +228,21 @@ class Workflow:
                     unique = deduplicate(discovered + unique)
                     available = True
                 failed = failed or lyrics_failed
-        return unique[:20],failed and not available
+        visible = unique[:20]
+        # Missing popularity is unknown. A crowded ranked catalogue must not
+        # suppress every exact-title result from an independent catalogue.
+        leaders = {}
+        for candidate in unique:
+            if title_query_match(title, candidate.title, exact=True):
+                leaders.setdefault(candidate.source, candidate)
+        for candidate in leaders.values():
+            if candidate not in visible:
+                visible.insert(min(4, len(visible)), candidate)
+                if len(visible) > 20:
+                    remove = next(i for i in range(len(visible) - 1, -1, -1)
+                                  if visible[i] not in leaders.values())
+                    visible.pop(remove)
+        return visible,failed and not available
 
     async def search(self, artist, title):
         candidates = []
@@ -443,7 +459,7 @@ class Workflow:
                 User.telegram_user_id == user_id, IdentificationFlow.prompt_message_id == reply_message_id,
             ))
             active(flow)
-            if flow.state != "correction":
+            if flow.state not in {"correction", "candidates"}:
                 raise FlowError("stale")
             flow.corrected_artist, flow.corrected_title = artist or '', title
             flow.state = "searching"

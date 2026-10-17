@@ -80,3 +80,10 @@ Follow-up: the user's Starting Over file has a correct title but appended musici
 credits in its performer tag. Add a bounded title recovery round for unmatched
 uploads, retaining only exact titles and a matching artist prefix. Require an
 explicit choice rather than silently stripping credits or confirming an identity.
+# 2026-10-17 — Censored titles and common-title refinement
+
+Accept bounded censorship aliases for search without merging canonical identities.
+Reserve an early exact-title result for otherwise omitted catalogues when another
+provider fills the visible limit. Allow owner-bound replies to refine candidate
+lists with an artist. Do not infer the artist of a common title or admit unverified
+video hints. See [diagnosis and evidence](search-aliases-2026-10-17.md).

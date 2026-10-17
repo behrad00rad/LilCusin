@@ -28,6 +28,7 @@ COPY = {
     'search': ('Search a song', 'جست‌وجوی آهنگ'),
     'recommend': ('For You', 'پیشنهاد برای تو'),
     'lookup': ('Finding your song…', 'دارم آهنگت رو پیدا می‌کنم…'),
+    'search_refine': ('Missing your song? Reply to these results with Artist - Song title. Include the artist for common titles or unreleased tracks.', 'آهنگت توی نتایج نیست؟ اسم خواننده و آهنگ رو با قالب «خواننده - آهنگ» به همین پیام ریپلای کن. برای اسم‌های تکراری یا آهنگ‌های منتشرنشده، اسم خواننده رو هم بنویس.'),
     'busy': ('Another action is running. You can cancel it below.', 'یک کار دیگه در حال انجامه. می‌تونی از دکمهٔ زیر لغوش کنی.'),
     'guide': ('Forward an audio song to rate it immediately. Missing tags? Type its artist and title when asked.\n\nType a song name to search and get audio. For unknown audio, reply with /recognize. Voice/video clips and public post links can also be identified.\n\n/cancel stops a request; /setup personalizes recommendations.', 'فایل آهنگ رو برای امتیاز دادن بفرست. اگه مشخصاتش ناقص باشه، اسم آهنگ و خواننده رو می‌پرسم.\n\nبرای جست‌وجو و دریافت فایل، اسم آهنگ رو بنویس. برای تشخیص صدای ناشناس، /recognize رو ریپلای کن. ویس، ویدیو و لینک عمومی پست هم قابل تشخیصه.\n\n/cancel برای لغو و /setup برای تنظیم سلیقه است.'),
 }

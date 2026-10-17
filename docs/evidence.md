@@ -85,3 +85,10 @@ Expanded-tag follow-up: the user-specified Starting Over / LSD and the Search fo
 God match was present in iTunes and absent from MusicBrainz's first 100 title
 results. Bounded recovery returned the exact candidate in 0.80 seconds. This was
 metadata-only verification, not recognition, download, or user-confirmed playback.
+# 2026-10-17 — Follow-up search cases
+
+The bounded live workflow surfaced the censored joint-artist Paris recording at
+position 5 in 2.44 seconds and qualified Kendrick Lamar / Prayer in 1.30 seconds.
+Title-only Prayer did not include Kendrick in the inspected provider windows.
+These are metadata probes, not playback or universal unreleased-song coverage.
+See [full verification](search-aliases-2026-10-17.md).

@@ -41,6 +41,30 @@ def match_text(value: str) -> str:
     return comparison_text(value)
 
 
+def title_query_match(query: str, title: str, *, exact=False) -> bool:
+    """Search-only equivalence for catalogue censorship; never an identity key."""
+    wanted, actual = match_text(query), match_text(title)
+    if wanted and (wanted == actual if exact else wanted in actual):
+        return True
+    marker = '\ue000'
+    left = match_text(query.replace('*', marker)).split()
+    right = match_text(title.replace('*', marker)).split()
+    if not left or (exact and len(left) != len(right)) or len(left) > len(right):
+        return False
+    def word_match(a, b):
+        if a == b:
+            return True
+        if marker in a and marker in b:
+            return False
+        masked, plain = (a, b) if marker in a else (b, a)
+        if marker not in masked or len(masked.replace(marker, '')) < 2:
+            return False
+        pattern = re.sub(marker + '+', lambda _: r'[^\W_]{1,8}', re.escape(masked))
+        return re.fullmatch(pattern, plain) is not None
+    return any(all(word_match(a, b) for a, b in zip(left, right[start:start + len(left)]))
+               for start in range(len(right) - len(left) + 1))
+
+
 def identifier_key(provider: str, value: str):
     """Last.fm song URLs can differ only in typography or URL encoding."""
     if provider == 'lastfm':
