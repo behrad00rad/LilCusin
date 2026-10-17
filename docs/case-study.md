@@ -68,3 +68,10 @@ that suppressed unknown-popularity exact matches. Search now supports bounded
 masked-title aliases and catalogue diversity. Common-title results can be refined
 directly with an artist; unreleased catalogue entries remain eligible, while
 intended-artist inference and universal coverage are not claimed.
+# 2026-10-17 — Popular video discovery and forgiving search
+
+The user's typo and unreleased-song feedback showed catalogue-only ranking was
+insufficient. Bounded metadata discovery now supplies validated song suggestions
+with observed video-view provenance and small spelling-error recovery. Both live
+reported Prayer queries returned the expected song first, while repeat search
+used cache. This remains explicit discovery/selection, not automatic recognition.

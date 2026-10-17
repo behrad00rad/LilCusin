@@ -11,12 +11,12 @@ import re
 import tempfile
 import weakref
 from collections import OrderedDict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from time import monotonic
 from types import SimpleNamespace
 
 from .config import ConfigError
-from .matching import match_text, similarities
+from .matching import match_text, similarities, search_query_matches_song, title_query_match, search_text_match
 from .providers.common import Failure, ProviderError, items, request_json, text
 from .youtube_fetch import FetchError, YouTubeFetcher
 
@@ -94,12 +94,104 @@ class LyricsSearch:
         self.fetcher = fetcher or YouTubeFetcher(SimpleNamespace(timeout=12, disk_bytes=2_000_000))
         self.clock = clock
         self.cache = OrderedDict()
+        self.title_cache = OrderedDict()
         self.locks = weakref.WeakValueDictionary()
         self.capacity = asyncio.Semaphore(2)
         self.retry_after = 0
 
     def clear(self):
         self.cache.clear()
+        self.title_cache.clear()
+
+    async def search_titles(self, query):
+        """Bounded public-video discovery; catalogue validation before choice."""
+        if self.settings.provider != 'youtube' or not 1 <= len(query.split()) <= 8 or len(query) > 240:
+            return [], False
+        key = hashlib.sha256(('title:' + match_text(query)).encode()).hexdigest()
+        lock = self.locks.setdefault(key, asyncio.Lock())
+        async with lock:
+            now = self.clock()
+            cached = self.title_cache.get(key)
+            if cached and cached[0] > now:
+                self.title_cache.move_to_end(key)
+                return list(cached[1]), False
+            if now < self.retry_after or self.capacity.locked():
+                return [], True
+            try:
+                async with asyncio.timeout(6), self.capacity:
+                    async def alive():
+                        return True
+                    with tempfile.TemporaryDirectory(prefix='lilcusin-title-') as directory:
+                        data = await self.fetcher.process(self.fetcher.base() + [
+                            '--flat-playlist', '--dump-single-json', '--skip-download', '--',
+                            'ytsearch20:' + ' '.join(query.split()) + ' lyrics',
+                        ], directory, alive, output=True)
+                    payload = json.loads(data)
+                    if not isinstance(payload, dict) or not isinstance(payload.get('entries'), list):
+                        raise ProviderError(Failure.INVALID_RESPONSE)
+                    hints = {}
+                    for entry in payload['entries'][:20]:
+                        if not isinstance(entry, dict):
+                            continue
+                        label = text(entry.get('title')) or ''
+                        # Do not turn a reaction, cover or alternate edition into
+                        # the requested recording unless that is in the query.
+                        unwanted = {'reaction', 'reacts', 'instrumental', 'karaoke', 'cover', 'remix', 'sped', 'slowed'}
+                        if (set(match_text(label).split()) & unwanted) - set(match_text(query).split()):
+                            continue
+                        clean = dict(entry, title=re.sub(r'\s*[\[(](?:unreleased|leaked?)[\])]\s*', ' ', label, flags=re.I))
+                        views = entry.get('view_count')
+                        views = views if type(views) is int and views >= 0 else None
+                        for artist, title in video_hints([clean]):
+                            if search_query_matches_song(query, artist, title):
+                                pair = (artist, title)
+                                if pair not in hints or views is not None and views > (hints[pair] or 0):
+                                    hints[pair] = views
+                    selected = sorted(hints, key=lambda pair: (
+                        not (title_query_match(query, pair[1], exact=True)
+                             or search_text_match(query, pair[1], exact=True)), -(hints[pair] or 0)))[:3]
+                    catalogue = [('musicbrainz', 'search_recordings'), ('lastfm', 'search_tracks')]
+                    catalogue += [(provider, 'search_tracks') for provider in ('deezer', 'itunes')
+                                  if getattr(self.providers, 'has_' + provider, False) is True]
+                    calls = [(artist, title, provider, method) for artist, title in selected
+                             for provider, method in catalogue]
+                    async def validate(provider, method, artist, title):
+                        try:
+                            async with asyncio.timeout(1.8):
+                                return await self.providers.call(provider, method, artist, title)
+                        except TimeoutError:
+                            raise ProviderError(Failure.NETWORK) from None
+                    results = await asyncio.gather(*[validate(provider, method, artist, title)
+                        for artist, title, provider, method in calls], return_exceptions=True)
+                    matches = {}
+                    available = not calls
+                    for (artist, title, _, _), result in zip(calls, results):
+                        if isinstance(result, ProviderError):
+                            continue
+                        if isinstance(result, BaseException):
+                            raise result
+                        available = True
+                        for candidate in result:
+                            if (not candidate.artist or not candidate.title
+                                    or min(similarities(artist, title, candidate)) < .85
+                                    or match_text(candidate.title) != match_text(title)):
+                                continue
+                            identity = (match_text(candidate.artist), match_text(candidate.title))
+                            views = hints[(artist, title)]
+                            previous = matches.get(identity)
+                            if previous is None or (views or 0) > (previous.youtube_views or 0):
+                                matches[identity] = replace(candidate, youtube_views=views)
+                    if not available:
+                        raise ProviderError(Failure.UNAVAILABLE)
+                    ranked = sorted(matches.values(), key=lambda row: -(row.youtube_views or 0))[:10]
+            except (ProviderError, FetchError, TimeoutError, OSError, ValueError, TypeError):
+                self.retry_after = self.clock() + 60
+                return [], True
+            self.title_cache[key] = (self.clock() + (900 if ranked else 60), tuple(ranked))
+            self.title_cache.move_to_end(key)
+            while len(self.title_cache) > 128:
+                self.title_cache.popitem(last=False)
+            return ranked, False
 
     async def discover(self, phrase):
         if self.settings.provider == 'musixmatch':

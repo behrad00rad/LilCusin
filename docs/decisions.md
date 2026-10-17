@@ -87,3 +87,11 @@ Reserve an early exact-title result for otherwise omitted catalogues when anothe
 provider fills the visible limit. Allow owner-bound replies to refine candidate
 lists with an artist. Do not infer the artist of a common title or admit unverified
 video hints. See [diagnosis and evidence](search-aliases-2026-10-17.md).
+# 2026-10-17 — Discover beyond catalogue popularity
+
+Run bounded public-video metadata discovery alongside short Telegram title queries.
+Validate hints independently, tolerate small search-only spelling errors, rank
+validated discoveries by observed upload views and label that provenance. Keep
+identity/confirmation rules, no-download discovery, admission limits, caching and
+cancellation. This supersedes treating artist refinement alone as sufficient for
+the reported Prayer case. See [implementation and probes](discovery-popularity-2026-10-17.md).

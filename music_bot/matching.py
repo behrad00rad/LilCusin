@@ -65,6 +65,39 @@ def title_query_match(query: str, title: str, *, exact=False) -> bool:
                for start in range(len(right) - len(left) + 1))
 
 
+def search_text_match(query: str, value: str, *, exact=False) -> bool:
+    """Discovery-only prefix/one-edit matching, never automatic confirmation."""
+    left, right = match_text(query).split(), match_text(value).split()
+    if not left or len(left) > len(right) or exact and len(left) != len(right):
+        return False
+    def close(a, b):
+        if a == b or not exact and len(a) >= 3 and b.startswith(a):
+            return True
+        if min(len(a), len(b)) < 4 or abs(len(a) - len(b)) > 1:
+            return False
+        if len(a) == len(b):
+            changes = [i for i in range(len(a)) if a[i] != b[i]]
+            return len(changes) == 1 or (len(changes) == 2 and changes[1] == changes[0] + 1
+                and a[changes[0]] == b[changes[1]] and a[changes[1]] == b[changes[0]])
+        shorter, longer = (a, b) if len(a) < len(b) else (b, a)
+        return any(longer[:i] + longer[i + 1:] == shorter for i in range(len(longer)))
+    return any(all(close(a, b) for a, b in zip(left, right[start:start + len(left)]))
+               for start in range(len(right) - len(left) + 1))
+
+
+def search_query_matches_song(query: str, artist: str, title: str) -> bool:
+    if title_query_match(query, title) or search_text_match(query, title):
+        return True
+    words = query.split()
+    for boundary in range(1, min(len(words), 4)):
+        song, performer = ' '.join(words[:boundary]), ' '.join(words[boundary:])
+        performer = re.sub(r'^by\s+', '', performer, flags=re.I)
+        if ((title_query_match(song, title, exact=True) or search_text_match(song, title, exact=True))
+                and search_text_match(performer, artist)):
+            return True
+    return False
+
+
 def identifier_key(provider: str, value: str):
     """Last.fm song URLs can differ only in typography or URL encoding."""
     if provider == 'lastfm':

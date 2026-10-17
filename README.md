@@ -113,6 +113,13 @@ provider fallback and owner checks. A live `hello` search ranked Adele's exact
 title first, followed by other exact-title matches. The user verified title-only
 chat search and selection; production deployment remains deferred.
 
+Telegram short-title searches also use bounded, metadata-only YouTube discovery
+when enabled, validating artist/title hints against catalogues before offering a
+choice. This can surface unreleased songs and recover small spelling mistakes.
+Observed upload views rank these discovery suggestions and are labelled separately
+from catalogue popularity; they are not total song plays. Results are cached for
+fifteen minutes. See [measurements and limits](docs/discovery-popularity-2026-10-17.md).
+
 ## Technical details
 
 ### Telegram Mini App

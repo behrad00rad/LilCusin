@@ -92,3 +92,10 @@ position 5 in 2.44 seconds and qualified Kendrick Lamar / Prayer in 1.30 seconds
 Title-only Prayer did not include Kendrick in the inspected provider windows.
 These are metadata probes, not playback or universal unreleased-song coverage.
 See [full verification](search-aliases-2026-10-17.md).
+# 2026-10-17 — Prayer popularity and typo probes
+
+Actual metadata-only discovery returned Kendrick Lamar / Prayer first for prayer
+(5.55 s) and prayer kendick (4.17 s), then repeated the typo query from cache in
+0.08 s. The matched upload reported 3,879,049 views. No media was downloaded and
+these samples are not total-song popularity or a latency SLA. See
+[regressions, architecture and limitations](discovery-popularity-2026-10-17.md).

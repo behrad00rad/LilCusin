@@ -46,7 +46,8 @@ async def present(message, result, user_id, workflow, enrichment, chat_service=N
             enrichment.schedule(result.track_id)
     elif result.kind == "candidates":
         rows = [[InlineKeyboardButton(
-            text=messages.candidate_label(candidate.artist, candidate.title),
+            text=messages.candidate_label(candidate.artist, candidate.title) + (
+                f' · YouTube {candidate.youtube_views:,}' if candidate.youtube_views is not None else ''),
             callback_data=f"c:{result.submission_id}:{result.revision}:{index}",
         )] for index, candidate in enumerate(result.candidates)]
         rows.append([InlineKeyboardButton(text=messages.NONE, callback_data=f"n:{result.submission_id}:{result.revision}")])
@@ -54,6 +55,8 @@ async def present(message, result, user_id, workflow, enrichment, chat_service=N
             rows.append([InlineKeyboardButton(text=copy('close'),
                          callback_data=f'close:{result.submission_id}:{result.revision}', style='danger')])
         heading = messages.CHOOSE + ('\n\n' + copy('search_refine') if chat_service is not None else '')
+        if any(candidate.youtube_views is not None for candidate in result.candidates):
+            heading += '\n\n' + copy('search_views')
         if status_message is not None:
             await status_message.edit_text(heading, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
             sent = status_message

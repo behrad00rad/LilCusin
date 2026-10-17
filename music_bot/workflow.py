@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import insert
 
 from .catalog import IdentityConflict, canonical_track
-from .matching import confidence, decode_track, deduplicate, encode_track, similarities, match_decision, strong_match, match_text, title_query_match
+from .matching import confidence, decode_track, deduplicate, encode_track, similarities, match_decision, strong_match, match_text, title_query_match, search_text_match, search_query_matches_song
 
 import logging
 import asyncio
@@ -133,7 +133,23 @@ class Workflow:
                 done.exception()
         task.add_done_callback(finished)
 
-    async def search_title(self, title, artist=None):
+    def title_discovery_enabled(self):
+        return (self.lyrics is not None and getattr(type(self.lyrics), 'search_titles', None) is not None
+                and getattr(getattr(self.lyrics, 'settings', None), 'provider', None) == 'youtube')
+
+    async def search_chat_title(self, title):
+        if not self.title_discovery_enabled() or len(title.split()) > 8:
+            return await self.search_title(title)
+        catalogue, discovered = await asyncio.gather(
+            self.search_title(title, discover_lyrics=False), self.lyrics.search_titles(title))
+        rows, failed = catalogue
+        suggestions, discovery_failed = discovered
+        # Views rank only within validated discovery results; do not equate a
+        # YouTube view count with a Deezer rank or Last.fm listener count.
+        suggestions = [row for row in suggestions if search_query_matches_song(title, row.artist, row.title)]
+        return deduplicate(suggestions + rows)[:20], failed and discovery_failed
+
+    async def search_title(self, title, artist=None, *, discover_lyrics=True):
         """Browse titles and bounded title/artist hints; require explicit selection."""
         from .recommendations.repository import from_track
         from sqlalchemy import or_
@@ -190,8 +206,10 @@ class Workflow:
                     available = True
                     candidates += result
         def hint_match(candidate):
-            return any(title_query_match(song, candidate.title, exact=True)
-                       and match_text(performer) in match_text(candidate.artist)
+            return any((title_query_match(song, candidate.title, exact=True)
+                        or CHAT_FAST.get() and search_text_match(song, candidate.title, exact=True))
+                       and (match_text(performer) in match_text(candidate.artist)
+                            or CHAT_FAST.get() and search_text_match(performer, candidate.artist))
                        for performer, song in hints)
         wanted = match_text(title)
         def artist_match(candidate):
@@ -215,7 +233,7 @@ class Workflow:
         for candidate in matches:
             key=(match_text(candidate.artist),match_text(candidate.title))
             if key not in seen:unique.append(candidate);seen.add(key)
-        if not artist and self.lyrics is not None:
+        if not artist and self.lyrics is not None and discover_lyrics:
             from .lyrics_search import needs_lyrics
             if needs_lyrics(title, unique):
                 try:
@@ -342,13 +360,15 @@ class Workflow:
         context = CHAT_FAST.set(fast)
         try:
             local = await self.local_matches(title, artist) if fast else []
-            if local and (title_only or strong_match(artist, title, local)):
+            discovery = title_only and self.title_discovery_enabled() and len(title.split()) <= 8
+            if local and not discovery and (title_only or strong_match(artist, title, local)):
                 candidates, failed = local, False
                 if submission.submission_type != 'telegram_audio':
                     self.warm_search(title, artist)
             else:
                 async with asyncio.timeout(7 if fast else None):
-                    candidates, failed = await self.search_title(title) if title_only else await self.search(artist, title)
+                    candidates, failed = await self.search_chat_title(title) if title_only and fast else (
+                        await self.search_title(title) if title_only else await self.search(artist, title))
                     if not candidates and artist and submission.submission_type == 'telegram_audio':
                         candidates, rescue_failed = await self.search_audio_title(artist, title)
                         recovered_audio_tags = bool(candidates)
