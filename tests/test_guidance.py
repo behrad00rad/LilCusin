@@ -47,17 +47,17 @@ class PreferenceTests(ServiceTestCase):
         await self.chat.forget(123)
         async with self.database.sessions() as session:self.assertIsNone(await session.scalar(select(UserPreferences)))
 
-    async def test_first_message_gets_guide_once_and_keeps_original_submission(self):
+    async def test_first_message_goes_directly_to_submission_without_guide(self):
         middleware=LanguageMiddleware(self.database)
         message=Message.model_validate({'message_id':1,'date':1700000000,'chat':{'id':123,'type':'private'},
             'from':{'id':123,'is_bot':False,'first_name':'Test','language_code':'fa'},'text':'Radiohead - Creep'})
         handler=AsyncMock()
         with patch('aiogram.types.Message.answer',new_callable=AsyncMock) as answer:
             await middleware(handler,message,{'chat_service':self.chat})
-            self.assertIn(CATALOGUE['fa']['setup_q1'],answer.call_args.args[0])
+            answer.assert_not_awaited()
             self.assertEqual(handler.await_count,1)
             await middleware(handler,message,{'chat_service':self.chat})
-            self.assertEqual(answer.await_count,1)
+            self.assertEqual(answer.await_count,0)
         self.assertEqual(language.get(),'en')
 
     async def test_concurrent_languages_do_not_leak(self):

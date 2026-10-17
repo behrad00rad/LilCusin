@@ -1,4 +1,6 @@
 import logging
+import asyncio
+from time import monotonic
 
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
@@ -15,7 +17,8 @@ from .interactions import parse_callback, present, rating_keyboard
 from . import chat_handlers
 from .guidance import show_guide
 from .i18n import menu_labels
-from .chat_ui import dismiss, main_menu
+from .chat_ui import dismiss, main_menu, cancel_keyboard, recovery_keyboard, show_recommendations
+from .bot_copy import text as copy
 
 router = Router()
 logger = logging.getLogger("music_bot")
@@ -28,22 +31,72 @@ async def start(message: Message, chat_service=None) -> None:
         return
     if chat_service is not None:
         await chat_service.ensure_user(submitter(message))
-        from .taste_setup_bot import show_setup
-        if await show_setup(message,chat_service):return
-    await show_guide(message)
+    from .bot_copy import text
+    await message.answer(text('welcome'), reply_markup=main_menu())
+
+
+@router.message(Command('version'))
+async def version(message: Message):
+    if message.chat.type == 'private' and submitter(message) is not None:
+        from .build_info import BUILD_ID
+        await message.answer('Lil Cusin · ' + BUILD_ID)
 
 
 @router.message(Command("help"))
 async def help_command(message: Message) -> None:
     if message.chat.type == 'private':
-        await show_guide(message)
+        from .bot_copy import text
+        await message.answer(text('guide'), reply_markup=main_menu())
     else:
         await message.answer(messages.PRIVATE_ONLY)
 
 
-router.message.register(chat_handlers.command, Command("recommend", "profile", "taste", "privacy", "forgetme"))
+router.message.register(chat_handlers.command, Command("search", "recommend", "profile", "taste", "privacy", "forgetme"))
 router.message.register(chat_handlers.command, F.text.in_(menu_labels('MENU_SEND','MENU_FOR_YOU','MENU_PROFILE','MENU_SETTINGS','MENU_HELP')))
 router.callback_query.register(chat_handlers.callback, F.data.startswith("q:"))
+
+
+@router.callback_query(F.data.startswith('cancelreq:') | F.data.startswith('closereq:'))
+async def cancel_request(query: CallbackQuery, get_song=None):
+    import re
+    match = re.fullmatch(r'(?:cancelreq|closereq):([a-f0-9]{32})', query.data or '')
+    if (not match or get_song is None or not isinstance(query.message, Message)
+            or query.message.chat.type != 'private' or query.message.chat.id != query.from_user.id or query.from_user.is_bot):
+        await query.answer(messages.STALE)
+        return
+    try:
+        await get_song.cancel_request(query.from_user.id, match[1], query.message.message_id)
+        await query.answer(copy('cancelled'))
+        if query.data.startswith('closereq:'):
+            await dismiss(query.message)
+    except FlowError:
+        await query.answer(messages.STALE)
+
+
+@router.callback_query(F.data.startswith('nav:'))
+async def navigation(query: CallbackQuery, workflow: Workflow, chat_service=None, get_song=None, recognition=None):
+    if (not isinstance(query.message, Message) or query.message.chat.type != 'private'
+            or query.message.chat.id != query.from_user.id or query.from_user.is_bot
+            or query.data not in {'nav:cancel', 'nav:search', 'nav:recommend'}):
+        await query.answer(messages.STALE)
+        return
+    await query.answer()
+    if query.data == 'nav:cancel':
+        if recognition is not None:
+            await recognition.cancel(query.from_user.id)
+        if get_song is not None:
+            await get_song.cancel(query.from_user.id)
+        await workflow.cancel(query.from_user.id)
+        if chat_service is not None:
+            await chat_service.cancel_controls(query.from_user.id)
+        try:
+            await query.message.edit_text(copy('cancelled'), reply_markup=recovery_keyboard())
+        except TelegramBadRequest:
+            await query.message.answer(copy('cancelled'), reply_markup=recovery_keyboard())
+    elif query.data == 'nav:recommend' and chat_service is not None:
+        await show_recommendations(query.message, chat_service, query.from_user.id)
+    else:
+        await query.message.answer(messages.SEND_SONG_PROMPT, reply_markup=main_menu())
 
 
 @router.callback_query(F.data.startswith('g:'))
@@ -61,7 +114,7 @@ async def get_song_choice(query: CallbackQuery, get_song=None):
         await query.answer(messages.STALE)
         return
     await query.answer(messages.WORKING)
-    await query.message.answer('Your song is queued. Use /cancel to cancel.')
+    await get_song.bind_status(query.from_user.id, match[1], query.message.message_id)
 
 
 @router.callback_query(F.data.startswith('v:'))
@@ -75,7 +128,7 @@ async def other_versions(query: CallbackQuery, get_song=None):
         await query.answer(messages.STALE)
         return
     try:
-        await get_song.other_versions(query.from_user.id, match[1], query.message.message_id)
+        request_id = await get_song.other_versions(query.from_user.id, match[1], query.message.message_id)
     except FlowError:
         await query.answer(messages.STALE)
         return
@@ -83,7 +136,8 @@ async def other_versions(query: CallbackQuery, get_song=None):
         await query.answer(str(error))
         return
     await query.answer(messages.WORKING)
-    await query.message.answer('Looking for other versions… Choose a recording, or /cancel.')
+    pending = await query.message.answer(copy('queued'), reply_markup=cancel_keyboard())
+    await get_song.bind_status(query.from_user.id, request_id, pending.message_id)
 
 
 @router.callback_query(F.data.startswith('w:'))
@@ -98,14 +152,15 @@ async def wrong_song(query: CallbackQuery, get_song=None):
         return
     await query.answer(messages.WORKING)
     try:
-        await get_song.wrong(query.from_user.id, match[1], query.message.message_id)
+        request_id = await get_song.wrong(query.from_user.id, match[1], query.message.message_id)
     except FlowError:
         await query.message.answer(messages.STALE)
         return
     except FetchError as error:
         await query.message.answer(str(error))
         return
-    await query.message.answer('Looking for another recording... You can /cancel while waiting.')
+    pending = await query.message.answer(copy('queued'), reply_markup=cancel_keyboard())
+    await get_song.bind_status(query.from_user.id, request_id, pending.message_id)
 
 
 @router.message(Command("cancel"))
@@ -120,7 +175,7 @@ async def cancel(message: Message, workflow: Workflow, chat_service=None, get_so
     await workflow.cancel(message.from_user.id)
     if chat_service is not None:
         await chat_service.cancel_controls(message.from_user.id)
-    await message.answer(messages.CANCELLED)
+    await message.answer(copy('cancelled'), reply_markup=recovery_keyboard())
 
 
 def submitter(message: Message) -> Submitter | None:
@@ -136,20 +191,55 @@ async def recognize_command(message: Message, recognition=None):
         await recognition.submit(message, message.reply_to_message or message)
 
 
+@router.message(Command('rate'))
+async def rate_command(message: Message, submissions: SubmissionService, workflow: Workflow, enrichment: Enrichment, chat_service=None):
+    if message.chat.type != 'private' or submitter(message) is None:
+        await message.answer(messages.PRIVATE_ONLY)
+        return
+    source = message.reply_to_message
+    if source is not None and (source.audio is not None or song_document(source)):
+        await audio_submission(message, submissions, workflow, enrichment, chat_service, source=source)
+    else:
+        await message.answer(copy('rate_prompt'), reply_markup=main_menu())
+
+
+@router.callback_query(F.data.startswith('close:'))
+async def close_search(query: CallbackQuery, workflow: Workflow):
+    import re
+    match = re.fullmatch(r'close:([1-9][0-9]{0,17}):([0-9]{1,8})', query.data or '')
+    if (not match or not isinstance(query.message, Message) or query.message.chat.type != 'private'
+            or query.message.chat.id != query.from_user.id or query.from_user.is_bot):
+        await query.answer(messages.STALE)
+        return
+    try:
+        await workflow.close_candidates(int(match[1]), query.from_user.id, int(match[2]), query.message.message_id)
+        await query.answer()
+        await dismiss(query.message)
+    except FlowError:
+        await query.answer(messages.STALE)
+
+
 @router.message(F.video | F.voice | F.video_note | F.document)
-async def recognize_media(message: Message, recognition=None):
+async def recognize_media(message: Message, recognition=None, submissions=None, workflow=None, enrichment=None, chat_service=None):
+    if song_document(message) and submissions is not None and workflow is not None:
+        await audio_submission(message, submissions, workflow, enrichment, chat_service)
+        return
     if recognition is not None:
         await recognition.submit(message)
     else:
         await message.answer(messages.UNSUPPORTED)
 
 
+def song_document(message):
+    from pathlib import PurePath
+    document = getattr(message, 'document', None)
+    return bool(document and ((document.mime_type or '').startswith('audio/') or
+        PurePath(document.file_name or '').suffix.lower() in {'.mp3', '.m4a', '.aac', '.flac', '.ogg', '.opus', '.wav', '.wma'}))
+
+
 @router.message(F.audio)
 async def audio_submission(message: Message, submissions: SubmissionService,
-                           workflow: Workflow, enrichment: Enrichment, chat_service=None, recognition=None) -> None:
-    if recognition is not None and recognition.enabled:
-        await recognition.submit(message)
-        return
+                           workflow: Workflow, enrichment: Enrichment, chat_service=None, recognition=None, source=None) -> None:
     if message.chat.type != "private":
         await message.answer(messages.PRIVATE_ONLY)
         return
@@ -157,10 +247,10 @@ async def audio_submission(message: Message, submissions: SubmissionService,
     if user is None:
         await message.answer(messages.NO_USER)
         return
-    audio = message.audio
+    audio = (source or message).audio or (source or message).document
     metadata = AudioMetadata(
-        audio.file_id, audio.file_unique_id, audio.performer, audio.title,
-        audio.file_name, audio.mime_type, audio.file_size, audio.duration,
+        audio.file_id, audio.file_unique_id, getattr(audio, 'performer', None), getattr(audio, 'title', None),
+        audio.file_name, audio.mime_type, audio.file_size, getattr(audio, 'duration', None),
     )
     try:
         saved = await submissions.submit_audio(user, metadata)
@@ -168,11 +258,18 @@ async def audio_submission(message: Message, submissions: SubmissionService,
         logger.error("Could not persist audio submission.")
         await message.answer(messages.SAVE_FAILED)
         return
-    pending = await message.answer(messages.audio_received(metadata))
+    pending = await message.answer(copy('lookup'), reply_markup=cancel_keyboard())
     try:
-        result = await workflow.start(saved.id, user.telegram_user_id)
-        await present(message, result, user.telegram_user_id, workflow, enrichment, chat_service)
-    finally:
+        started = monotonic()
+        result = await workflow.start(saved.id, user.telegram_user_id, fast=chat_service is not None)
+        logger.info('Chat search completed: %s in %.0f ms.', result.kind, (monotonic() - started) * 1000)
+        await present(message, result, user.telegram_user_id, workflow, enrichment, chat_service,
+                      status_message=pending if chat_service is not None else None)
+    except asyncio.CancelledError:
+        await workflow.cancel(user.telegram_user_id)
+        await dismiss(pending)
+        raise
+    if chat_service is None:
         await dismiss(pending)
 
 
@@ -191,7 +288,7 @@ async def text_submission(message: Message, submissions: SubmissionService,
         return
     try:
         if message.reply_to_message is not None:
-            result = await workflow.correct(user.telegram_user_id, message.reply_to_message.message_id, message.text)
+            result = await workflow.correct(user.telegram_user_id, message.reply_to_message.message_id, message.text, fast=chat_service is not None)
             await present(message, result, user.telegram_user_id, workflow, enrichment, chat_service)
             await dismiss(message.reply_to_message)
             return
@@ -206,12 +303,18 @@ async def text_submission(message: Message, submissions: SubmissionService,
         logger.error("Could not persist text submission.")
         await message.answer(messages.SAVE_FAILED)
         return
-    pending = await message.answer(messages.text_received(saved.parsed_artist, saved.parsed_title)
-                                   if saved.parsed_artist else messages.PENDING)
+    pending = await message.answer(copy('lookup'), reply_markup=cancel_keyboard())
     try:
-        result = await workflow.start(saved.id, user.telegram_user_id)
-        await present(message, result, user.telegram_user_id, workflow, enrichment, chat_service)
-    finally:
+        started = monotonic()
+        result = await workflow.start(saved.id, user.telegram_user_id, fast=chat_service is not None)
+        logger.info('Chat search completed: %s in %.0f ms.', result.kind, (monotonic() - started) * 1000)
+        await present(message, result, user.telegram_user_id, workflow, enrichment, chat_service,
+                      status_message=pending if chat_service is not None else None)
+    except asyncio.CancelledError:
+        await workflow.cancel(user.telegram_user_id)
+        await dismiss(pending)
+        raise
+    if chat_service is None:
         await dismiss(pending)
 
 
@@ -236,10 +339,10 @@ async def callback(query: CallbackQuery, workflow: Workflow, enrichment: Enrichm
             result = await workflow.rate(submission_id, query.from_user.id, *arguments)
             acknowledgement = messages.RATING_SAVED
         elif action == "choose":
-            result = await workflow.select(submission_id, query.from_user.id, *arguments)
+            result = await workflow.select(submission_id, query.from_user.id, *arguments, recover=chat_service is not None)
             acknowledgement = messages.WORKING
         else:
-            result = await workflow.none(submission_id, query.from_user.id, *arguments)
+            result = await workflow.none(submission_id, query.from_user.id, *arguments, recover=chat_service is not None)
             acknowledgement = messages.WORKING
         await query.answer(acknowledgement)
         answered = True
@@ -248,17 +351,22 @@ async def callback(query: CallbackQuery, workflow: Workflow, enrichment: Enrichm
                 from .chat_ui import show_card
                 track = await chat_service.submitted_track(query.from_user.id, result.submission_id)
                 await show_card(query.message, chat_service, query.from_user.id, track,
-                                rating=result.rating, submitted=True, edit_existing=True)
+                                rating=result.rating, submitted=True, edit_existing=True,
+                                rating_mode=await chat_service.submitted_is_audio(query.from_user.id, result.submission_id))
             else:
                 try:
                     await query.message.edit_reply_markup(reply_markup=rating_keyboard(result))
                 except TelegramBadRequest:
                     pass  # Repeated ratings can leave the keyboard unchanged.
         else:
-            await present(query.message, result, query.from_user.id, workflow, enrichment, chat_service)
-            await dismiss(query.message)
+            await present(query.message, result, query.from_user.id, workflow, enrichment, chat_service,
+                          status_message=query.message if chat_service is not None else None)
+            if chat_service is None:
+                await dismiss(query.message)
     except FlowError as error:
         acknowledgement = messages.FLOW_FAILED if str(error) == "failure" else messages.STALE
+        if chat_service is not None and isinstance(query.message, Message) and query.message.chat.type == 'private' and query.message.chat.id == query.from_user.id:
+            await query.message.answer(copy('stale'), reply_markup=recovery_keyboard())
     except Exception:
         logger.error("Callback processing failed; details omitted for privacy.")
         acknowledgement = messages.FLOW_FAILED

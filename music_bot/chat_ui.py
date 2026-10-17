@@ -11,6 +11,7 @@ from . import messages as M
 from .i18n import localized_reason
 from .matching import identity_key
 from .config import normalized_lil_bro_username
+from .bot_copy import text as copy
 from aiogram.exceptions import TelegramBadRequest
 
 
@@ -27,21 +28,34 @@ async def dismiss(message):
 
 def main_menu():
     return ReplyKeyboardMarkup(keyboard=[
-        [KeyboardButton(text=M.MENU_SEND), KeyboardButton(text=M.MENU_FOR_YOU)],
+        [KeyboardButton(text=copy('rate_song'), style='primary'), KeyboardButton(text=M.MENU_FOR_YOU)],
         [KeyboardButton(text=M.MENU_PROFILE), KeyboardButton(text=M.MENU_CHANNELS)],
         [KeyboardButton(text=M.MENU_SETTINGS), KeyboardButton(text=M.MENU_HELP)],
     ], resize_keyboard=True)
 
 
+def cancel_keyboard(request_id=None):
+    data = f'cancelreq:{request_id}' if request_id else 'nav:cancel'
+    return InlineKeyboardMarkup(inline_keyboard=[[Button(text=copy('cancel'), callback_data=data, style='danger')]])
+
+
+def recovery_keyboard():
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        Button(text=copy('search'), callback_data='nav:search'),
+        Button(text=copy('recommend'), callback_data='nav:recommend')]])
+
+
 def button(token, action, text, index=None):
     suffix = f':{index}' if index is not None else ''
-    return Button(text=text, callback_data=f'q:{token}:{action}{suffix}')
+    style = {'get': 'primary', 'love': 'success', 'like': 'success', 'dislike': 'danger',
+             'delete': 'danger', 'menu': 'danger'}.get(action)
+    return Button(text=text, callback_data=f'q:{token}:{action}{suffix}', style=style)
 
 
 def parse_control(data):
     if not isinstance(data, str) or len(data.encode()) > 64:
         return None
-    match = re.fullmatch(r'q:([a-f0-9]{32}):(get|versions|rate|more|love|like|neutral|dislike):([0-4])', data)
+    match = re.fullmatch(r'q:([a-f0-9]{32}):(get|versions|rate|details|more|love|like|neutral|dislike):([0-4])', data)
     if match:
         return match[1], match[2], int(match[3])
     match = re.fullmatch(r'q:([a-f0-9]{32}):(next|foryou|menu|delete|keep)', data)
@@ -98,44 +112,48 @@ def list_content(rows, token, seed_track=None):
     for index, row in enumerate(rows):
         artist, song_title = clean(row.artist, 85), clean(row.title, 85)
         label = html.escape(f'{artist} — {song_title}')
-        if url := lil_bro_url(artist, song_title):
-            label = f'<a href="{html.escape(url, quote=True)}">{label}</a>'
         entry = f'{index + 1}. {label}'
         if row.album:
             entry += '\n' + html.escape(M.ALBUM_LINE.format(album=clean(row.album, 85)))
         entry += '\n' + html.escape(clean(localized_reason(row.reason), 120))
         lines.append(entry)
-        actions = [button(token, 'rate', M.RATE_NUMBER.format(number=index + 1), index),
-                   button(token, 'more', M.SIMILAR_NUMBER.format(number=index + 1), index),
-                   button(token, 'get', 'Get song', index), button(token, 'versions', 'Other versions', index)]
-        if art := safe_url(row.artwork_url, artwork=True):
-            actions.append(Button(text=M.ARTWORK, url=art))
+        actions = [button(token, 'get', '↓ ' + clean(song_title, 22), index),
+                   button(token, 'rate', '♡', index), button(token, 'details', '⋯', index)]
         keyboard.append(actions)
-    keyboard.append([button(token, 'next', M.ANOTHER_LIST), button(token, 'menu', M.MAIN_MENU)])
+    keyboard.append([button(token, 'next', M.ANOTHER_LIST), button(token, 'menu', copy('close'))])
     if seed_track is not None:
         keyboard.append([button(token, 'foryou', M.AFTER_FOR_YOU)])
-    lines.insert(1, M.LIL_BRO_HANDOFF_NOTE)
     return '\n\n'.join(lines), InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def card_keyboard(token, selected=None, submitted=False):
-    keyboard = [[button(token, value, M.rating_label(value, selected), 0)
-                 for value in ('love', 'like', 'neutral', 'dislike')],
-                [button(token, 'more', M.MORE_LIKE, 0),
-                 button(token, 'foryou' if submitted else 'next', M.AFTER_FOR_YOU if submitted else M.CONTINUE)],
-                [button(token, 'menu', M.DONE if submitted else M.MAIN_MENU)],
-                [button(token, 'get', 'Get song', 0), button(token, 'versions', 'Find other versions', 0)]]
+def card_keyboard(token, selected=None, submitted=False, expanded=False, rating_mode=False):
+    if rating_mode:
+        return InlineKeyboardMarkup(inline_keyboard=[[
+            button(token, value, M.rating_label(value, selected), 0)
+            for value in ('love', 'like', 'neutral', 'dislike')],
+            [button(token, 'more', copy('similar'), 0), button(token, 'menu', copy('close'))]])
+    keyboard = [[button(token, 'get', copy('get'), 0)],
+                [button(token, 'more', copy('similar'), 0), button(token, 'versions', copy('versions'), 0)]]
+    if expanded or selected is not None:
+        keyboard.append([button(token, value, M.rating_label(value, selected), 0)
+                         for value in ('love', 'like', 'neutral', 'dislike')])
+    else:
+        keyboard.append([button(token, 'rate', copy('rate'), 0)])
+    keyboard.append([button(token, 'foryou' if submitted else 'next', M.AFTER_FOR_YOU if submitted else M.CONTINUE),
+                     button(token, 'menu', copy('close'))])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-async def show_card(message, service, user_id, track, seed=None, rating=None, submitted=False, edit_existing=False):
-    token = await service.create_control(user_id, tracks=[track.id], seed=seed, kind='card', submitted=submitted)
-    text = M.CARD_TITLE.format(artist=clean(track.display_artist or track.artist), title=clean(track.display_title or track.title))
+async def show_card(message, service, user_id, track, seed=None, rating=None, submitted=False, edit_existing=False, rating_mode=False):
+    token = await service.create_control(user_id, tracks=[track.id], seed=seed, kind='rating' if rating_mode else 'card', submitted=submitted)
+    text = copy('song', artist=clean(track.display_artist or track.artist), title=clean(track.display_title or track.title))
+    if rating_mode:
+        text += '\n\n' + M.RATING_QUESTION
     if edit_existing:
-        await message.edit_text(text, parse_mode=None, reply_markup=card_keyboard(token, rating, submitted))
+        await message.edit_text(text, parse_mode=None, reply_markup=card_keyboard(token, rating, submitted, rating_mode=rating_mode))
         sent = message
     else:
-        sent = await message.answer(text, parse_mode=None, reply_markup=card_keyboard(token, rating, submitted))
+        sent = await message.answer(text, parse_mode=None, reply_markup=card_keyboard(token, rating, submitted, rating_mode=rating_mode))
     await service.bind_control(token, sent.message_id)
 
 

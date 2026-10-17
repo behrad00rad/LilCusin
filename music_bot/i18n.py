@@ -16,7 +16,9 @@ def tr(key, **values):
 
 def menu_labels(*keys):
     from . import messages
+    from .bot_copy import COPY
     return ({CATALOGUE[code].get('bot_'+key, '') for code in LANGUAGES for key in keys}
+            | (set(COPY['rate_song']) if 'MENU_SEND' in keys else set())
             | {vars(messages).get(key, '') for key in keys}) - {''}
 
 

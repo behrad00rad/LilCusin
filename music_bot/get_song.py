@@ -1,4 +1,4 @@
-"""Single durable worker; transport is injected, fetching returns only a local artifact.
+"""Bounded durable worker; transport is injected, fetching returns a local artifact.
 
 Run one bot/worker per database. Sending is at-most-once after an ambiguous restart:
 Telegram sendAudio has no idempotency key, so interrupted sends require a new tap.
@@ -10,6 +10,7 @@ import shutil
 import tempfile
 import weakref
 import hashlib
+from time import monotonic
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
@@ -24,6 +25,8 @@ from .youtube_fetch import FetchError, YouTubeFetcher, confident, VIDEO
 from .workflow import FlowError
 from .lilbro_fetch import LilBroFetcher, configured_fetcher
 from .audio_artwork import artwork_key, prepare as prepare_artwork
+from .bot_copy import text as copy
+from .i18n import language
 
 logger = logging.getLogger('music_bot')
 
@@ -40,6 +43,7 @@ class FetchSettings:
     timeout: int = 180
     disk_bytes: int = 150_000_000
     retention_days: int = 7
+    workers: int = 2
 
     @classmethod
     def environment(cls):
@@ -54,7 +58,8 @@ class FetchSettings:
             except ValueError:
                 from .config import ConfigError
                 raise ConfigError('Invalid Get song limit: ' + name) from None
-        if values['max_bytes'] > 49_000_000 or values['disk_bytes'] < 2 * values['max_bytes']:
+        if (values['max_bytes'] > 49_000_000 or values['disk_bytes'] < 2 * values['max_bytes']
+                or values['workers'] > 4):
             from .config import ConfigError
             raise ConfigError('Get song file/disk limits are incompatible.')
         return cls(enabled=os.getenv('GET_SONG_ENABLED', 'false').lower() == 'true', **values)
@@ -66,6 +71,7 @@ class GetSong:
         self.fetcher = fetcher or configured_fetcher(self.settings, bot)
         self.artwork_loader = artwork_loader
         self.task = None
+        self.jobs = {}
         self.recognizer = None
         self.art_attempted = set()
         self.delivery_locks = weakref.WeakValueDictionary()
@@ -93,6 +99,143 @@ class GetSong:
         if self.task:
             self.task.cancel()
             await asyncio.gather(self.task, return_exceptions=True)
+        for task in self.jobs.values():
+            task.cancel()
+        await asyncio.gather(*self.jobs.values(), return_exceptions=True)
+        self.jobs.clear()
+
+    async def begin(self, message, user_id, track_id, *, other_versions=False):
+        """Attach one durable status, including when the request already exists."""
+        from .chat_ui import cancel_keyboard
+        pending = await message.answer(copy('queued'), reply_markup=cancel_keyboard())
+        try:
+            request_id = await self.request(user_id, track_id, other_versions=other_versions)
+            if not other_versions:
+                await self.cached_request(user_id, request_id)
+            await self.bind_status(user_id, request_id, pending.message_id)
+            return request_id
+        except FetchError as error:
+            token, keyboard = await self.retry_keyboard(user_id, track_id)
+            await pending.edit_text(copy('failed') + '\n' + str(error), reply_markup=keyboard)
+            from .chat_service import ChatService
+            await ChatService(self.db, None).bind_control(token, pending.message_id)
+            return None
+
+    async def cached_request(self, user_id, request_id):
+        async with self.db.sessions() as session:
+            req = await session.scalar(select(AudioRequest).join(User).where(
+                AudioRequest.id == request_id, User.telegram_user_id == user_id, AudioRequest.state == 'pending'))
+            if req is None:
+                return
+            job = await session.get(FetchJob, req.job_id)
+            track = await session.get(Track, job.track_id)
+        if not job.metadata_json.get('force_choice') or job.video_id:
+            await self.deliver_cached(job, track)
+
+    async def retry_keyboard(self, user_id, track_id):
+        from .chat_service import ChatService
+        from .chat_ui import button
+        controls = ChatService(self.db, None)
+        token = await controls.create_control(user_id, tracks=[track_id], kind='card')
+        return token, InlineKeyboardMarkup(inline_keyboard=[[
+            button(token, 'get', copy('retry'), 0), button(token, 'versions', copy('versions'), 0)]])
+
+    async def bind_status(self, user_id, request_id, message_id):
+        async with self.delivery_locks.setdefault(user_id, asyncio.Lock()):
+            async with self.db.write() as session:
+                req = await session.scalar(select(AudioRequest).join(User).where(
+                    AudioRequest.id == request_id, User.telegram_user_id == user_id))
+                if req is None:
+                    raise FlowError('stale')
+                old = req.status_message_id
+                req.status_message_id = message_id
+                state, job_id = req.state, req.job_id
+            if old and old != message_id:
+                try:
+                    await self.bot.delete_message(user_id, old)
+                except Exception:
+                    pass
+            if state == 'choice':
+                async with self.db.sessions() as session:
+                    job = await session.get(FetchJob, job_id)
+                await self.show_choices(req, user_id, job.candidates)
+            else:
+                key = {'pending': 'queued', 'sending': 'sending', 'done': 'delivered',
+                       'cancelled': 'cancelled', 'failed': 'failed', 'uncertain': 'uncertain'}.get(state, 'queued')
+                await self.progress(request_id, key, locked=True)
+
+    async def progress(self, request_id, key, keyboard=None, *, locked=False):
+        if not locked:
+            async with self.db.sessions() as session:
+                user_id = await session.scalar(select(User.telegram_user_id).join(AudioRequest).where(AudioRequest.id == request_id))
+            if user_id is None:
+                return
+            async with self.delivery_locks.setdefault(user_id, asyncio.Lock()):
+                return await self.progress(request_id, key, keyboard, locked=True)
+        from .preferences import preferences
+        from .chat_service import ChatService
+        from .chat_ui import cancel_keyboard, card_keyboard
+        async with self.db.sessions() as session:
+            result = (await session.execute(select(AudioRequest, User.telegram_user_id, FetchJob.track_id)
+                .join(User, User.id == AudioRequest.user_id).join(FetchJob, FetchJob.id == AudioRequest.job_id)
+                .where(AudioRequest.id == request_id))).first()
+        if not result or not result[0].status_message_id:
+            return
+        req, user_id, track_id = result
+        # Late worker updates must not resurrect cancelled/failed requests.
+        if req.state in {'cancelled', 'failed', 'uncertain', 'done'} and key not in {'cancelled', 'failed', 'uncertain', 'delivered'}:
+            return
+        context = None
+        token = None
+        try:
+            prefs = await preferences(self.db, user_id)
+            context = language.set(prefs['language'])
+            async with self.db.sessions() as session:
+                track = await session.get(Track, track_id)
+            heading = copy('song', artist=track.display_artist or track.artist, title=track.display_title or track.title)
+            if keyboard is None:
+                if key in {'queued', 'searching', 'fetching', 'sending'}:
+                    keyboard = cancel_keyboard(request_id)
+                elif key in {'failed', 'uncertain'}:
+                    token, keyboard = await self.retry_keyboard(user_id, track_id)
+                elif key == 'delivered':
+                    token = await ChatService(self.db, None).create_control(user_id, tracks=[track_id], kind='card')
+                    keyboard = card_keyboard(token)
+            if token:
+                await ChatService(self.db, None).bind_control(token, req.status_message_id)
+            async with asyncio.timeout(4):
+                await self.bot.edit_message_text(heading + '\n\n' + copy(key), chat_id=user_id, message_id=req.status_message_id, reply_markup=keyboard)
+        except Exception:
+            pass  # Presentation failure must not fail or repeat audio delivery.
+        finally:
+            if context is not None:
+                language.reset(context)
+
+    async def show_choices(self, req, user_id, rows):
+        from .preferences import preferences
+        context = language.set((await preferences(self.db, user_id))['language'])
+        try:
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text=f"{r['title'][:45]} — {r.get('artist', '')[:25]} ({int(r['duration'])}s)" +
+                    (' [' + (', '.join(r.get('version', [])).title() or 'Original / unlabelled') + ']') +
+                    (' ⚠ duration differs' if r.get('duration_mismatch') else '') +
+                    (' ⚠ title has extra text' if r.get('title_mismatch') else ''), callback_data=f'g:{req.id}:{i}')]
+                for i, r in enumerate(rows)])
+            keyboard.inline_keyboard.extend([
+                [InlineKeyboardButton(text=copy('versions'), callback_data=f'v:{req.id}')],
+                [InlineKeyboardButton(text=copy('close'), callback_data=f'closereq:{req.id}', style='danger')]])
+            if req.status_message_id:
+                await self.bot.edit_message_text(copy('choice'), chat_id=user_id, message_id=req.status_message_id, reply_markup=keyboard)
+                message_id = req.status_message_id
+            else:
+                sent = await self.bot.send_message(user_id, copy('choice'), reply_markup=keyboard)
+                message_id = sent.message_id
+            async with self.db.write() as session:
+                current = await session.get(AudioRequest, req.id)
+                if current and current.state == 'choice':
+                    current.message_id = message_id
+        finally:
+            language.reset(context)
 
     async def request(self, user_id, track_id, *, other_versions=False):
         if not self.settings.enabled:
@@ -328,6 +471,7 @@ class GetSong:
 
     async def cancel(self, user_id, forget=False):
         # Serialize with the final ownership check and Telegram send, avoiding post-forget delivery.
+        cancelled = []
         async with self.delivery_locks.setdefault(user_id, asyncio.Lock()):
             async with self.db.write() as s:
                 ids = select(User.id).where(User.telegram_user_id == user_id)
@@ -339,6 +483,20 @@ class GetSong:
                     for req in (await s.scalars(select(AudioRequest).where(AudioRequest.user_id.in_(ids),
                             AudioRequest.state.in_(('pending', 'choice'))))).all():
                         req.state = 'cancelled'
+                        cancelled.append(req.id)
+            for request_id in cancelled:
+                await self.progress(request_id, 'cancelled', locked=True)
+
+    async def cancel_request(self, user_id, request_id, message_id):
+        async with self.delivery_locks.setdefault(user_id, asyncio.Lock()):
+            async with self.db.write() as session:
+                req = await session.scalar(select(AudioRequest).join(User).where(
+                    AudioRequest.id == request_id, User.telegram_user_id == user_id,
+                    AudioRequest.status_message_id == message_id, AudioRequest.state.in_(('pending', 'choice'))))
+                if req is None:
+                    raise FlowError('stale')
+                req.state = 'cancelled'
+            await self.progress(request_id, 'cancelled', locked=True)
 
     async def alive(self, job_id):
         async with self.db.sessions() as s:
@@ -364,13 +522,19 @@ class GetSong:
     async def run(self):
         while True:
             try:
+                for job_id, task in list(self.jobs.items()):
+                    if task.done():
+                        await asyncio.gather(task, return_exceptions=True)
+                        self.jobs.pop(job_id)
                 await self.maintenance()
                 async with self.db.sessions() as s:
-                    job = await s.scalar(select(FetchJob).where(FetchJob.state.in_(('queued', 'choice', 'done')),
+                    jobs = (await s.scalars(select(FetchJob).where(FetchJob.state.in_(('queued', 'choice', 'done')),
+                        FetchJob.id.not_in(list(self.jobs)),
                         select(AudioRequest.id).where(AudioRequest.job_id == FetchJob.id, AudioRequest.state == 'pending').exists())
-                        .order_by(FetchJob.created_at))
-                if job and self.settings.enabled:
-                    await self.execute(job.id)
+                        .order_by(FetchJob.created_at).limit(max(0, self.settings.workers - len(self.jobs))))).all()
+                if self.settings.enabled:
+                    for job in jobs:
+                        self.jobs[job.id] = asyncio.create_task(self.execute(job.id))
             except asyncio.CancelledError:
                 raise
             except Exception:
@@ -392,15 +556,13 @@ class GetSong:
         await self.state(job_id, 'running')
         phase = 'search'
         try:
-            if self.artwork_loader and not artwork_key(track):
-                await self.artwork_loader.load(track.id)
-                async with self.db.sessions() as s:
-                    track = await s.get(Track, track.id)
             if not job.metadata_json.get('force_choice') or job.video_id:
                 await self.deliver_cached(job, track)
             if not await self.alive(job_id):
                 await self.state(job_id, 'done')
                 return
+            for req, _ in await self.requests(job_id):
+                await self.progress(req.id, 'searching')
             with tempfile.TemporaryDirectory(dir=self.root, prefix='job-') as directory:
                 if shutil.disk_usage(directory).free < self.settings.disk_bytes:
                     raise FetchError('Temporary storage unavailable.')
@@ -441,6 +603,8 @@ class GetSong:
                     job.video_id, job.metadata_json = rows[0]['id'], rows[0]
                     await self.state(job_id, 'running', video_id=job.video_id, metadata_json=rows[0])
                 phase = 'download'
+                for req, _ in await self.requests(job_id):
+                    await self.progress(req.id, 'fetching')
                 if isinstance(self.fetcher, LilBroFetcher):
                     async def persist(fields):
                         job.metadata_json = {**job.metadata_json, **fields}
@@ -457,14 +621,23 @@ class GetSong:
                         await asyncio.sleep(.5)
                         path = await self.fetcher.fetch(job.video_id, directory, lambda: self.alive(job_id))
                 phase = 'prepare'
-                if self.recognizer and not artwork_key(track):
-                    await self.shazam_artwork(track, path, directory, lambda: self.alive(job_id))
-                thumbnail, cover_key = await prepare_artwork(self.fetcher, track, path, directory,
-                                                            lambda: self.alive(job_id))
-                if not thumbnail and self.recognizer and track.id not in self.art_attempted:
-                    await self.shazam_artwork(track, path, directory, lambda: self.alive(job_id), force=True)
-                    thumbnail, cover_key = await prepare_artwork(self.fetcher, track, path, directory,
-                                                                lambda: self.alive(job_id))
+                thumbnail, cover_key = None, None
+                try:
+                    async with asyncio.timeout(3):
+                        if self.artwork_loader and not artwork_key(track):
+                            await self.artwork_loader.load(track.id)
+                            async with self.db.sessions() as s:
+                                track = await s.get(Track, track.id)
+                        if self.recognizer and not artwork_key(track):
+                            await self.shazam_artwork(track, path, directory, lambda: self.alive(job_id))
+                        thumbnail, cover_key = await prepare_artwork(self.fetcher, track, path, directory,
+                                                                    lambda: self.alive(job_id))
+                        if not thumbnail and self.recognizer and track.id not in self.art_attempted:
+                            await self.shazam_artwork(track, path, directory, lambda: self.alive(job_id), force=True)
+                            thumbnail, cover_key = await prepare_artwork(self.fetcher, track, path, directory,
+                                                                        lambda: self.alive(job_id))
+                except Exception:
+                    pass  # Optional presentation has a total budget, audio remains deliverable.
                 async with self.db.write() as s:
                     await s.execute(delete(AudioSource).where(AudioSource.track_id == track.id, AudioSource.video_id == job.video_id))
                     s.add(AudioSource(track_id=track.id, video_id=job.video_id,
@@ -481,6 +654,8 @@ class GetSong:
             logger.warning('Audio delivery failed at %s (%s); details omitted for privacy.', phase, type(error).__name__)
             if isinstance(error, FetchError):
                 known = {'Audio source unavailable.': 'source_unavailable', 'Request cancelled.': 'cancelled',
+                         'No suitable source found.': 'no_matching_candidate',
+                         'Source metadata unavailable.': 'invalid_source_metadata',
                          'Audio unavailable or too large.': 'file_limit',
                          'Fetched media is unsupported or exceeds limits.': 'validation',
                          'Temporary storage limit reached.': 'storage_limit'}
@@ -502,29 +677,23 @@ class GetSong:
                         continue
                     current.state = 'choice'
                 try:
-                    keyboard = InlineKeyboardMarkup(inline_keyboard=[[
-                        InlineKeyboardButton(text=f"{i+1}. {r['title'][:45]} — {r.get('artist', '')[:25]} ({int(r['duration'])}s)" +
-                            (' [' + (', '.join(r.get('version', [])).title() or 'Original / unlabelled') + ']') +
-                            (' ⚠ duration differs' if r.get('duration_mismatch') else ''),
-                            callback_data=f'g:{req.id}:{i}')]
-                        for i, r in enumerate(rows)])
-                    keyboard.inline_keyboard.append([InlineKeyboardButton(text='Find other versions', callback_data=f'v:{req.id}')])
-                    sent = await self.bot.send_message(user_id, 'Choose the recording you want, or /cancel.',
-                                                       reply_markup=keyboard)
-                    async with self.db.write() as s:
-                        current = await s.get(AudioRequest, req.id)
-                        if current:
-                            current.message_id = sent.message_id
+                    await self.show_choices(current, user_id, rows)
                 except Exception:
-                    await self.request_state(req.id, 'failed')
+                    await self.request_state(req.id, 'failed', locked=True)
 
-    async def request_state(self, request_id, state):
+    async def request_state(self, request_id, state, *, locked=False):
         async with self.db.write() as s:
             req = await s.get(AudioRequest, request_id)
-            if req:
+            if req and req.state not in {'done', 'cancelled', 'expired', 'failed', 'uncertain'}:
                 req.state = state
+            else:
+                return False
+        if state in {'failed', 'uncertain'}:
+            await self.progress(request_id, state, locked=locked)
+        return True
 
     async def send(self, req, user_id, job, track, audio, thumbnail=None, cover_key=None):
+        started = monotonic()
         async with self.delivery_locks.setdefault(user_id, asyncio.Lock()):
             async with self.db.write() as s:
                 current = await s.get(AudioRequest, req.id)
@@ -536,18 +705,28 @@ class GetSong:
                     current.state = 'failed'
                     return
                 current.state = 'sending'
+                from .preferences import UserPreferences, normalize_language
+                prefs = await s.get(UserPreferences, req.user_id)
+                owner = await s.get(User, req.user_id)
+                context = language.set(normalize_language(prefs.language if prefs and prefs.language else owner.language_code))
+                try:
+                    keyboard = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+                        text=copy('wrong'), callback_data=f'w:{req.id}'), InlineKeyboardButton(
+                        text=copy('versions'), callback_data=f'v:{req.id}')]])
+                finally:
+                    language.reset(context)
+            if not isinstance(audio, str):
+                await self.progress(req.id, 'sending', locked=True)
             try:
                 extra = {'thumbnail': FSInputFile(thumbnail)} if thumbnail else {}
                 sent = await self.bot.send_audio(user_id, audio=audio, title=track.display_title or track.title,
                     performer=track.display_artist or track.artist, request_timeout=self.settings.timeout,
-                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
-                        text='Wrong song', callback_data=f'w:{req.id}'), InlineKeyboardButton(
-                        text='Find other versions', callback_data=f'v:{req.id}')]]), **extra)
+                    reply_markup=keyboard, **extra)
             except TelegramBadRequest:
-                await self.request_state(req.id, 'pending')
+                await self.request_state(req.id, 'pending', locked=True)
                 raise
             except Exception:
-                await self.request_state(req.id, 'uncertain')
+                await self.request_state(req.id, 'uncertain', locked=True)
                 return
             async with self.db.write() as s:
                 current = await s.get(AudioRequest, req.id)
@@ -558,6 +737,8 @@ class GetSong:
                         AudioDelivery.track_id == track.id, AudioDelivery.video_id == job.video_id))
                     s.add(AudioDelivery(user_id=req.user_id, track_id=track.id, video_id=job.video_id,
                         file_id=sent.audio.file_id, message_id=sent.message_id, artwork_key=cover_key))
+            await self.progress(req.id, 'delivered', locked=True)
+            logger.info('Audio delivered: cached=%s in %.0f ms.', isinstance(audio, str), (monotonic() - started) * 1000)
 
     async def deliver_cached(self, job, track):
         for req, user_id in await self.requests(job.id):
@@ -573,10 +754,6 @@ class GetSong:
                     query = query.where(AudioDelivery.video_id == job.video_id)
                 cached = await s.scalar(query.order_by(AudioDelivery.created_at.desc()))
             if cached:
-                if self.recognizer and not artwork_key(track) and track.id not in self.art_attempted:
-                    continue  # Give a previously coverless delivery one Shazam artwork attempt.
-                if artwork_key(track) and cached.artwork_key != artwork_key(track):
-                    continue  # Upgrade an old coverless file once; subsequent sends reuse it.
                 cached_job = FetchJob(id=job.id, track_id=track.id, video_id=cached.video_id)
                 try:
                     await self.send(req, user_id, cached_job, track, cached.file_id, cover_key=cached.artwork_key)
@@ -606,7 +783,12 @@ class GetSong:
                 text='Listen on YouTube', url='https://www.youtube.com/watch?v=' + video)]])
         for req, user_id in await self.requests(job_id):
             async with self.delivery_locks.setdefault(user_id, asyncio.Lock()):
-                await self.request_state(req.id, 'failed')
+                if not await self.request_state(req.id, 'failed', locked=True):
+                    continue
+                async with self.db.sessions() as session:
+                    current = await session.get(AudioRequest, req.id)
+                if current is None or current.status_message_id:
+                    continue
                 try:
                     await self.bot.send_message(user_id,
                         ('No other matching recordings were found. Try Get song again later.' if alternatives else

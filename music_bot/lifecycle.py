@@ -1,42 +1,70 @@
 import asyncio
 import weakref
-from collections import OrderedDict
-from time import monotonic
 
 from aiogram import BaseMiddleware
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, Message
 
 from . import messages
 from .i18n import menu_action
 
 
 class PrivateActions(BaseMiddleware):
-    """One personal-data mutation per user; reject rapid duplicate navigation."""
+    """Serialize mutations; let navigation cancel an in-flight foreground handler."""
 
     def __init__(self):
         self.locks = weakref.WeakValueDictionary()
-        self.recent = OrderedDict()
+        self.active = {}
+        self.interruptible = set()
+        self.waiting = {}
 
     async def __call__(self, handler, event, data):
         user = getattr(event, "from_user", None)
         if user is None:
             return await handler(event, data)
+        chat = event.chat if isinstance(event, Message) else getattr(getattr(event, 'message', None), 'chat', None)
+        if user.is_bot or chat is None or chat.type != 'private' or chat.id != user.id:
+            return await handler(event, data)
         lock = self.locks.setdefault(user.id, asyncio.Lock())
         text = getattr(event, "text", None) or ""
         callback = getattr(event, "data", None) or ""
-        navigation = (text.split("@")[0] == "/recommend" or menu_action(text) == 'recommend'
-                      or callback.endswith((":next", ":foryou")) or ":more:" in callback)
-        now = monotonic()
-        if lock.locked() or navigation and now - self.recent.get(user.id, -10) < 3:
-            await event.answer(messages.BUSY)
-            return
+        command = text.split()[0].split('@')[0] if text.strip() else ''
+        navigation = (command in {'/cancel', '/rate', '/start', '/search', '/help', '/recommend', '/profile', '/taste', '/channels', '/version'}
+                      or menu_action(text) is not None or callback.startswith(('nav:', 'cancelreq:', 'closereq:', 'close:')))
+        search = bool(text.strip() and not text.lstrip().startswith('/') and menu_action(text) is None)
+        cancellable = search or command in {'/start', '/help', '/recommend', '/profile', '/taste', '/channels', '/version'} or menu_action(text) is not None or callback in {'nav:search', 'nav:recommend'} or (callback.startswith('q:') and any(x in callback for x in (':more:', ':next', ':foryou')))
+        current = asyncio.current_task()
+        if lock.locked():
+            previous = self.active.get(user.id)
+            if (navigation or search) and user.id in self.interruptible and previous is not None and previous is not asyncio.current_task():
+                self.waiting[user.id] = current
+                if not previous.cancelling():
+                    previous.cancel()
+                try:
+                    await asyncio.gather(previous, return_exceptions=True)
+                except asyncio.CancelledError:
+                    if self.waiting.get(user.id) is current:
+                        self.waiting.pop(user.id, None)
+                    raise
+                if self.waiting.get(user.id) is not current:
+                    return
+                self.waiting.pop(user.id, None)
+            else:
+                from .bot_copy import text as copy
+                from .chat_ui import cancel_keyboard
+                if isinstance(event, CallbackQuery):
+                    await event.answer(copy('busy'))
+                else:
+                    await event.answer(copy('busy'), reply_markup=cancel_keyboard())
+                return
         async with lock:
-            if navigation:
-                self.recent[user.id] = now
-                self.recent.move_to_end(user.id)
-                while len(self.recent) > 1000:
-                    self.recent.popitem(last=False)
-            return await handler(event, data)
+            self.active[user.id] = asyncio.current_task()
+            if cancellable:
+                self.interruptible.add(user.id)
+            try:
+                return await handler(event, data)
+            finally:
+                self.active.pop(user.id, None)
+                self.interruptible.discard(user.id)
 
 
 class UpdateTasks(BaseMiddleware):

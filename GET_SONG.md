@@ -40,7 +40,8 @@ configuration allows 20 requests/hour while testing; the default remains five.
 
 Get song uses the recommendation's persisted canonical track ID. It never accepts
 user URLs. A user-bound callback queues a persistent request and acknowledges it
-before any network lookup or audio work. One background worker searches YouTube,
+before any network lookup or audio work. A bounded pool (two jobs by default,
+`GET_SONG_WORKERS=1..4`) searches YouTube,
 checks identity/version/duration, asks for a recording choice when uncertain, then
 sends Telegram `sendAudio` with the canonical artist/title. This does not add audio
 to channels, the Mini App, a public library, or Telopotify.

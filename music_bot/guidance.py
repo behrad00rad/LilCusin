@@ -32,10 +32,9 @@ def guide_keyboard(step):
 
 
 async def show_guide(message, step=0):
-    n=step+1
-    text='🦉 '+tr('step',n=n)+'\n\n'+tr(f'g{n}_title')+'\n'+tr(f'bot_g{n}_text')
-    if step==0:text+='\n\nRadiohead - Creep'
-    await message.answer(text,reply_markup=guide_keyboard(step))
+    from .bot_copy import text
+    from .chat_ui import main_menu
+    await message.answer(text('guide'), reply_markup=main_menu())
 
 
 async def language_picker(message):
@@ -64,18 +63,16 @@ async def guide_callback(query,chat_service):
         await preferences(chat_service.database,query.from_user.id,language=code)
         language.set(code)
         await query.answer(tr('ok'))
-        from .taste_setup_bot import show_setup
-        if not await show_setup(query.message,chat_service):await show_guide(query.message)
+        from .bot_copy import text
         from .chat_ui import main_menu
-        await query.message.answer(tr('bot_MENU_PROMPT'),reply_markup=main_menu())
+        await query.message.answer(text('welcome'),reply_markup=main_menu())
     elif data=='guide:language':
         await query.answer();await language_picker(query.message)
     elif data=='guide:done':
         await query.answer()
-        from .taste_setup_bot import show_setup
-        if await show_setup(query.message,chat_service):return
+        from .bot_copy import text
         from .chat_ui import main_menu
-        await query.message.answer(tr('bot_g1_text')+'\n\nRadiohead - Creep',reply_markup=main_menu())
+        await query.message.answer(text('welcome'),reply_markup=main_menu())
     elif re.fullmatch(r'guide:[0-2]',data):
         await query.answer();await show_guide(query.message,int(data[-1]))
     else:await query.answer(tr('stale'))
@@ -97,15 +94,12 @@ class LanguageMiddleware(BaseMiddleware):
         try:
             if not prefs['bot_guide_seen']:
                 await preferences(self.database,user.id,bot_seen=True)
-                if isinstance(event,Message) and not (event.text or '').startswith(('/start','/help','/language')):
-                    from .taste_setup_bot import show_setup
-                    if not await show_setup(event,service):await show_guide(event)
             return await handler(event,data)
         finally:language.reset(context)
 
 async def configure_commands(bot):
     from aiogram.types import BotCommand, BotCommandScopeAllPrivateChats
-    keys={'start':'guide','recommend':'for_you','profile':'taste','taste':'taste','help':'guide',
+    keys={'start':'search','search':'search','rate':'heard','recommend':'for_you','profile':'taste','taste':'taste','help':'guide',
           'language':'language','privacy':'privacy_hint','forgetme':'yes_delete','cancel':'cancel',
           'connectchannel':'connect','channels':'channels','disconnectchannel':'disconnect','setup':'setup_title',
           'recognize':'recognize_command'}
@@ -113,6 +107,7 @@ async def configure_commands(bot):
         context=language.set(code)
         try:
             commands=[BotCommand(command=name,description=tr(key)[:100]) for name,key in keys.items()]
+            commands.append(BotCommand(command='version',description='Bot build'))
             await bot.set_my_commands(commands,scope=BotCommandScopeAllPrivateChats(),language_code=code)
             if code=='en':await bot.set_my_commands(commands,scope=BotCommandScopeAllPrivateChats())
         finally:language.reset(context)

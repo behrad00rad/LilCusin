@@ -4,8 +4,10 @@ Install `requirements.txt` and restart the bot. ShazamIO recognition is enabled
 by default and needs no API key. FFmpeg on PATH is used when available, otherwise
 the bundled imageio-ffmpeg executable is used. No database migration is needed. Set `RECOGNITION_ENABLED=false` to restore existing audio metadata identification.
 
-Send audio, voice, video, a video note, or an audio/video document in private chat.
-You can reply to an earlier media message with `/recognize`. Supported public HTTPS
+Send voice, video, a video note, or a video document in private chat.
+Music files default to metadata-based rating without fingerprinting or downloading.
+Reply to an earlier audio/media message with `/recognize` to explicitly identify it.
+Supported public HTTPS
 post links include YouTube/Shorts, TikTok, Instagram reels/posts, Pinterest video
 pins, X/Twitter posts, SoundCloud tracks and Vimeo videos. TikTok short links and
 pin.it links are accepted. Install `requirements-audio.txt`, including the curl-cffi
@@ -25,7 +27,8 @@ up to 20 pending requests; each user can have one request and start one every
 30 seconds. Jobs time out after 4 minutes. `/cancel` stops that user's job.
 Queued jobs are ephemeral and lost on restart; resend after a restart.
 
-FFmpeg extracts up to three 12-second mono WAV samples at 0, 30 and 60 seconds,
+FFmpeg extracts up to three 12-second mono WAV samples from the start, middle and
+end of media with a known duration (otherwise at 0, 30 and 60 seconds),
 stopping at the first match. ShazamIO calculates a fingerprint locally and sends it to Shazam over HTTPS,
 never via a Telegram token-bearing URL. Users see this disclosure
 when submitting. The third party processes audio under its own service terms.
@@ -34,8 +37,8 @@ After a hard process/host crash, the OS temporary directory may need cleanup.
 Results are cached in memory for one hour (maximum 500 entries); request limits
 and the cache reset on restart. Nothing is added to taste history automatically.
 
-Results include artist, title and available listening links. A failed match asks
-for a clearer recording; provider failures are distinguished from media failures.
+Results include artist, title and available listening links. A failed match offers
+typed song/artist input or another audio section; provider failures are distinguished from media failures.
 When Get song is enabled, recognition automatically queues the identified artist
 and title for full-song audio delivery, including recognition-cache hits. The
 existing source permissions, per-user limits, recording selection, cached Telegram
@@ -64,8 +67,8 @@ stop and retain the recognition result. This does not guarantee source availabil
 
 Shazam cover artwork and album metadata are retained directly. Valid Apple image
 CDN artwork goes through the normal audio-tagging and Telegram thumbnail pipeline,
-without depending on Last.fm for covers. Re-recognizing a previously coverless
-track upgrades the cached audio when artwork is available. Earlier sent messages
+without depending on Last.fm for covers. Cached Telegram audio is sent before
+artwork work; it is not re-fetched solely to upgrade a cover. Earlier sent messages
 remain unchanged. Missing or unavailable artwork never prevents audio delivery.
 
 Find other versions appears on new recognition messages, song cards, recording
@@ -76,6 +79,6 @@ the selected edition gets its own track metadata and artwork when available.
 
 All Get song paths can identify a 12-second sample of downloaded audio through
 Shazam to obtain a missing or unreachable cover. Artist/title/version checks protect
-against artwork from another recording. Previously coverless cached audio may need
-one re-fetch to upgrade; failed fallback attempts are remembered for this process.
+against artwork from another recording. New-file artwork work has a three-second
+total budget; cached audio bypasses it. Failed fallback attempts are remembered for this process.
 No new API key is needed. Old Telegram messages and buttons remain unchanged.

@@ -31,10 +31,14 @@ class ChatFlowTests(ServiceTestCase):
             message = self.message(self.serial, text=text)
             self.outgoing.append((message, text, kwargs))
             return message
+        async def edited(message, text, **kwargs):
+            self.outgoing.append((message, text, kwargs))
+            return message
         self.patches = [patch('aiogram.types.Message.answer', side_effect=answer),
                         patch('aiogram.types.Message.edit_reply_markup', new_callable=AsyncMock),
-                        patch('aiogram.types.CallbackQuery.answer', new_callable=AsyncMock)]
-        self.answer, self.edit, self.ack = [p.start() for p in self.patches]
+                        patch('aiogram.types.CallbackQuery.answer', new_callable=AsyncMock),
+                        patch('aiogram.types.Message.edit_text', autospec=True, side_effect=edited)]
+        self.answer, self.edit, self.ack, self.edit_text = [p.start() for p in self.patches]
 
     async def asyncTearDown(self):
         for p in self.patches:
@@ -97,7 +101,7 @@ class ChatFlowTests(ServiceTestCase):
         _, text, options = self.outgoing[-1]
         self.assertEqual(text.count('&lt;b&gt;Artist&lt;/b&gt;'), 1)
         self.assertEqual(options['parse_mode'], 'HTML')
-        self.assertIn('https://t.me/musicbehbot?text=', text)
+        self.assertNotIn('https://t.me/', text)
         self.assertFalse(any(b.url for r in options['reply_markup'].inline_keyboard for b in r))
         self.assertIsNone(safe_url('https://www.last.fm@evil.example/music'))
         self.assertEqual(safe_url('https://www.last.fm/music/A/_/B'), 'https://www.last.fm/music/A/_/B')
@@ -111,7 +115,8 @@ class ChatFlowTests(ServiceTestCase):
         seed = control.payload['tracks'][0]
         engine = self.chat.recommendations
         with patch.object(engine, 'recommend_similar_to_track', wraps=engine.recommend_similar_to_track) as similar:
-            await self.click(listing, 0, 1)
+            await self.click(listing, 0, 2)
+            await self.click(self.outgoing[-1], 1, 0)
             similar.assert_awaited_once_with(TELEGRAM_ID, seed, limit=5)
         self.assertIn(M.MORE_LIKE, self.outgoing[-1][1])
         async with self.database.sessions() as session:
@@ -121,7 +126,7 @@ class ChatFlowTests(ServiceTestCase):
 
     async def test_rating_recommendation_owner_repeat_and_change(self):
         await self.feed(message=self.message(text='/recommend'))
-        await self.click(self.outgoing[-1])
+        await self.click(self.outgoing[-1], column=1)
         card = self.outgoing[-1]
         await self.click(card, user=999)
         self.ack.assert_called_with(M.STALE)
@@ -204,40 +209,42 @@ class ChatFlowTests(ServiceTestCase):
             await self.feed(message=self.message(text=M.MENU_PROFILE))
             self.assertIn(M.TASTE_TITLE, self.outgoing[-1][1])
             await self.feed(message=self.message(text='/recommend'))
-            await self.click(self.outgoing[-1])
+            await self.click(self.outgoing[-1], column=2)
             card = self.outgoing[-1]
-            await self.click(card)
             before = len(self.outgoing)
-            await self.click(card, row=2)
+            await self.click(card, row=3, column=1)
             delete_message.assert_awaited_once()
             self.assertEqual(len(self.outgoing), before)
 
-    async def test_audio_exact_match_immediately_rates_without_optional_lookup(self):
+    async def test_audio_exact_match_rates_immediately_without_download_actions(self):
         from dataclasses import replace
         from tests.test_workflow import EXACT
         self.providers.call.return_value = [replace(EXACT, album=None, duration=None)]
         await self.feed(message=self.message(audio={'file_id': 'test', 'file_unique_id': 'unique',
             'duration': 120, 'performer': 'Artist', 'title': 'Song'}))
         self.assertIn(M.RATING_QUESTION, self.outgoing[-1][1])
+        self.assertIn(':love:', self.outgoing[-1][2]['reply_markup'].inline_keyboard[0][0].callback_data)
         self.assertFalse(any(text == M.CHOOSE for _, text, _ in self.outgoing))
         self.assertEqual(self.providers.call.await_count, 1)
-        self.deleted_messages.assert_awaited_once()
-        await self.click(self.outgoing[-1])
+        self.deleted_messages.assert_not_awaited()
+        card = self.outgoing[-1]
+        await self.click(card)
         self.assertEqual(self.ack.call_args.args[0], M.RATING_SAVED)
 
-    async def test_candidate_prompt_is_deleted_after_selection(self):
+    async def test_candidate_prompt_becomes_song_card_after_selection(self):
         from dataclasses import replace
         from tests.test_workflow import EXACT
         self.providers.call.return_value = [replace(EXACT, title='Song remix', external_ids={})]
         await self.feed(message=self.message(text='Artist - Song'))
         self.assertEqual(self.outgoing[-1][1], M.CHOOSE)
-        self.deleted_messages.assert_awaited_once()  # Lookup status.
+        self.deleted_messages.assert_not_awaited()
         await self.click(self.outgoing[-1])
-        self.assertIn(M.RATING_QUESTION, self.outgoing[-1][1])
-        self.assertEqual(self.deleted_messages.await_count, 2)  # Selection prompt too.
+        self.assertIn(':get:', self.outgoing[-1][2]['reply_markup'].inline_keyboard[0][0].callback_data)
+        self.assertEqual(self.deleted_messages.await_count, 0)
 
-    async def test_recommendation_has_handoff_but_no_catalogue_button(self):
+    async def test_recommendation_has_direct_delivery_without_handoff(self):
         await self.feed(message=self.message(text='/recommend'))
         _, text, options = self.outgoing[-1]
-        self.assertIn('https://t.me/musicbehbot?text=', text)
+        self.assertNotIn('https://t.me/', text)
+        self.assertEqual(len(options['reply_markup'].inline_keyboard[0]), 3)
         self.assertFalse(any(button.text == M.CATALOGUE for row in options['reply_markup'].inline_keyboard for button in row))

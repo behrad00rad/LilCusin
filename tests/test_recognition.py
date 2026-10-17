@@ -64,20 +64,28 @@ class RecognitionTests(unittest.IsolatedAsyncioTestCase):
         await self.service.submit(msg)
         await self.finish()
         self.assertEqual(self.provider.recognize.await_count, 3)
-        self.assertIn('Couldn’t identify', msg.answer.await_args.args[0])
+        self.assertIn('type the song name', msg.answer.await_args.args[0])
         offsets = [call.args[0][call.args[0].index('-ss') + 1]
                    for call in self.service.fetcher.process.await_args_list]
         self.assertEqual(offsets, ['0', '30', '60'])
 
+    def test_duration_aware_offsets_do_not_skip_past_short_clip(self):
+        from music_bot.recognition import sample_offsets
+        self.assertEqual(sample_offsets(6), (0,))
+        self.assertEqual(sample_offsets(24), (0, 6, 12))
+        self.assertEqual(sample_offsets(180), (0, 84, 168))
+        self.assertEqual(sample_offsets(None), (0, 30, 60))
+
     async def test_match_and_cached_match_queue_audio(self):
         self.provider.recognize.return_value = RecognizedSong('Artist — Band', 'Title')
-        self.service.delivery = NS(request_recognized=AsyncMock())
+        self.service.delivery = NS(request_recognized=AsyncMock(), cached_request=AsyncMock(), bind_status=AsyncMock())
         for user in (123, 456):
             msg = message(user=user, audio=media())
             await self.service.submit(msg)
             await self.finish()
             self.service.delivery.request_recognized.assert_awaited_with(user, 'Artist — Band', 'Title')
-            self.assertIn('full song', msg.answer.await_args.args[0])
+            self.assertEqual(msg.answer.await_args.args[0], 'Artist — Band — Title')
+            self.service.delivery.bind_status.assert_awaited()
         self.provider.recognize.assert_awaited_once()
 
     async def test_delivery_failure_keeps_recognition(self):
@@ -232,8 +240,7 @@ class RecognitionTests(unittest.IsolatedAsyncioTestCase):
         service = NS(enabled=True, submit=AsyncMock(), cancel=AsyncMock())
         workflow = NS(cancel=AsyncMock())
         msg = message(audio=media(), reply_to_message=None)
-        await audio_submission(msg, None, None, None, recognition=service)
-        service.submit.assert_awaited_with(msg)
+        service.submit.assert_not_awaited()
         await recognize_media(msg, recognition=service)
         await recognize_command(msg, recognition=service)
         service.submit.assert_awaited_with(msg, msg)

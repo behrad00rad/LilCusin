@@ -94,6 +94,7 @@ async def main() -> None:
             enrichment = Enrichment(database, providers)
             stack.push_async_callback(enrichment.close)
             workflow = Workflow(database, providers, LyricsSearch(provider_session, providers, lyrics_settings))
+            stack.push_async_callback(workflow.close)
             channels = ChannelService(database, workflow)
             await channels.initialize()
             update_tasks = UpdateTasks()
@@ -126,7 +127,8 @@ async def main() -> None:
                 await configure_commands(bot)
             except (TelegramNetworkError, TelegramRetryAfter):
                 logger.warning('Command menu refresh unavailable; continuing to polling.')
-            logger.info("Bot initialized; starting long polling.")
+            from .build_info import BUILD_ID
+            logger.info("Bot initialized (%s); starting long polling.", BUILD_ID)
             # aiogram handles SIGINT/SIGTERM; cleanup drains handlers first.
             await dispatcher.start_polling(
                 bot, allowed_updates=sorted(set(dispatcher.resolve_used_update_types()) | {'edited_message'}),

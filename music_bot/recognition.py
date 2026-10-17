@@ -6,6 +6,7 @@ import re
 import shutil
 import tempfile
 import time
+import logging
 from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,6 +20,15 @@ from .i18n import language
 from .youtube_fetch import FetchError, YouTubeFetcher, VIDEO
 
 MAX_BYTES = 20_000_000
+logger = logging.getLogger('music_bot')
+
+
+def sample_offsets(duration):
+    """Sample different useful sections, rather than seeking past a short clip."""
+    if not isinstance(duration, (int, float)) or duration <= 0:
+        return (0, 30, 60)
+    end = max(0, int(duration) - 12)
+    return tuple(dict.fromkeys((0, min(end, max(0, int(duration / 2) - 6)), end)))
 
 
 class RecognitionError(Exception):
@@ -281,7 +291,8 @@ class Recognition:
                         source = (await self.fetcher.fetch_social(video, directory, self.alive)
                                   if video.startswith('https://') else await self.fetcher.fetch(video, directory, self.alive))
                     result = None
-                    for offset in (0, 30, 60):
+                    attempts = 0
+                    for offset in sample_offsets(getattr(media, 'duration', None)):
                         sample = root / 'sample.wav'
                         sample.unlink(missing_ok=True)
                         await self.fetcher.process([self.ffmpeg or ffmpeg_executable(), '-nostdin', '-v', 'error', '-y',
@@ -292,6 +303,7 @@ class Recognition:
                         if not sample.exists() or sample.stat().st_size < 1024:
                             break
                         result = await self.provider.recognize(sample)
+                        attempts += 1
                         if result:
                             break
                     if result:
@@ -301,8 +313,10 @@ class Recognition:
                         recognized = await message.answer(result, parse_mode=None)
                         await self.deliver(message, result, recognized)
                     else:
-                        await message.answer(text('Couldn’t identify this song. Send a clearer section with the music audible.',
-                            'آهنگ رو پیدا نکردم. بخشی واضح‌تر بفرست که صدای موسیقی توش شنیده بشه.'))
+                        logger.info('Recognition completed: no_match after %s samples.', attempts)
+                        from .chat_ui import recovery_keyboard
+                        await message.answer(text('No recognition match found. You can type the song name or artist, or try another section of the audio.',
+                            'تشخیص آهنگ نتیجه نداد. می‌تونی اسم آهنگ یا خواننده رو بنویسی، یا بخش دیگه‌ای از صدا رو بفرستی.'), reply_markup=recovery_keyboard())
         except asyncio.CancelledError:
             raise
         except RecognitionError as error:
@@ -338,9 +352,10 @@ class Recognition:
             if result.album:
                 metadata['album'] = result.album
             request_id = await self.delivery.request_recognized(message.from_user.id, result.artist, result.title, **metadata)
-            if recognized_message is not None and hasattr(self.delivery, 'bind_recognition_versions'):
+            if recognized_message is not None and hasattr(self.delivery, 'bind_status'):
                 try:
-                    await self.delivery.bind_recognition_versions(message.from_user.id, request_id, recognized_message)
+                    await self.delivery.cached_request(message.from_user.id, request_id)
+                    await self.delivery.bind_status(message.from_user.id, request_id, recognized_message.message_id)
                 except Exception:
                     pass  # A failed optional button must not change a queued delivery.
         except asyncio.CancelledError:
@@ -351,9 +366,6 @@ class Recognition:
         except Exception:
             await message.answer(text('Song identified, but audio delivery is unavailable. Try again later.',
                                       'آهنگ پیدا شد، ولی فعلاً ارسال فایل ممکن نیست. بعداً دوباره امتحان کن.'))
-        else:
-            await message.answer(text('Finding the full song… I’ll send the audio here. Use /cancel to stop.',
-                                      'دارم فایل کامل آهنگ رو پیدا می‌کنم… همین‌جا می‌فرستمش. برای لغو /cancel رو بزن.'))
 
     def check(self):
         if self.enabled:

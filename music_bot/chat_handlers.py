@@ -8,7 +8,8 @@ from aiogram.types import Message, InlineKeyboardMarkup
 from . import messages as M
 from .i18n import menu_action
 from .guidance import show_guide, language_picker
-from .chat_ui import button, card_keyboard, dismiss, main_menu, parse_control, show_card, show_recommendations
+from .chat_ui import button, card_keyboard, dismiss, main_menu, parse_control, show_card, show_recommendations, recovery_keyboard
+from .bot_copy import text as copy
 from .submissions import Submitter
 from .workflow import FlowError, RATINGS
 
@@ -31,7 +32,9 @@ async def command(message, chat_service):
         await chat_service.ensure_user(Submitter(user.id, user.username, user.full_name, user.language_code))
     if action == 'recommend':
         await show_recommendations(message, chat_service, user.id)
-    elif action == 'send':
+    elif action in {'send', 'rate'}:
+        await message.answer(copy('rate_prompt'), reply_markup=main_menu())
+    elif action == 'search':
         await message.answer(M.SEND_SONG_PROMPT, reply_markup=main_menu())
     elif action == 'taste':
         from .taste_ui import show_taste
@@ -58,7 +61,7 @@ async def command(message, chat_service):
         await language_picker(message)
         await message.answer(M.SETTINGS_TEXT, reply_markup=main_menu())
     elif action == 'help':
-        await show_guide(message)
+        await message.answer(copy('guide'), reply_markup=main_menu())
     else:
         await message.answer(M.HELP if action == 'help' else M.UNSUPPORTED, reply_markup=main_menu())
 
@@ -77,7 +80,7 @@ async def callback(query, chat_service, get_song=None, workflow=None):
         acknowledged = True
         if action in RATINGS:
             try:
-                await query.message.edit_reply_markup(reply_markup=card_keyboard(token, action, payload.get('submitted', False)))
+                await query.message.edit_reply_markup(reply_markup=card_keyboard(token, action, payload.get('submitted', False), rating_mode=payload.get('kind') == 'rating'))
             except TelegramBadRequest:
                 pass
         elif action in {'get', 'versions'}:
@@ -85,21 +88,17 @@ async def callback(query, chat_service, get_song=None, workflow=None):
             if get_song is None:
                 await query.message.answer('Get song is unavailable.')
             else:
-                await query.message.answer('Finding your song... You can /cancel while waiting.')
-                try:
-                    if action == 'versions':
-                        await get_song.request(query.from_user.id, track.id, other_versions=True)
-                    else:
-                        await get_song.request(query.from_user.id, track.id)
-                except FetchError as error:
-                    await query.message.answer(str(error))
+                await get_song.begin(query.message, query.from_user.id, track.id, other_versions=action == 'versions')
         elif action == 'rate':
+            if payload.get('kind') in {'card', 'rating'}:
+                await query.message.edit_reply_markup(reply_markup=card_keyboard(token, expanded=True, submitted=payload.get('submitted', False)))
+            else:
+                await show_card(query.message, chat_service, query.from_user.id, track, payload['seed'], rating_mode=True)
+        elif action == 'details':
             await show_card(query.message, chat_service, query.from_user.id, track, payload['seed'])
         elif action in {'next', 'more', 'foryou'}:
             seed = track.id if action == 'more' else payload['seed'] if action == 'next' else None
             await show_recommendations(query.message, chat_service, query.from_user.id, seed)
-            if payload.get('kind') == 'card':
-                await dismiss(query.message)
         elif action == 'menu':
             await dismiss(query.message)
         elif action == 'delete':
@@ -120,6 +119,8 @@ async def callback(query, chat_service, get_song=None, workflow=None):
         if not acknowledged:
             await query.answer(M.STALE)
             acknowledged = True
+        if isinstance(query.message, Message) and query.message.chat.type == 'private' and query.message.chat.id == query.from_user.id:
+            await query.message.answer(copy('stale'), reply_markup=recovery_keyboard())
     except (TelegramBadRequest, TelegramForbiddenError):
         pass
     except Exception:

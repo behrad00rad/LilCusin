@@ -35,7 +35,7 @@ class ChatService:
                     ChatControl.token == expected_token, ChatControl.user_id == internal,
                     ChatControl.expires_at > utc_now())) is None:
                 raise FlowError("stale")
-            await session.execute(delete(ChatControl).where(ChatControl.expires_at <= utc_now()))
+            await session.execute(delete(ChatControl).where(ChatControl.expires_at <= utc_now() - timedelta(days=1)))
             # Keep at most twenty active controls per user, with no unbounded UI state.
             old = select(ChatControl.token).where(ChatControl.user_id == internal).order_by(ChatControl.expires_at.desc()).offset(19)
             await session.execute(delete(ChatControl).where(ChatControl.token.in_(old)))
@@ -54,10 +54,15 @@ class ChatService:
         async with self.database.write() as session:
             row = await session.scalar(select(ChatControl).join(User).where(
                 ChatControl.token == token, User.telegram_user_id == user_id,
-                ChatControl.message_id == message_id, ChatControl.expires_at > utc_now()))
+                ChatControl.message_id == message_id))
             if row is None:
                 raise FlowError("stale")
             payload = dict(row.payload)
+            if row.expires_at <= utc_now():
+                if (payload.get('kind') not in {'card', 'rating', 'list'} or action in {'delete', 'keep'}
+                        or row.expires_at < utc_now() - timedelta(days=1)):
+                    raise FlowError('stale')
+                row.expires_at = utc_now() + CONTROL_TTL
             if payload["kind"] == "forget" and action not in {"delete", "keep"}:
                 raise FlowError("stale")
             if payload["kind"] != "forget" and action in {"delete", "keep"}:
@@ -71,15 +76,15 @@ class ChatService:
                     raise FlowError("stale")
             key = f"{action}:{index}"
             if rating is None:
-                if action not in {"get", "versions"} and key in payload["used"]:
+                if action not in {"get", "versions", "rate", "details"} and key in payload["used"]:
                     raise FlowError("stale")
-                if action not in {"get", "versions"}:
+                if action not in {"get", "versions", "rate", "details"}:
                     payload["used"] = [*payload["used"], key]
                 row.payload = payload
-                if action in {"delete", "keep"}:
+                if action in {"delete", "keep", "menu"}:
                     await session.delete(row)
             else:
-                if payload["kind"] != "card" or track is None:
+                if payload["kind"] not in {"card", "rating"} or track is None:
                     raise FlowError("stale")
                 await save_rating(session, row.user_id, track.id, rating)
             return payload, track
@@ -108,6 +113,11 @@ class ChatService:
             if track is None:
                 raise FlowError("stale")
             return track
+
+    async def submitted_is_audio(self, user_id, submission_id):
+        async with self.database.sessions() as session:
+            submission = await owned_submission(session, submission_id, user_id)
+            return submission.submission_type == 'telegram_audio'
 
     async def track(self, track_id):
         async with self.database.sessions() as session:

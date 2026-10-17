@@ -23,6 +23,7 @@ class AudioRequest(Base):
     job_id: Mapped[str] = mapped_column(ForeignKey('audio_fetch_jobs.id'), index=True)
     state: Mapped[str] = mapped_column(default='pending')
     message_id: Mapped[int | None]
+    status_message_id: Mapped[int | None]
     delivered_video_id: Mapped[str | None]
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
 

@@ -8,6 +8,19 @@ from music_bot.youtube_fetch import YouTubeFetcher, FetchError, confident, rank_
 
 
 class YouTubeSearchTests(unittest.IsolatedAsyncioTestCase):
+    def test_extra_upload_title_text_is_a_choice_not_an_automatic_match(self):
+        track = NS(artist='Artist', title='Song Name', duration=200)
+        rows = rank_candidates(track, [dict(id='abcdefghijk', title='Artist - Song Name extra upload credits and packaging',
+            uploader='Artist', duration=200)], 900)
+        self.assertEqual(len(rows), 1)
+        self.assertTrue(rows[0]['title_mismatch'])
+        self.assertFalse(confident(rows))
+        for title, uploader in [('Other Song Name packaging credits', 'Unknown'),
+                                ('Artist - Song Name (Cover)', 'Artist'),
+                                ('Artist - Song Name (Karaoke)', 'Artist'),
+                                ('Artist - Song Names packaging', 'Artist')]:
+            self.assertFalse(rank_candidates(track, [dict(id='abcdefghijk', title=title, uploader=uploader, duration=200)], 900))
+
     def test_other_versions_offer_diversity_without_covers_or_wrong_artists(self):
         from music_bot.youtube_fetch import base_title
         self.assertEqual(base_title('Song (Live)'), 'Song')

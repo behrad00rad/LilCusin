@@ -22,6 +22,10 @@ def migrate(connection) -> None:
             if name not in existing:
                 # Identifiers are fixed above, never taken from users or providers.
                 connection.exec_driver_sql(f'ALTER TABLE "{table}" ADD COLUMN "{name}" VARCHAR')
+    if inspector.has_table('audio_requests'):
+        existing = {column['name'] for column in inspector.get_columns('audio_requests')}
+        if 'status_message_id' not in existing:
+            connection.exec_driver_sql('ALTER TABLE audio_requests ADD COLUMN status_message_id INTEGER')
     if inspector.has_table("recommendation_history"):
         existing = {column["name"] for column in inspector.get_columns("recommendation_history")}
         for name, sql_type in {"ranking_score": "FLOAT", "batch_id": "VARCHAR", "position": "INTEGER"}.items():

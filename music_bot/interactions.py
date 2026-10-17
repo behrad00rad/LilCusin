@@ -5,6 +5,7 @@ import re
 from aiogram.types import ForceReply, InlineKeyboardButton, InlineKeyboardMarkup
 
 from . import messages
+from .bot_copy import text as copy
 
 
 def parse_callback(data):
@@ -30,22 +31,35 @@ def rating_keyboard(result):
     ]])
 
 
-async def present(message, result, user_id, workflow, enrichment, chat_service=None):
+async def present(message, result, user_id, workflow, enrichment, chat_service=None, status_message=None):
     if result.kind == "confirmed":
+        rating_mode = False
         if chat_service is not None:
             from .chat_ui import show_card
             track = await chat_service.submitted_track(user_id, result.submission_id)
-            await show_card(message, chat_service, user_id, track, rating=result.rating, submitted=True)
+            rating_mode = await chat_service.submitted_is_audio(user_id, result.submission_id)
+            await show_card(status_message or message, chat_service, user_id, track, rating=result.rating,
+                            submitted=True, edit_existing=status_message is not None, rating_mode=rating_mode)
         else:
             await message.answer(messages.rating_prompt(result.artist, result.title), reply_markup=rating_keyboard(result))
-        enrichment.schedule(result.track_id)
+        if not rating_mode:
+            enrichment.schedule(result.track_id)
     elif result.kind == "candidates":
         rows = [[InlineKeyboardButton(
             text=messages.candidate_label(candidate.artist, candidate.title),
             callback_data=f"c:{result.submission_id}:{result.revision}:{index}",
         )] for index, candidate in enumerate(result.candidates)]
         rows.append([InlineKeyboardButton(text=messages.NONE, callback_data=f"n:{result.submission_id}:{result.revision}")])
-        await message.answer(messages.CHOOSE, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+        if chat_service is not None:
+            rows.append([InlineKeyboardButton(text=copy('close'),
+                         callback_data=f'close:{result.submission_id}:{result.revision}', style='danger')])
+        if status_message is not None:
+            await status_message.edit_text(messages.CHOOSE, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+            sent = status_message
+        else:
+            sent = await message.answer(messages.CHOOSE, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+        if chat_service is not None:
+            await workflow.bind_candidates(result, user_id, sent.message_id)
     elif result.kind == "limit":
         await message.answer(messages.LIMIT)
     else:
@@ -53,3 +67,6 @@ async def present(message, result, user_id, workflow, enrichment, chat_service=N
                    "failure": messages.PROVIDER_FAILED}.get(result.kind, messages.CORRECTION)
         prompt = await message.answer(wording, reply_markup=ForceReply(selective=True))
         await workflow.bind_prompt(result, user_id, prompt.message_id)
+    if status_message is not None and result.kind not in {'confirmed', 'candidates'}:
+        from .chat_ui import dismiss
+        await dismiss(status_message)

@@ -32,3 +32,32 @@ evidence.md for the architecture, evidence and remaining limits.
 Release preparation on 2026-10-17 verified 28 recognition/social-search tests,
 compilation and dependency compatibility. Broader test runs did not complete;
 production and remaining live-platform limitations above still apply.
+
+
+## 2026-10-17 — Local UX audit
+
+Completed a code-based review of chat navigation, Mini App parity, search and delivery critical paths. Findings and proposed priorities: [UX audit](ux-audit-2026-10-17.md). No application changes, live Telegram checks, latency measurements, or test runs in this audit; implementation and deployment remain unverified. Existing user edits were preserved. Recommendations have not been accepted as implementation decisions.
+
+## 2026-10-17 — Approved local chat phases 1–3
+
+The user approved runtime identity, chat-flow improvements, and performance work, while explicitly deferring the Mini App. Implemented details, rationale, measured offline comparisons, and verification status are maintained in [local bot flow results](bot-flow-results-2026-10-17.md). The current changes remain uncommitted; production and pre-existing Worker edits are outside this work.
+
+## 2026-10-17 — Reported recording failures
+
+Investigated the user's reported source-search and recognition failures and implemented guarded candidate recovery, metadata-aware audio routing, and duration-aware fingerprint sampling. Findings, authorization limits and validation status: [recording recovery](recording-recovery-2026-10-17.md). Candidate recovery is distinct from verified audio delivery; the Mini App and production remain outside this change.
+
+## 2026-10-17 — Rating intent and native bot controls
+
+The user explicitly requested rating uploads without automatic recognition, compact Details controls, colors and Close on search results. Implemented changes and verification status: [rating and UI follow-up](rating-ui-2026-10-17.md). This supersedes automatic fingerprinting of untagged song uploads; recognition is explicit for audio files. Production and Mini App are outside this change.
+# 2026-10-17 — Search resilience correction
+
+A partial metadata-provider failure incorrectly appeared as an outage when an
+uploaded file had no usable match. The local bot now distinguishes healthy misses
+from total failures and runs independent fallbacks together. Rating uploads with
+unmatched tags request corrected names. Verified with 75 regressions and one
+public live sample; Last.fm authentication itself remains unresolved.
+
+The subsequent exact-song diagnosis exposed expanded performer credits as the
+remaining retrieval issue. Title-only recovery now offers plausible exact-title
+matches for confirmation. iTunes supplied the user's expected song in a live
+metadata check; MusicBrainz's first title page did not.

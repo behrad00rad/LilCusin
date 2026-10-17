@@ -98,7 +98,13 @@ def rank_candidates(track, entries, max_duration):
         t = SequenceMatcher(None, target, normalized).ratio()
         if raw.get('artist') and artist_key(str(raw['artist'])) != wanted_artists:
             continue
-        if t < .82:
+        # Exact song words plus verified artist context can be a useful choice
+        # even when an upload title contains extra credits/packaging. Never
+        # turn this weaker substring match into an automatic delivery.
+        title_mismatch = t < .82
+        identifiable = len(target.replace(' ', '')) >= 3
+        contains_title = bool(identifiable and re.search(r'(?<!\w)' + re.escape(target) + r'(?!\w)', normalized))
+        if title_mismatch and not (a == 1 and contains_title):
             continue
         uploader = match_text(str(raw.get('uploader') or raw.get('channel') or ''))
         official = uploader in {artist_text, artist_text + ' topic', artist_text.replace(' ', '') + 'vevo'}
@@ -112,7 +118,8 @@ def rank_candidates(track, entries, max_duration):
         if raw.get('track') or re.search(r'\baudio\b', str(raw.get('title', '')), re.I):
             preference += .03
         result.append(dict(id=video, title=title, artist=artist, duration=duration, score=score + preference,
-                           exact=bool(duration_ok and (rich or (official and a == 1 and t == 1))),
+                           exact=bool(not title_mismatch and duration_ok and (rich or (official and a == 1 and t == 1))),
+                           title_mismatch=title_mismatch,
                            identity_title=normalized, identity_artist='|'.join(wanted_artists) if a else match_text(artist),
                            version=sorted(words), recording_title=str(raw.get('track') or without_artist_credit(title, track.artist))))
     result.sort(key=lambda row: row['score'], reverse=True)

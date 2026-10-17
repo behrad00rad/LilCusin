@@ -56,3 +56,32 @@ The release includes the recognition/discovery changes and these study records.
 Pre-existing Worker, deployment-note and recommendation-test edits remain outside
 the commit. Production was not deployed. Commit and push identity are recorded
 in the local Work Journal after remote verification.
+
+
+## 2026-10-17 — Local UX audit
+
+Completed a code-based review of chat navigation, Mini App parity, search and delivery critical paths. Findings and proposed priorities: [UX audit](ux-audit-2026-10-17.md). No application changes, live Telegram checks, latency measurements, or test runs in this audit; implementation and deployment remain unverified. Existing user edits were preserved. Recommendations have not been accepted as implementation decisions.
+
+## 2026-10-17 — Approved local chat phases 1–3
+
+The user approved runtime identity, chat-flow improvements, and performance work, while explicitly deferring the Mini App. Implemented details, rationale, measured offline comparisons, and verification status are maintained in [local bot flow results](bot-flow-results-2026-10-17.md). The current changes remain uncommitted; production and pre-existing Worker edits are outside this work.
+
+## 2026-10-17 — Reported recording failures
+
+Investigated the user's reported source-search and recognition failures and implemented guarded candidate recovery, metadata-aware audio routing, and duration-aware fingerprint sampling. Findings, authorization limits and validation status: [recording recovery](recording-recovery-2026-10-17.md). Candidate recovery is distinct from verified audio delivery; the Mini App and production remain outside this change.
+
+## 2026-10-17 — Rating intent and native bot controls
+
+The user explicitly requested rating uploads without automatic recognition, compact Details controls, colors and Close on search results. Implemented changes and verification status: [rating and UI follow-up](rating-ui-2026-10-17.md). This supersedes automatic fingerprinting of untagged song uploads; recognition is explicit for audio files. Production and Mini App are outside this change.
+# 2026-10-17 — Local search fallback recovery
+
+75 relevant regressions passed in 162.447 seconds; a separate focused 27-test run
+passed. Public-sample bounded lookup with rejected primary returned five matches
+in 1.51 seconds. Only the isolated local bot restarted. No private query replay,
+production deployment, or Mini App changes. Last.fm credential remains invalid.
+See [report](search-fallback-2026-10-17.md).
+
+Expanded-tag follow-up: the user-specified Starting Over / LSD and the Search for
+God match was present in iTunes and absent from MusicBrainz's first 100 title
+results. Bounded recovery returned the exact candidate in 0.80 seconds. This was
+metadata-only verification, not recognition, download, or user-confirmed playback.

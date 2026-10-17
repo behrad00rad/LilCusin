@@ -21,6 +21,8 @@ flowchart LR
 By default identification uses song **metadata** (artist and title). Optional
 [music recognition](RECOGNITION.md) listens to samples from audio, video, voice
 messages and supported YouTube links through ShazamIO (no API key). Set `RECOGNITION_ENABLED=false` to disable it.
+Music-file uploads go to rating via metadata; they do not automatically run audio
+recognition. Reply to unknown audio with `/recognize` to request fingerprinting.
 An optional **Get song** button can fetch a permitted individual recording and send
 a playable private Telegram music message. It is disabled by default; see
 [Get song setup, permissions and verification](GET_SONG.md). Ratings are ❤️ Love, 👍 Like, 😐 Neutral, and 👎 Dislike.
@@ -81,20 +83,27 @@ already runs on a VPS, stop that copy before starting another one.
 
 | Action | What happens |
 | --- | --- |
-| Type a song name, optionally `Artist - Song title`, or send Telegram audio | Title-only chat search uses the same search as the Mini App and lets you choose the right recording. |
+| Type a song name, optionally `Artist - Song title`, or use `/search` | Search catalogues and choose the matching song; Get song is the primary delivery action. |
+| Send a music file, or reply to it with `/rate` | Match its tags and show rating controls. Missing or unmatched tags prompt for corrected names; no automatic fingerprinting or file download. |
 | Rate a confirmed song | Love and Like teach **For You** your preferences. You can change a rating later. |
 | Tap **More Like This** | Find songs related to the selected song, even before rating it. |
 | `/taste` or `/profile` | See your taste summary or rating counts. |
 | `/connectchannel` | Optionally connect a playlist channel; new audio posts can become weak taste signals after identification. |
 | `/privacy` or `/forgetme` | Read what is stored or remove your personal records. |
+| `/version` | Show the content-based build identifier for the running bot. |
 
 If a match is wrong, choose another candidate or reply to the correction prompt
 with a song name (the artist is optional). `/cancel` closes an unfinished search. The match is
 based on metadata and can be wrong even when the names look similar.
 
+Search and version results have **Close** controls. Delivery keeps one status
+message with contextual cancellation, retry, and recording choices. Ratings after
+delivery are optional. Recently expired song controls can recover using retained
+owner and message context; cancelled or deleted-account controls cannot.
+
 Normal private messages accept a song title alone, such as `hello`, `Creep`, or
 `همسفر` (2–240 characters). Chat and the Mini App share the same query parser and
-title-search service. It combines Last.fm, MusicBrainz and optional Deezer metadata. Relevant title-prefix matches use Deezer popularity rank when available, otherwise public Last.fm listener counts. Popular longer titles can rank above obscure exact titles. Other partial matches
+title-search service. It combines Last.fm, MusicBrainz, iTunes and optional Deezer metadata. Chat uses bounded provider calls and suitable local matches first. If uploaded performer tags contain extra credits, an exact-title recovery lookup can offer a plausible artist match for explicit confirmation. Relevant title-prefix matches use Deezer popularity rank when available, otherwise public Last.fm listener counts. Popular longer titles can rank above obscure exact titles. Other partial matches
 remain available below them. Title-only searches show up to 20 results and require a choice
 before confirming a song; they never create a rating automatically. Corrections
 also accept a title without an artist. Existing owner checks, expiry, search-attempt
@@ -109,7 +118,7 @@ chat search and selection; production deployment remains deferred.
 ### Telegram Mini App
 
 Lil Cusin includes a mobile interface with **For You**, **Search**, **Channels**, and **My Taste**.
-New Telegram users get three short taste questions: style, mood, and an artist.
+Telegram users can optionally run `/setup` for three short taste questions: style, mood, and an artist.
 These answers choose starter songs without creating ratings. `/setup` revisits
 the questions; users with existing music history can keep using their current taste.
 The corresponding Mini App setup screens are prepared but await Cloudflare publication.
@@ -329,3 +338,6 @@ The recognition/discovery case study is documented in
 [case study](docs/case-study.md), [decisions](docs/decisions.md), and
 [verification evidence](docs/evidence.md). These distinguish local tests and
 user confirmations from production deployment and remaining unverified behavior.
+
+The chat flow, rating controls, delivery performance and metadata recovery changes
+are summarized in [the October 17 release record](docs/chat-release-2026-10-17.md).

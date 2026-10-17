@@ -25,7 +25,8 @@ class GetSongTests(ServiceTestCase):
             s.add(track)
             await s.flush()
             self.track_id = track.id
-        self.bot = NS(send_audio=AsyncMock(return_value=NS(audio=NS(file_id='telegram-file'), message_id=8)),
+        self.bot = NS(edit_message_text=AsyncMock(), delete_message=AsyncMock(),
+                      send_audio=AsyncMock(return_value=NS(audio=NS(file_id='telegram-file'), message_id=8)),
                       send_message=AsyncMock(return_value=NS(message_id=9)))
         self.fetcher = NS(search=AsyncMock(return_value=[dict(id=VIDEO, title='Song', artist='Artist',
             duration=200, score=1, exact=True)]), fetch=AsyncMock(side_effect=self.audio))
@@ -225,7 +226,7 @@ class GetSongTests(ServiceTestCase):
         async def queued(*args):
             query.answer.assert_awaited_once()
             return await real_wrong(*args)
-        with patch.object(Message, 'answer', new_callable=AsyncMock), patch.object(self.service, 'wrong', side_effect=queued):
+        with patch.object(Message, 'answer', new_callable=AsyncMock, return_value=NS(message_id=99)), patch.object(self.service, 'wrong', side_effect=queued):
             await wrong_song(query, self.service)
         self.fetcher.search.assert_not_awaited()
         self.fetcher.fetch.assert_not_awaited()
@@ -337,7 +338,7 @@ class GetSongTests(ServiceTestCase):
         async with self.database.sessions() as s:
             self.assertIsNone(await s.scalar(select(AudioSelection)))
 
-    async def test_artwork_upgrade_uploads_once_then_reuses_decorated_cache(self):
+    async def test_cached_audio_never_refetches_for_artwork_upgrade(self):
         from music_bot.audio_artwork import artwork_key
         req = await self.service.request(123, self.track_id)
         await self.service.execute((await self.job(req))[0])
@@ -352,15 +353,15 @@ class GetSongTests(ServiceTestCase):
         with patch('music_bot.get_song.prepare_artwork', AsyncMock(side_effect=prepare)) as decorate:
             req = await self.service.request(123, self.track_id)
             await self.service.execute((await self.job(req))[0])
-            self.assertIn('thumbnail', self.bot.send_audio.call_args.kwargs)
+            self.assertNotIn('thumbnail', self.bot.send_audio.call_args.kwargs)
             req = await self.service.request(123, self.track_id)
             await self.service.execute((await self.job(req))[0])
-            self.assertEqual(decorate.await_count, 1)
-        self.assertEqual(self.fetcher.fetch.await_count, 2)
+            self.assertEqual(decorate.await_count, 0)
+        self.assertEqual(self.fetcher.fetch.await_count, 1)
         self.assertEqual(self.bot.send_audio.call_args.kwargs['audio'], 'telegram-file')
         self.assertNotIn('thumbnail', self.bot.send_audio.call_args.kwargs)
         async with self.database.sessions() as s:
-            self.assertEqual((await s.scalar(select(AudioDelivery))).artwork_key, key)
+            self.assertIsNone((await s.scalar(select(AudioDelivery))).artwork_key)
 
     async def test_duplicate_requests_share_job(self):
         first, second = await asyncio.gather(self.service.request(123, self.track_id), self.service.request(123, self.track_id))
@@ -570,11 +571,12 @@ class GetSongTests(ServiceTestCase):
         message = Message.model_validate(dict(message_id=10, date=1, chat=dict(id=123, type='private')))
         query = NS(data=f'q:{token}:get:0', message=message, from_user=NS(id=123, is_bot=False), answer=AsyncMock())
         with patch.object(Message, 'answer', new_callable=AsyncMock) as answer:
+            answer.return_value = NS(message_id=99, edit_text=AsyncMock())
             original = self.service.request
-            async def queued(user, track):
+            async def queued(user, track, **kwargs):
                 query.answer.assert_awaited_once()
                 answer.assert_awaited_once()
-                return await original(user, track)
+                return await original(user, track, **kwargs)
             with patch.object(self.service, 'request', side_effect=queued):
                 await callback(query, self.chat, self.service)
         self.fetcher.search.assert_not_awaited()
