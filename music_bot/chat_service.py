@@ -231,6 +231,10 @@ class ChatService:
             ids = select(User.id).where(User.telegram_user_id == user_id)
             await session.execute(delete(ChatControl).where(ChatControl.user_id.in_(ids)))
             await session.execute(delete(ChannelConnectionCode).where(ChannelConnectionCode.user_id.in_(ids)))
+            from .social_chat import SwapPrompt
+            from .social import SongSwap
+            await session.execute(delete(SwapPrompt).where(SwapPrompt.user_id.in_(ids)))
+            await session.execute(update(SongSwap).where(SongSwap.sender_id.in_(ids),SongSwap.state=='draft').values(state='cancelled',note=''))
 
     async def forget(self, user_id):
         async with self.database.write() as session:

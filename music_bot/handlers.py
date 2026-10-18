@@ -25,14 +25,47 @@ logger = logging.getLogger("music_bot")
 
 
 @router.message(CommandStart())
-async def start(message: Message, chat_service=None) -> None:
+async def start(message: Message, chat_service=None, get_song=None) -> None:
     if message.chat.type != "private" or submitter(message) is None:
         await message.answer(messages.PRIVATE_ONLY)
         return
     if chat_service is not None:
         await chat_service.ensure_user(submitter(message))
-    from .bot_copy import text
-    await message.answer(text('welcome'), reply_markup=main_menu())
+        parts = (message.text or '').split(maxsplit=1)
+        if len(parts) == 2 and parts[1].startswith('swap_'):
+            from .social_chat import show
+            from .social import Social
+            from .taste_cards import CardError
+            from .i18n import tr
+            try:
+                swap = await Social(chat_service.database).read(message.from_user.id, parts[1][5:])
+                if swap['state'] != 'sent': raise CardError('social_unavailable')
+                await show(message, chat_service, message.from_user.id, parts[1][5:])
+                if get_song is not None:
+                    await get_song.begin(message, message.from_user.id, swap['song']['id'])
+                else:
+                    await message.answer(tr('get_song_unavailable'))
+            except CardError as error:
+                await message.answer(tr(str(error)))
+            return
+        if len(parts) == 2 and parts[1].startswith(('compare_', 'cmp_')):
+            from . import invitation_chat
+            if parts[1].startswith('compare_'):
+                await invitation_chat.prepare(message, chat_service, message.from_user.id, parts[1][8:])
+            else:
+                await invitation_chat.show(message, chat_service, message.from_user.id, parts[1][4:])
+            return
+        if len(parts) == 2 and parts[1].startswith('get_'):
+            from .miniapp_delivery import start_delivery
+            await start_delivery(message, chat_service, get_song, parts[1])
+            return
+        if len(parts) == 2 and parts[1].startswith('taste_'):
+            from .taste_card_chat import view_card
+            await view_card(message, chat_service, parts[1][6:])
+            return
+    from .onboarding import welcome_keyboard
+    from .i18n import tr
+    await message.answer(tr('onboard_welcome'), reply_markup=welcome_keyboard())
 
 
 @router.message(Command('version'))
@@ -49,6 +82,53 @@ async def help_command(message: Message) -> None:
         await message.answer(text('guide'), reply_markup=main_menu())
     else:
         await message.answer(messages.PRIVATE_ONLY)
+
+
+from . import taste_card_chat
+router.message.register(taste_card_chat.command, Command('tastecard', 'cardname', 'cardbio', 'cardsearch', 'cardshare', 'cardhide', 'carddelete', 'cardimage'))
+router.callback_query.register(taste_card_chat.callback, F.data.startswith('tc:'))
+from . import invitation_chat
+router.callback_query.register(invitation_chat.callback, F.data.startswith('ci:'))
+from . import social_chat
+router.callback_query.register(social_chat.callback, F.data.startswith('sc:') | F.data.startswith('ss:'))
+
+
+@router.message(Command('swaps', 'socialsettings', 'socialreports', 'savedsongs'))
+async def social_flow_command(message: Message, chat_service):
+    user = submitter(message)
+    if message.chat.type != 'private' or user is None: return
+    await chat_service.ensure_user(user)
+    command = message.text.split()[0].split('@')[0]
+    if command == '/socialreports': await social_chat.moderation(message, chat_service)
+    elif command == '/socialsettings': await social_chat.settings(message, chat_service, user.telegram_user_id)
+    elif command == '/savedsongs': await social_chat.saved(message, chat_service, user.telegram_user_id)
+    else: await social_chat.inbox(message, chat_service, user.telegram_user_id)
+
+
+@router.message(Command('invitations', 'pickfavorites'))
+async def social_command(message: Message, chat_service):
+    user = submitter(message)
+    if message.chat.type != 'private' or user is None:
+        return
+    await chat_service.ensure_user(user)
+    if message.text.split()[0].split('@')[0] == '/invitations':
+        await invitation_chat.listing(message, chat_service, user.telegram_user_id)
+    else:
+        from .onboarding import start_path
+        await start_path(message, chat_service, user.telegram_user_id, 'pick')
+
+
+@router.callback_query(F.data.startswith('ob:'))
+async def onboarding_callback(query: CallbackQuery, chat_service):
+    if (not isinstance(query.message, Message) or query.message.chat.type != 'private'
+            or query.message.chat.id != query.from_user.id or query.from_user.is_bot
+            or query.data not in {'ob:send', 'ob:pick'}):
+        await query.answer(messages.STALE);return
+    await query.answer()
+    from .onboarding import start_path
+    await chat_service.ensure_user(Submitter(query.from_user.id, query.from_user.username,
+        query.from_user.full_name, query.from_user.language_code))
+    await start_path(query.message, chat_service, query.from_user.id, query.data[3:])
 
 
 router.message.register(chat_handlers.command, Command("search", "recommend", "profile", "taste", "privacy", "forgetme"))
@@ -175,6 +255,8 @@ async def cancel(message: Message, workflow: Workflow, chat_service=None, get_so
     await workflow.cancel(message.from_user.id)
     if chat_service is not None:
         await chat_service.cancel_controls(message.from_user.id)
+        from .onboarding import set_mode
+        await set_mode(chat_service, message.from_user.id, 'pick', False)
     await message.answer(copy('cancelled'), reply_markup=recovery_keyboard())
 
 
@@ -283,33 +365,54 @@ async def text_submission(message: Message, submissions: SubmissionService,
     if user is None:
         await message.answer(messages.NO_USER)
         return
-    if recognition is not None and message.text.strip().lower().startswith(('https://', 'http://')):
+    if chat_service is not None:
+        from .social_chat import note_reply
+        if await note_reply(message, chat_service):
+            return
+        from .onboarding import handle_reply
+        if await handle_reply(message, chat_service, workflow):
+            return
+    if chat_service is not None and message.reply_to_message is None:
+        workflow.schedule_cleanup(message)
+    from .recognition import recognition_link
+    if recognition is not None and (recognition_link(message.text) or message.text.strip().lower().startswith(('https://', 'http://'))):
         await recognition.submit(message)
         return
+    pending = None
     try:
         if message.reply_to_message is not None:
             result = await workflow.correct(user.telegram_user_id, message.reply_to_message.message_id, message.text, fast=chat_service is not None)
             await present(message, result, user.telegram_user_id, workflow, enrichment, chat_service)
             await dismiss(message.reply_to_message)
             return
+        pending = await message.answer(copy('lookup'), reply_markup=cancel_keyboard())
+        acknowledged = monotonic()
         saved = await submissions.submit_search(user, message.text)
     except InvalidSubmission:
-        await message.answer(messages.INVALID_TEXT)
+        if pending is not None:
+            await pending.edit_text(messages.INVALID_TEXT, reply_markup=None)
+        else:
+            await message.answer(messages.INVALID_TEXT)
         return
     except FlowError:
         await message.answer(messages.STALE)
         return
     except SQLAlchemyError:
         logger.error("Could not persist text submission.")
-        await message.answer(messages.SAVE_FAILED)
+        if pending is not None:
+            await pending.edit_text(messages.SAVE_FAILED, reply_markup=None)
+        else:
+            await message.answer(messages.SAVE_FAILED)
         return
-    pending = await message.answer(copy('lookup'), reply_markup=cancel_keyboard())
     try:
         started = monotonic()
         result = await workflow.start(saved.id, user.telegram_user_id, fast=chat_service is not None)
         logger.info('Chat search completed: %s in %.0f ms.', result.kind, (monotonic() - started) * 1000)
         await present(message, result, user.telegram_user_id, workflow, enrichment, chat_service,
                       status_message=pending if chat_service is not None else None)
+        logger.info('Chat first results displayed in %.0f ms after acknowledgement.', (monotonic() - acknowledged) * 1000)
+        if chat_service is not None and result.kind in {'confirmed', 'candidates'}:
+            await dismiss(message)
     except asyncio.CancelledError:
         await workflow.cancel(user.telegram_user_id)
         await dismiss(pending)
@@ -360,7 +463,7 @@ async def callback(query: CallbackQuery, workflow: Workflow, enrichment: Enrichm
                     pass  # Repeated ratings can leave the keyboard unchanged.
         else:
             await present(query.message, result, query.from_user.id, workflow, enrichment, chat_service,
-                          status_message=query.message if chat_service is not None else None)
+                          status_message=query.message if chat_service is not None and action != 'choose' else None)
             if chat_service is None:
                 await dismiss(query.message)
     except FlowError as error:

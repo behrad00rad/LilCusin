@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, patch
 from aiogram import Bot
 from aiogram.types import Update
 
+from music_bot.i18n import tr
 from music_bot import messages
 from music_bot.bot_copy import text as copy
 from music_bot.submissions import InvalidSubmission
@@ -40,7 +41,7 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
                                           workflow=self.workflow, enrichment=AsyncMock())
 
     async def test_commands_preserved_and_not_saved(self):
-        for command, response in [("/start", copy('welcome')), ("/help", copy('guide'))]:
+        for command, response in [("/start", tr('onboard_welcome')), ("/help", copy('guide'))]:
             await self.send(text=command)
             self.assertEqual(response, self.answer.call_args.args[0])
             self.assertNotIn('guide:1', str(self.answer.call_args.kwargs['reply_markup']))
@@ -61,7 +62,7 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
     async def test_invalid_text_explains_search(self):
         self.service.submit_search.side_effect = InvalidSubmission()
         await self.send(text="x" * 241)
-        self.answer.assert_called_with(messages.INVALID_TEXT)
+        self.answer.return_value.edit_text.assert_awaited_once_with(messages.INVALID_TEXT, reply_markup=None)
 
     async def test_forwarded_audio_without_metadata(self):
         await self.send(

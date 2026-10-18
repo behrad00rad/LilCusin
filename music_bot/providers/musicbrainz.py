@@ -102,6 +102,28 @@ class MusicBrainzClient:
         if not isinstance(payload.get('recordings'),list):raise ProviderError(Failure.INVALID_RESPONSE)
         return [normalize_recording(item) for item in items(payload['recordings'])]
 
+    async def search_artist_tracks(self, query: str) -> list[TrackCandidate]:
+        """Resolve native-script aliases before looking up an artist's recordings."""
+        from ..matching import match_text
+        from dataclasses import replace
+        async with shared_limiter():
+            payload = await request_json(self.session, 'https://musicbrainz.org/ws/2/artist/',
+                params={'fmt': 'json', 'query': f'artist:{quoted_query(query)} OR alias:{quoted_query(query)}', 'limit': 5},
+                headers={'User-Agent': USER_AGENT})
+        wanted = match_text(query)
+        ids = []
+        for artist in items(payload.get('artists')):
+            names = [artist.get('name'), artist.get('sort-name')]
+            names += [alias.get('name') for alias in items(artist.get('aliases'))]
+            identifier = text(artist.get('id'))
+            if (identifier and re.fullmatch(r'[0-9a-fA-F-]{36}', identifier)
+                    and any(isinstance(name, str) and match_text(name) == wanted for name in names)):
+                ids.append(identifier)
+        if not ids:
+            return []
+        payload = await self._request(query=' OR '.join('arid:' + identifier for identifier in ids[:2]), limit=100)
+        return [replace(normalize_recording(row), artist_aliases=(query,)) for row in items(payload.get('recordings'))]
+
     async def get_recording(self, recording_id: str) -> TrackCandidate:
         # Identifiers form a URL path; never allow arbitrary paths or query strings.
         if not re.fullmatch(r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}", recording_id):

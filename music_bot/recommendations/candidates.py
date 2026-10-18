@@ -190,6 +190,34 @@ async def generate(database, profile, providers, limit):
     candidates = [item for item in candidates if not any(
         profile.history_aliases.get(key, now - S.HISTORY_WINDOW) > now - S.HISTORY_COOLDOWN
         for key in item.identities)]
+    # A selected song needs no ratings. Sparse/empty track similarity data must
+    # still allow discovery from its artist, without inventing similarity scores.
+    if not candidates and providers is not None and profile.selected_track_id is not None:
+        seed = profile.positives[0].item
+        try:
+            async with asyncio.timeout(S.PROVIDER_TIMEOUT):
+                values = await providers.call("lastfm", "get_artist_top_tracks", seed.metadata.artist)
+            fallback = [item for metadata in values if (item := candidate_item(metadata)) is not None
+                        and comparison_text(metadata.artist) == comparison_text(seed.metadata.artist)] if isinstance(values, list) else []
+            async with database.sessions() as session:
+                resolved, tracks = await resolve_tracks(session, fallback)
+                canonical = await load_items(session, tracks)
+            for index, item in enumerate(fallback):
+                track_id = resolved[index]
+                if track_id == -1:
+                    continue
+                if track_id is not None:
+                    item = merge(canonical[track_id], item)
+                if item.track_id in profile.rated_ids or item.identities & profile.rated_aliases:
+                    continue
+                if any(profile.history_aliases.get(key, now - S.HISTORY_WINDOW) > now - S.HISTORY_COOLDOWN
+                       for key in item.identities):
+                    continue
+                item.sources.add("artist_top_tracks")
+                candidates.append(item)
+            candidates = deduplicate(candidates)
+        except (ProviderError, TimeoutError):
+            logger.warning("Recommendation artist fallback unavailable.")
     for item in candidates:
         for key in sorted(item.identities):
             for seed_id, score in negative_links[key].items():

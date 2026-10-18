@@ -64,6 +64,27 @@ class NormalizationTests(unittest.TestCase):
 
 
 class ProviderTests(unittest.IsolatedAsyncioTestCase):
+    async def test_musicbrainz_resolves_native_artist_alias_before_recordings(self):
+        identifier = 'f2345678-1234-1234-1234-123456789abc'
+        payloads = [{'artists': [{'id': identifier, 'name': 'Faramarz Aslani', 'aliases': [{'name': 'فرامرز اصلانی'}]}]},
+                    {'recordings': [{'id': identifier, 'title': 'Age Ye Rooz', 'artist-credit': [{'artist': {'name': 'Faramarz Aslani'}}]}]}]
+        with patch('music_bot.providers.musicbrainz.request_json', AsyncMock(side_effect=payloads)) as request, \
+             patch('music_bot.providers.musicbrainz.shared_limiter', return_value=RateLimiter(clock=lambda: 10, sleep=AsyncMock())):
+            rows = await MusicBrainzClient(mock_session()).search_artist_tracks('فرامرز اصلانی')
+        self.assertEqual(rows[0].artist_aliases, ('فرامرز اصلانی',))
+        self.assertEqual(request.await_args.kwargs['params']['query'], 'arid:' + identifier)
+
+    async def test_similar_pool_and_artist_fallback_requests(self):
+        session = mock_session({'similartracks': {'track': []}})
+        await LastFMClient(session, 'secret').get_similar_tracks('Kendrick Lamar', 'DNA.')
+        params = session.get.call_args.kwargs['params']
+        self.assertEqual(params['limit'], 50)
+        self.assertEqual(params['autocorrect'], 1)
+        session = mock_session({'toptracks': {'track': [{'name': 'HUMBLE.', 'artist': {'name': 'Kendrick Lamar'}}]}})
+        result = await LastFMClient(session, 'secret').get_artist_top_tracks('Kendrick Lamar')
+        self.assertEqual(result[0].title, 'HUMBLE.')
+        self.assertNotIn('track', session.get.call_args.kwargs['params'])
+
     async def test_lastfm_title_search_omits_artist_and_keeps_public_popularity(self):
         session=mock_session({'results':{'trackmatches':{'track':[{'name':'Hello','artist':'Adele','listeners':'5000000'}]}}})
         matches=await LastFMClient(session,'private-key').search_titles('hello')

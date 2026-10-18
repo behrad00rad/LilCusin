@@ -56,6 +56,11 @@ class Database:
         from . import fetch_models  # Additive Get song tables.
         from .preferences import UserPreferences  # Register the additive preferences table.
         from .taste_setup import TasteSetup
+        from .taste_cards import TasteCard, SignatureSong  # Additive, private by default.
+        from .comparison_invitations import ComparisonInvitation
+        from .onboarding import Onboarding
+        from . import social  # Additive relationship, exchange, report and notice tables.
+        from .social_chat import SwapPrompt
         async with self.engine.begin() as connection:
             await connection.exec_driver_sql("BEGIN IMMEDIATE")
             await connection.run_sync(migrate)

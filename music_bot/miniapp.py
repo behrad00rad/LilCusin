@@ -19,6 +19,7 @@ from .i18n import language
 from .models import ChatControl, Track, User, utc_now
 from .artwork import ArtworkLoader
 from .channel_api import register_channel_api
+from .taste_card_api import register_taste_card_api
 from .providers.common import ProviderError
 from .submissions import Submitter, parse_search_query, InvalidSubmission
 from .workflow import RATINGS, save_rating, FlowError
@@ -58,7 +59,7 @@ def track_json(track, reason=None):
                                        getattr(track, 'display_title', None) or track.title))
 
 
-def create_app(token, chat, workflow):
+def create_app(token, chat, workflow, *, bot_username=None):
     # Limit simultaneous provider work; SQLite writes already serialize.
     capacity = asyncio.Semaphore(4)
     channels = ChannelService(chat.database, workflow)
@@ -93,7 +94,7 @@ def create_app(token, chat, workflow):
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['Referrer-Policy'] = 'no-referrer'
         response.headers['X-Robots-Tag'] = 'noindex, nofollow'
-        response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self'; img-src 'self' https://lastfm.freetls.fastly.net https://lastfm-img.freetls.fastly.net https://lastfm-img2.akamaized.net; connect-src 'self'; object-src 'none'; base-uri 'none'"
+        response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self'; img-src 'self' data: https://lastfm.freetls.fastly.net https://lastfm-img.freetls.fastly.net https://lastfm-img2.akamaized.net; connect-src 'self'; object-src 'none'; base-uri 'none'"
         return response
 
     async def body(request):
@@ -117,6 +118,8 @@ def create_app(token, chat, workflow):
     async def bundle(user_id, tracks, status='ok', visible=(), expected_token=None, links=(), extra=None):
         grant = await chat.create_control(user_id, tracks=list(dict.fromkeys([t['id'] for t in tracks] + list(visible))), kind='miniapp', expected_token=expected_token, links=links)
         for track in tracks:
+            if bot_username:
+                track['get_song_url'] = f"https://t.me/{bot_username}?start=get_{grant}_{track['id']}"
             if not track.get('artwork'):artwork.schedule(track['id'])
         return web.json_response(dict(tracks=tracks, token=grant, status=status, **(extra or {})))
 
@@ -252,14 +255,14 @@ def create_app(token, chat, workflow):
 
     async def asset(request):
         name = request.match_info.get('name', 'index.html')
-        if name not in {'index.html', 'app.js', 'style.css', 'locales.json', 'bot-logo.jpg', 'vazirmatn.woff2', 'Vazirmatn-OFL.txt'}:
+        if name not in {'index.html', 'app.js', 'social.js', 'style.css', 'locales.json', 'bot-logo.jpg', 'vazirmatn.woff2', 'Vazirmatn-OFL.txt'}:
             raise web.HTTPNotFound()
         return web.FileResponse(ASSETS / name)
 
     app = web.Application(middlewares=[security], client_max_size=16384)
     app.on_cleanup.append(lambda app: artwork.close())
     app.router.add_get('/', asset)
-    app.router.add_get('/{name:index.html|app.js|style.css|locales.json|bot-logo.jpg|vazirmatn.woff2|Vazirmatn-OFL.txt}', asset)
+    app.router.add_get('/{name:index.html|app.js|social.js|style.css|locales.json|bot-logo.jpg|vazirmatn.woff2|Vazirmatn-OFL.txt}', asset)
     app.router.add_get('/api/profile', profile)
     app.router.add_get('/api/preferences', get_preferences)
     app.router.add_post('/api/preferences/update', set_preferences)
@@ -274,11 +277,14 @@ def create_app(token, chat, workflow):
     app.router.add_post('/api/channels/connect', channel_connect)
     app.router.add_post('/api/channels/disconnect', channel_disconnect)
     register_channel_api(app,chat,workflow,body,bundle,track_json,capacity)
+    register_taste_card_api(app, chat, body, bot_username=bot_username)
+    from .social_api import register_social_api
+    register_social_api(app, chat, body, bot_username=bot_username)
     return app
 
 
-async def start_server(token, chat, workflow, host, port):
-    runner = web.AppRunner(create_app(token, chat, workflow), access_log=None)
+async def start_server(token, chat, workflow, host, port, *, bot_username=None):
+    runner = web.AppRunner(create_app(token, chat, workflow, bot_username=bot_username), access_log=None)
     await runner.setup()
     try:
         await web.TCPSite(runner, host, port).start()

@@ -1,4 +1,5 @@
 import asyncio
+from contextlib import closing
 import json
 import math
 import sqlite3
@@ -76,6 +77,25 @@ class ScoringTests(unittest.TestCase):
 
 
 class RecommendationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_dna_empty_similarity_falls_back_without_ratings(self):
+        async with self.database.write() as session:
+            session.add(User(telegram_user_id=TELEGRAM_ID))
+            seed = Track(artist="kendrick lamar", title="dna", display_artist="Kendrick Lamar", display_title="DNA.", metadata_source="fixture")
+            session.add(seed)
+            await session.flush()
+            seed_id = seed.id
+        providers = AsyncMock()
+        providers.call.side_effect = [[], [
+            TrackCandidate("DNA.", "Kendrick Lamar", "lastfm"),
+            TrackCandidate("HUMBLE.", "Kendrick Lamar", "lastfm"),
+            TrackCandidate("Unrelated", "Another Artist", "lastfm"),
+        ]]
+        result = await RecommendationService(self.database, providers).recommend_similar_to_track(TELEGRAM_ID, seed_id)
+        self.assertEqual(result.status, "ok")
+        self.assertEqual([row.title for row in result.recommendations], ["HUMBLE."])
+        self.assertEqual(result.recommendations[0].sources, ("artist_top_tracks",))
+        self.assertEqual(await self.count(Rating), 0)
+
     async def asyncSetUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.database = Database(Path(self.temp.name) / "recommendations.sqlite3")
@@ -296,7 +316,7 @@ class RecommendationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_additive_history_migration_preserves_legacy_rows(self):
         path = Path(self.temp.name) / "legacy.sqlite3"
-        with sqlite3.connect(path) as connection:
+        with closing(sqlite3.connect(path)) as connection, connection:
             connection.execute("CREATE TABLE recommendation_history (id INTEGER PRIMARY KEY, user_id INTEGER, track_id INTEGER, recommended_at DATETIME, reason VARCHAR, source VARCHAR)")
             connection.execute("INSERT INTO recommendation_history VALUES (1, 2, 3, '2026-01-01', 'old reason', 'old source')")
         legacy = Database(path)
@@ -305,7 +325,7 @@ class RecommendationTests(unittest.IsolatedAsyncioTestCase):
             await legacy.initialize()
         finally:
             await legacy.close()
-        with sqlite3.connect(path) as connection:
+        with closing(sqlite3.connect(path)) as connection, connection:
             row = connection.execute("SELECT * FROM recommendation_history").fetchone()
             self.assertEqual(row, (1, 2, 3, "2026-01-01", "old reason", "old source", None, None, None))
 

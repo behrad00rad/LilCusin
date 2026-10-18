@@ -54,11 +54,11 @@ class LastFMClient:
         self._api_key = api_key
 
     async def _request(self, method: str, artist: str, title: str, **params) -> dict | None:
-        if not title.strip() or (not artist.strip() and method != 'track.search'):
+        if (not title.strip() and method != 'artist.getTopTracks') or (not artist.strip() and method != 'track.search'):
             raise ProviderError(Failure.REQUEST)
         payload = await request_json(self.session, API_URL, params={
             "method": method, "api_key": self._api_key, "format": "json",
-            **({'artist': artist} if artist.strip() else {}), "track": title, **params,
+            **({'artist': artist} if artist.strip() else {}), **({'track': title} if title.strip() else {}), **params,
         })
         if "error" in payload:
             code = number(payload["error"])
@@ -112,10 +112,17 @@ class LastFMClient:
         return normalize_tags(tags.get("tag"))
 
     async def get_similar_tracks(self, artist: str, title: str) -> list[TrackCandidate]:
-        payload = await self._request("track.getSimilar", artist, title, limit=5)
+        payload = await self._request("track.getSimilar", artist, title, limit=50, autocorrect=1)
         if payload is None:
             return []
         similar = payload.get("similartracks")
         if not isinstance(similar, dict):
             raise ProviderError(Failure.INVALID_RESPONSE)
         return [normalize_track(track) for track in items(similar.get("track"))]
+
+    async def get_artist_top_tracks(self, artist: str) -> list[TrackCandidate]:
+        payload = await self._request("artist.getTopTracks", artist, "", limit=50, autocorrect=1)
+        top = payload.get("toptracks") if payload else None
+        if not isinstance(top, dict):
+            raise ProviderError(Failure.INVALID_RESPONSE)
+        return [normalize_track(track) for track in items(top.get("track"))]

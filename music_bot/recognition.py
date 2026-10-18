@@ -60,8 +60,8 @@ def youtube_id(value):
         elif host in {'youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com'}:
             if url.path == '/watch':
                 candidate = parse_qs(url.query).get('v', [''])[0]
-            elif url.path.startswith('/shorts/'):
-                candidate = url.path[len('/shorts/'):]
+            elif re.fullmatch(r'/(?:shorts|live|embed)/[A-Za-z0-9_-]{11}/?', url.path):
+                candidate = url.path.rstrip('/').rsplit('/', 1)[-1]
             else:
                 return None
         else:
@@ -94,6 +94,17 @@ def social_url(value):
             return 'https://' + host + path  # Drop tracking/query parameters.
     except ValueError:
         pass
+    return None
+
+
+def recognition_link(value):
+    """Extract one supported public media link from pasted/share text."""
+    for match in re.finditer(r'https://[^\s<>]+', value or ''):
+        candidate = match[0].rstrip(').,،]')
+        if video := youtube_id(candidate):
+            return video
+        if url := social_url(candidate):
+            return url
     return None
 
 
@@ -251,7 +262,7 @@ class Recognition:
             return
         source = source or message
         media = source.audio or source.video or source.voice or source.video_note or source.document
-        video = (youtube_id(source.text or '') or social_url(source.text or '')) if not media else None
+        video = recognition_link(source.text or getattr(source, 'caption', None) or '') if not media else None
         if not media and not video:
             await message.answer(text('Send audio, video, a voice note, or a public YouTube, TikTok, Instagram, Pinterest, X, SoundCloud or Vimeo post link. You can also reply to media with /recognize.',
                 'فایل صوتی، ویدیو، ویس یا لینک پست عمومی از یوتیوب، تیک‌تاک، اینستاگرام، پینترست، ایکس، ساندکلاد یا ویمئو بفرست. روی پیام رسانه‌ای هم می‌تونی /recognize رو ریپلای کنی.'))
@@ -292,20 +303,51 @@ class Recognition:
                                   if video.startswith('https://') else await self.fetcher.fetch(video, directory, self.alive))
                     result = None
                     attempts = 0
-                    for offset in sample_offsets(getattr(media, 'duration', None)):
+                    link_hits = {}
+                    duration = getattr(media, 'duration', None)
+                    link_video = False
+                    if not media:
+                        try:
+                            import json
+                            probe = await self.fetcher.process(['ffprobe', '-v', 'error', '-show_entries',
+                                'format=duration:stream=codec_type', '-of', 'json', str(source)], directory, self.alive, output=True)
+                            info = json.loads(probe)
+                            duration = float(info['format']['duration'])
+                            link_video = any(s.get('codec_type') == 'video' for s in info.get('streams', []))
+                        except (FetchError, OSError, ValueError, TypeError, KeyError):
+                            duration = None
+                    for offset in sample_offsets(duration):
                         sample = root / 'sample.wav'
                         sample.unlink(missing_ok=True)
-                        await self.fetcher.process([self.ffmpeg or ffmpeg_executable(), '-nostdin', '-v', 'error', '-y',
-                            '-protocol_whitelist', 'file,pipe', '-format_whitelist',
-                            'mov,matroska,webm,ogg,mp3,wav,flac,aac', '-ss', str(offset), '-i', str(source),
-                            '-t', '12', '-vn', '-map', '0:a:0', '-ac', '1', '-ar', '22050',
-                            '-codec:a', 'pcm_s16le', str(sample)], directory, self.alive)
+                        try:
+                            await self.fetcher.process([self.ffmpeg or ffmpeg_executable(), '-nostdin', '-v', 'error', '-y',
+                                '-protocol_whitelist', 'file,pipe', '-format_whitelist',
+                                'mov,matroska,webm,ogg,mp3,wav,flac,aac', '-ss', str(offset), '-i', str(source),
+                                '-t', '12', '-vn', '-map', '0:a:0', '-ac', '1', '-ar', '22050',
+                                '-codec:a', 'pcm_s16le', str(sample)], directory, self.alive)
+                        except FetchError:
+                            if media:
+                                raise
+                            continue
                         if not sample.exists() or sample.stat().st_size < 1024:
                             break
                         result = await self.provider.recognize(sample)
                         attempts += 1
                         if result:
-                            break
+                            if media or link_video:
+                                break
+                            from .matching import match_text
+                            identity = (match_text(result.artist), match_text(result.title)) if isinstance(result, RecognizedSong) else str(result)
+                            previous, count = link_hits.get(identity, (result, 0))
+                            link_hits[identity] = (previous, count + 1)
+                            if count + 1 >= 2:
+                                break
+                    if not media and not link_video:
+                        # A single fingerprint from altered social audio can be
+                        # a false credit. Reject conflicting sections without a
+                        # majority rather than automatically deliver a wrong song.
+                        best = max(link_hits.values(), key=lambda row: row[1], default=(None, 0))
+                        result = best[0] if len(link_hits) == 1 or best[1] >= 2 else None
                     if result:
                         self.cache[key] = (time.monotonic(), result)
                         while len(self.cache) > 500:
@@ -315,8 +357,11 @@ class Recognition:
                     else:
                         logger.info('Recognition completed: no_match after %s samples.', attempts)
                         from .chat_ui import recovery_keyboard
-                        await message.answer(text('No recognition match found. You can type the song name or artist, or try another section of the audio.',
-                            'تشخیص آهنگ نتیجه نداد. می‌تونی اسم آهنگ یا خواننده رو بنویسی، یا بخش دیگه‌ای از صدا رو بفرستی.'), reply_markup=recovery_keyboard())
+                        wording = text('Couldn’t confidently identify this link. Send the video/audio file, or type the song name or artist.',
+                            'نتونستم آهنگ این لینک رو با اطمینان تشخیص بدم. فایل ویدیو یا صدا رو بفرست، یا اسم آهنگ یا خواننده رو بنویس.') if video else text(
+                            'No recognition match found. You can type the song name or artist, or try another section of the audio.',
+                            'تشخیص آهنگ نتیجه نداد. می‌تونی اسم آهنگ یا خواننده رو بنویسی، یا بخش دیگه‌ای از صدا رو بفرستی.')
+                        await message.answer(wording, reply_markup=recovery_keyboard())
         except asyncio.CancelledError:
             raise
         except RecognitionError as error:

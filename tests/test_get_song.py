@@ -56,6 +56,44 @@ class GetSongTests(ServiceTestCase):
         self.assertEqual(self.bot.send_audio.call_args.kwargs['audio'], 'telegram-file')
         self.assertEqual(list(self.service.root.iterdir()), [])
 
+    async def test_artwork_exception_or_timeout_does_not_block_audio_delivery(self):
+        await self.check_artwork_failure(RuntimeError('private details'))
+
+    async def test_artwork_timeout_does_not_block_audio_delivery(self):
+        await self.check_artwork_failure(TimeoutError())
+
+    async def check_artwork_failure(self, error):
+        req = await self.service.request(123, self.track_id)
+        job_id, _ = await self.job(req)
+        with patch('music_bot.get_song.prepare_artwork', AsyncMock(side_effect=error)), \
+             self.assertLogs('music_bot', level='WARNING') as logs:
+            await self.service.execute(job_id)
+        self.assertEqual((await self.job(req))[1], 'done')
+        self.assertNotIn('private details', ' '.join(logs.output))
+        self.assertIsNone(self.bot.send_audio.await_args.kwargs.get('thumbnail'))
+        self.bot.send_audio.assert_awaited_once()
+
+    async def test_prepared_thumbnail_is_sent_and_cover_identity_cached(self):
+        from aiogram.types import FSInputFile
+        async with self.database.write() as session:
+            track = await session.get(Track, self.track_id)
+            track.display_title, track.display_artist = 'Song', 'Artist'
+        async def prepare(fetcher, track, path, folder, alive):
+            thumbnail = Path(folder) / 'cover.jpg'
+            thumbnail.write_bytes(b'mocked JPEG')
+            return thumbnail, 'cover-identity'
+        req = await self.service.request(123, self.track_id)
+        with patch('music_bot.get_song.prepare_artwork', AsyncMock(side_effect=prepare)):
+            await self.service.execute((await self.job(req))[0])
+        sent = self.bot.send_audio.await_args.kwargs
+        self.assertIsInstance(sent['thumbnail'], FSInputFile)
+        self.assertEqual(sent['title'], 'Song')
+        self.assertEqual(sent['performer'], 'Artist')
+        async with self.database.sessions() as session:
+            delivery = await session.scalar(select(AudioDelivery))
+            self.assertEqual(delivery.artwork_key, 'cover-identity')
+        self.assertEqual(list(self.service.root.iterdir()), [])
+
     async def test_recognized_identity_is_deduplicated_without_ratings(self):
         from music_bot.models import Rating, SongSubmission
         first = await self.service.request_recognized(123, 'Artist', 'Song')
@@ -188,8 +226,7 @@ class GetSongTests(ServiceTestCase):
     async def test_wrong_button_is_bound_to_delivered_request_and_message(self):
         req = await self.service.request(123, self.track_id)
         await self.service.execute((await self.job(req))[0])
-        self.assertEqual(self.bot.send_audio.call_args.kwargs['reply_markup'].inline_keyboard[0][0].callback_data,
-                         'w:' + req)
+        self.assertIsNone(self.bot.send_audio.call_args.kwargs.get('reply_markup'))
         for user, message in [(456, 8), (123, 99)]:
             with self.assertRaises(FlowError):
                 await self.service.wrong(user, req, message)

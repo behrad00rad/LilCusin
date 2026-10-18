@@ -15,6 +15,32 @@ from tests.test_providers import mock_session
 
 
 class SearchIntentTests(ServiceTestCase):
+    async def test_native_artist_alias_returns_recordings_not_name_titles(self):
+        from dataclasses import replace
+        song = TrackCandidate(artist='Faramarz Aslani', title='Age Ye Rooz', source='musicbrainz', artist_aliases=('فرامرز اصلانی',))
+        bogus = TrackCandidate(artist='Someone', title='فرامرز اصلانی', source='lastfm')
+        async def call(provider, method, *args):
+            return [song] if method == 'search_artist_tracks' else [bogus]
+        self.providers.call.side_effect = call
+        rows, _ = await self.workflow.search_title('فرامرز اصلانی')
+        self.assertEqual(rows, [song])
+
+    async def test_artist_query_does_not_reserve_a_slot_for_reversed_title(self):
+        song = TrackCandidate(artist='Pink Floyd', title='Wish You Were Here', source='musicbrainz')
+        bogus = TrackCandidate(artist='Wish You Were Here', title='Pink Floyd', source='lastfm')
+        self.providers.call.return_value = [bogus, song]
+        rows, _ = await self.workflow.search_title('pink floyd')
+        self.assertEqual(rows, [song])
+
+    async def test_reversed_social_identity_cannot_recreate_a_corrected_track(self):
+        from music_bot.models import Track
+        from music_bot.catalog import canonical_track, IdentityConflict
+        async with self.database.write() as session:
+            session.add(Track(artist='pink floyd', title='wish you were here', metadata_source='user_corrected'))
+        async with self.database.write() as session:
+            with self.assertRaises(IdentityConflict):
+                await canonical_track(session, TrackCandidate(artist='Wish You Were Here', title='Pink Floyd', source='lastfm'))
+
     async def test_artist_query_keeps_artist_tracks(self):
         rows = [TrackCandidate(artist='Deftones', title='Change (In the House of Flies)', source='test'),
                 TrackCandidate(artist='Other', title='Unrelated', source='test')]
@@ -90,6 +116,7 @@ class SocialTests(unittest.IsolatedAsyncioTestCase):
             args = fetcher.process.await_args.args[0]
             self.assertIn('--no-cookies-from-browser', args)
             self.assertIn('--max-filesize', args)
+            self.assertEqual(args[args.index('-f') + 1], 'best[vcodec!=none]/bestaudio/best')
             self.assertNotIn('generic', args[args.index('--use-extractors') + 1].lower())
             self.assertEqual(args[-1], 'https://instagram.com/reel/ABC/')
             with self.assertRaises(FetchError):

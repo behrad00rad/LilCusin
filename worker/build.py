@@ -5,7 +5,7 @@ import base64
 
 root = Path(__file__).resolve().parent
 assets = {}
-for name, mime in [('index.html','text/html'),('app.js','text/javascript'),('style.css','text/css'),('locales.json','application/json'),('Vazirmatn-OFL.txt','text/plain')]:
+for name, mime in [('index.html','text/html'),('app.js','text/javascript'),('social.js','text/javascript'),('style.css','text/css'),('locales.json','application/json'),('Vazirmatn-OFL.txt','text/plain')]:
     assets['/' if name == 'index.html' else '/' + name] = [
         (root.parent/'music_bot/web'/name).read_text(encoding='utf-8-sig'), mime + '; charset=utf-8']
 assets['/bot-logo.jpg'] = [base64.b64encode((root.parent/'music_bot/web/bot-logo.jpg').read_bytes()).decode(), 'image/jpeg']

@@ -107,6 +107,20 @@ class GetSong:
     async def begin(self, message, user_id, track_id, *, other_versions=False):
         """Attach one durable status, including when the request already exists."""
         from .chat_ui import cancel_keyboard
+        # Retire previous terminal status messages before creating another job UI.
+        async with self.db.sessions() as session:
+            old = (await session.execute(select(AudioRequest.id, AudioRequest.status_message_id).join(User).where(
+                User.telegram_user_id == user_id, AudioRequest.state.in_(['failed', 'cancelled', 'done']),
+                AudioRequest.status_message_id.is_not(None)).order_by(AudioRequest.created_at.desc()).limit(20))).all()
+        for rid, mid in old:
+            try:
+                await self.bot.delete_message(user_id, mid)
+                async with self.db.write() as session:
+                    row = await session.get(AudioRequest, rid)
+                    if row:
+                        row.status_message_id = None
+            except Exception:
+                pass
         pending = await message.answer(copy('queued'), reply_markup=cancel_keyboard())
         try:
             request_id = await self.request(user_id, track_id, other_versions=other_versions)
@@ -182,6 +196,16 @@ class GetSong:
         if not result or not result[0].status_message_id:
             return
         req, user_id, track_id = result
+        if key == 'delivered':
+            try:
+                await self.bot.delete_message(user_id, req.status_message_id)
+                async with self.db.write() as session:
+                    row = await session.get(AudioRequest, request_id)
+                    if row:
+                        row.status_message_id = None
+            except Exception:
+                pass
+            return
         # Late worker updates must not resurrect cancelled/failed requests.
         if req.state in {'cancelled', 'failed', 'uncertain', 'done'} and key not in {'cancelled', 'failed', 'uncertain', 'delivered'}:
             return
@@ -198,9 +222,6 @@ class GetSong:
                     keyboard = cancel_keyboard(request_id)
                 elif key in {'failed', 'uncertain'}:
                     token, keyboard = await self.retry_keyboard(user_id, track_id)
-                elif key == 'delivered':
-                    token = await ChatService(self.db, None).create_control(user_id, tracks=[track_id], kind='card')
-                    keyboard = card_keyboard(token)
             if token:
                 await ChatService(self.db, None).bind_control(token, req.status_message_id)
             async with asyncio.timeout(4):
@@ -623,7 +644,7 @@ class GetSong:
                 phase = 'prepare'
                 thumbnail, cover_key = None, None
                 try:
-                    async with asyncio.timeout(3):
+                    async with asyncio.timeout(12):
                         if self.artwork_loader and not artwork_key(track):
                             await self.artwork_loader.load(track.id)
                             async with self.db.sessions() as s:
@@ -636,8 +657,10 @@ class GetSong:
                             await self.shazam_artwork(track, path, directory, lambda: self.alive(job_id), force=True)
                             thumbnail, cover_key = await prepare_artwork(self.fetcher, track, path, directory,
                                                                         lambda: self.alive(job_id))
+                except TimeoutError:
+                    logger.warning('Artwork preparation timed out after 12 seconds; sending audio without artwork.')
                 except Exception:
-                    pass  # Optional presentation has a total budget, audio remains deliverable.
+                    logger.warning('Artwork preparation failed; sending audio without artwork. Details omitted for privacy.')
                 async with self.db.write() as s:
                     await s.execute(delete(AudioSource).where(AudioSource.track_id == track.id, AudioSource.video_id == job.video_id))
                     s.add(AudioSource(track_id=track.id, video_id=job.video_id,
@@ -705,23 +728,13 @@ class GetSong:
                     current.state = 'failed'
                     return
                 current.state = 'sending'
-                from .preferences import UserPreferences, normalize_language
-                prefs = await s.get(UserPreferences, req.user_id)
-                owner = await s.get(User, req.user_id)
-                context = language.set(normalize_language(prefs.language if prefs and prefs.language else owner.language_code))
-                try:
-                    keyboard = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
-                        text=copy('wrong'), callback_data=f'w:{req.id}'), InlineKeyboardButton(
-                        text=copy('versions'), callback_data=f'v:{req.id}')]])
-                finally:
-                    language.reset(context)
             if not isinstance(audio, str):
                 await self.progress(req.id, 'sending', locked=True)
             try:
                 extra = {'thumbnail': FSInputFile(thumbnail)} if thumbnail else {}
                 sent = await self.bot.send_audio(user_id, audio=audio, title=track.display_title or track.title,
                     performer=track.display_artist or track.artist, request_timeout=self.settings.timeout,
-                    reply_markup=keyboard, **extra)
+                    **extra)
             except TelegramBadRequest:
                 await self.request_state(req.id, 'pending', locked=True)
                 raise

@@ -51,7 +51,18 @@ async def command(message, chat_service):
             'that provider may retain its copy and request history. '
             'Private job records and Telegram audio references expire by the configured retention period (default 7 days). '
             'Your chosen and rejected recordings are also saved privately for that period. '
-            '/forgetme removes these personal records and cancels pending deliveries; shared source metadata and Telegram messages may remain.', reply_markup=main_menu())
+            '/forgetme removes these personal records and cancels pending deliveries; shared source metadata and Telegram messages may remain.'
+            '\n\n/tastecard lets you deliberately select a separate public card. /cardhide revokes its link; '
+            '/carddelete removes the card without removing your ratings. /forgetme also removes the card. '
+            'Copies and forwarded messages cannot be recalled. '
+            '\n\nConsented comparison uses selected favorites only, not private ratings. '
+            '/swaps contains chosen songs, optional notes and explicit reactions. /savedsongs lists your saves. '
+            '/socialsettings controls Telegram alerts (off by default, at most three in 24 hours). '
+            'Blocking or withdrawing consent stops pending swaps and alerts. Reports include the reported note '
+            'for operator review. Reports over 90 days old are removed on the next social access; either account deletion removes them too. '
+            'Expired swap notes are cleared on participant access; old exchanges are removed seven days after expiry. '
+            'Deleting an exchange clears its note but keeps personal saves and explicit ratings; '
+            '/forgetme removes the account and its social records.', reply_markup=main_menu())
     elif action == 'forgetme':
         token = await chat_service.create_control(user.id, kind='forget')
         keyboard = InlineKeyboardMarkup(inline_keyboard=[[button(token, 'delete', M.FORGET_YES), button(token, 'keep', M.FORGET_NO)]])
@@ -59,7 +70,10 @@ async def command(message, chat_service):
         await chat_service.bind_control(token, sent.message_id)
     elif action == 'settings':
         await language_picker(message)
-        await message.answer(M.SETTINGS_TEXT, reply_markup=main_menu())
+        from aiogram.types import InlineKeyboardButton
+        from .i18n import tr
+        await message.answer(M.SETTINGS_TEXT, reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text=tr('social_settings'),callback_data='sc:settings')]]))
     elif action == 'help':
         await message.answer(copy('guide'), reply_markup=main_menu())
     else:
@@ -83,6 +97,8 @@ async def callback(query, chat_service, get_song=None, workflow=None):
                 await query.message.edit_reply_markup(reply_markup=card_keyboard(token, action, payload.get('submitted', False), rating_mode=payload.get('kind') == 'rating'))
             except TelegramBadRequest:
                 pass
+            from .onboarding import after_rating
+            await after_rating(query.message, chat_service, query.from_user.id)
         elif action in {'get', 'versions'}:
             from .youtube_fetch import FetchError
             if get_song is None:
@@ -107,6 +123,8 @@ async def callback(query, chat_service, get_song=None, workflow=None):
             await chat_service.forget(query.from_user.id)
             if workflow is not None and workflow.lyrics is not None:
                 workflow.lyrics.clear()
+            if workflow is not None:
+                workflow.searches.clear()
             await query.message.answer(M.FORGET_DONE, reply_markup=main_menu())
         else:
             await query.message.answer(M.FORGET_CANCELLED if action == 'keep' else M.MAIN_MENU, reply_markup=main_menu())

@@ -41,6 +41,16 @@ def match_text(value: str) -> str:
     return comparison_text(value)
 
 
+def remove_reversed_candidates(candidates):
+    """Prefer structured catalogues over reversed scrobble/video identities."""
+    trusted = {(match_text(c.artist), match_text(c.title)) for c in candidates
+               if c.artist and c.title and c.source in {'musicbrainz', 'deezer', 'itunes', 'user_corrected'}}
+    return [c for c in candidates if not (c.artist and c.title
+            and c.source in {'lastfm', 'youtube'}
+            and (match_text(c.title), match_text(c.artist)) in trusted
+            and match_text(c.title) != match_text(c.artist))]
+
+
 def title_query_match(query: str, title: str, *, exact=False) -> bool:
     """Search-only equivalence for catalogue censorship; never an identity key."""
     wanted, actual = match_text(query), match_text(title)
@@ -127,6 +137,7 @@ def decode_track(data: dict) -> TrackCandidate:
     return TrackCandidate(**{
         **data, "tags": tuple(Tag(**tag) for tag in data.get("tags", [])),
         "releases": tuple(Release(**release) for release in data.get("releases", [])),
+        "artist_aliases": tuple(data.get('artist_aliases', ())),
     })
 
 

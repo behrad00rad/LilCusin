@@ -216,3 +216,34 @@ Bot-only recovery backup:
 `/home/baharnaj/lilcusin-miniapp-backups/20261014T205442Z-search-paging-taste`.
 Only bot services were restarted. Website processes, Nginx, bot credentials,
 and relay settings were verified unchanged.
+
+
+## UI publication and catalogue search — October 15, 2026 (Asia/Tehran)
+
+The previously held UI is published, including taste setup, channel replacement
+cursors, and the cover proxy. Worker version:
+`12c88fac-04fd-49c3-9d50-dc20a89b328f`.
+The cover fetch now uses Cloudflare-supported manual redirect handling and a
+bounded abort controller. Live image requests returned 200; browser images loaded
+from the app-hosted `/cover` path.
+
+Mini App search now browses title matches instead of applying identification
+confidence. It combines saved catalogue matches with up to 100 provider results,
+keeps title substrings, orders exact titles first, deduplicates artist/title pairs,
+and returns up to 20 songs. Artist-title queries use the same browse semantics.
+Saved matches survive provider failures. Search guidance was revised in all eight
+languages. Final affected staging suites passed 38 tests; the unchanged identity
+workflow suite passed 23 tests earlier. Worker route, artwork, and channel paging
+checks passed. VPS UI assets now match the published interface.
+
+Bot-only backup: `/home/baharnaj/lilcusin-miniapp-backups/20261015T115337Z-search-paging-taste`.
+All three bot services are active; website processes, Nginx, bot credentials, and
+provider configuration were verified unchanged by deployment. Browser checks used
+preview data; a real Telegram end-to-end check remains user-side. Available songs
+and artwork depend on the music catalogue, and not every song has a cover.
+The current changes remain local and uncommitted; no new push was performed.
+
+
+## 2026-10-18 — Taste-card/Get Song deployment and UI brief
+
+Released taste cards and owner-bound Get Song links. Worker version 2ff6bdc7-7cda-4a91-8bac-07dd901a3cef; bot/API/connector active using the current checkout. Existing connector token location is supplied through LILCUSIN_CONNECTOR_TOKEN_FILE. API binds to loopback 8091 and resolves the real bot username without polling. Protected backup retained. See [full verification and limitations](docs/deployment-2026-10-18.md).

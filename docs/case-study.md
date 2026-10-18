@@ -75,3 +75,106 @@ insufficient. Bounded metadata discovery now supplies validated song suggestions
 with observed video-view provenance and small spelling-error recovery. Both live
 reported Prayer queries returned the expected song first, while repeat search
 used cache. This remains explicit discovery/selection, not automatic recognition.
+
+## 2026-10-17 — Recovery for empty More like this results
+
+A user reported an empty result from DNA / Kendrick Lamar. The local patch expands
+the track-similarity pool and adds same-artist discovery when a selected song has
+no eligible candidates, without requiring ratings. Implementation and regression
+cases are present; runtime checks stalled in the local asyncio environment.
+Syntax/diff checks pass. Deployment and live outcome remain unverified; see
+[decision](decisions.md) and [evidence](evidence.md).
+
+## 2026-10-17 — Proposed social direction
+
+The user asked to document a Telegram-native community around music identity,
+sharing and connection. The [vision and phased task list](social-product-vision.md)
+describe profiles, song exchanges and later social features while preserving
+the current bot/Mini App foundation. This is planning documentation only;
+social implementation and commercial validation remain future work.
+
+
+## Deployment reliability - 2026-10-18
+
+A targeted audit found that the basic install instructions omitted the existing
+optional audio requirements, Python 3.13 needed audioop compatibility, and a silent
+three-second artwork budget could interrupt an eight-second image request. The
+local change adds compatible dependency bounds, safe stage diagnostics, a 12-second
+artwork budget and offline preflight. All 62 focused tests passed; synthetic M4A
+artwork and tags also round-tripped. The deployment guide explicitly preserves
+production-only changes and persistent data. These are local, uncommitted results;
+clean Debian 13/Python 3.13 installation remains unverified after download timeouts,
+and no production deployment or connection occurred.
+
+
+## 2026-10-18 — Establishing the social-release baseline
+
+Before adding music identity and exchange features, a read-only VPS inspection
+confirmed the running service and found that identical Git revisions did not
+mean identical local/deployed source. Existing edits were preserved. The first
+local async-test stall was traced to event-loop initialization rather than the
+recommendation code. [Baseline evidence](social-release-baseline-2026-10-18.md)
+keeps service liveness, test results and future social implementation separate.
+
+
+## 2026-10-18 — A deliberately selected music identity
+
+The first implemented social slice lets someone create a private taste card and
+choose exactly what to share: a nickname, bio and five songs. Short-lived links
+can be hidden or replaced without exposing private ratings or Telegram contacts.
+Both chat and Mini App use the same ownership rules. Local privacy/lifecycle
+tests and English/Persian phone/desktop checks passed. It remains uncommitted
+and undeployed; comparison and reciprocal exchanges are still future work. See
+[implementation and evidence](taste-card-release-2026-10-18.md).
+
+
+## 2026-10-18 — Deployed search, recognition and chat UX repairs
+
+Artist queries were being treated mainly as titles, reversed scrobble identities entered the catalogue, and TikTok soundtrack selection differed from uploaded-video recognition. The deployed repair adds artist/alias discovery, guards and corrects reversed metadata, fingerprints embedded video audio, retains search results and sends uncluttered audio messages. Server regressions and real-provider probes verify the release; visual Telegram confirmation and a live standalone Mini App remain outside this pass. See [verified account](search-recognition-ux-2026-10-18.md).
+
+
+## 2026-10-18 — Mini App Get song
+
+The primary Mini App song action now returns to LilCusin to get audio instead of opening Lil Bro. A short-lived owner-bound grant identifies the selected song, while the existing delivery workflow handles fetching and choices. Locally tested; production delivery remains unverified.
+
+
+## 2026-10-18 — Taste-card/Get Song deployment and UI brief
+
+The selected music card and same-bot Get Song action are deployed. Restoring the inactive API/connector removed the gap between the running bot and public visual surface. A consistent backup, scoped file reconciliation, VPS staging tests and public hash/auth checks support the release. The reviewed future UI remains separate from shipped functionality. See [deployment evidence](deployment-2026-10-18.md).
+
+## 2026-10-18 — Reducing search waiting
+
+Search waited for old-message deletion and repeated metadata work. The deployed
+performance pass acknowledges first, cleans up in the background, reuses completed
+searches and appends late choices to stable buttons. In a small engine sample,
+repeat queries fell from about 1.94 seconds to 57–91 ms; cold search remained
+about 3.4 seconds. Real Telegram perceived latency remains unverified.
+[Verified scope](search-performance-2026-10-18.md).
+
+## 2026-10-18 — Bot onboarding, portrait and selected-song consent
+The next local slice connects a short bot welcome to selected favorites, a Stories portrait and deliberate recipient-bound consent. Privacy revisions revoke stale agreements and no fake compatibility score appears. Locally tested; actual comparison, swaps and production verification remain separate. [Implementation](onboarding-portrait-consent-2026-10-18.md).
+
+## 2026-10-19 — Recovering a rejected live performance
+
+A Navan medley failed because upload metadata reversed its titles and added a
+cover label. A narrowly scoped matcher change now offers the verified performance
+with explicit selection while retaining wrong-version guards. Deployed after 18
+focused passing tests; playback remains unverified. [Evidence](navan-medley-fix-2026-10-19.md).
+
+
+## 2026-10-19 — A local two-way music loop
+
+The selected card now leads to an explainable comparison and a deliberate reciprocal pick, instead of ending at a share link. Private saves remain separate from explicit ratings. Block, report and opt-in alerts accompany the interaction; no unsupported compatibility score or social count is introduced. The bilingual Mini App exposes the same state as chat. Locally verified with fictional users and scoped tests; not deployed or cohort-validated. [Release and limits](social-loop-release-2026-10-19.md).
+
+### Navan follow-up verification limit
+
+The first deployed matcher patch passed an idealized fixture but missed stored
+identity normalization. User feedback exposed the gap. A corrected candidate now
+passes stored-input tests and real temporary audio retrieval; deployment and
+Telegram receipt remain pending. [Evidence](navan-medley-fix-2026-10-19.md).
+
+Navan follow-up deployment confirmed: user-approved one-file correction deployed,
+source hash verified, restart succeeded; all 20 isolated regressions passed against
+the deployed module. The identical candidate retrieved/validated actual audio.
+Telegram receipt/playback remains unverified; Mini App unchanged.
+[Deployment evidence](navan-medley-fix-2026-10-19.md).

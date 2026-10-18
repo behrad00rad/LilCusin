@@ -117,9 +117,11 @@ async def main() -> None:
             dispatcher.include_router(taste_router)
             dispatcher.include_router(router)
             chat_service = ChatService(database, RecommendationService(database, providers))
+            chat_service.social_bot = bot
             if config.miniapp_url:
                 miniapp = await start_server(config.telegram_bot_token, chat_service, workflow,
-                                            config.miniapp_host, config.miniapp_port)
+                                            config.miniapp_host, config.miniapp_port,
+                                            bot_username=(await bot.me()).username)
                 stack.push_async_callback(miniapp.cleanup)
                 await bot.set_chat_menu_button(menu_button=MenuButtonWebApp(
                     text='Open Lil Cusin', web_app=WebAppInfo(url=config.miniapp_url)))

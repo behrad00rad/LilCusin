@@ -31,6 +31,26 @@ def rating_keyboard(result):
     ]])
 
 
+def candidate_keyboard(result, *, chat=False):
+    rows = [[InlineKeyboardButton(
+        text=messages.candidate_label(candidate.artist, candidate.title) + (
+            f' · YouTube {candidate.youtube_views:,}' if candidate.youtube_views is not None else ''),
+        callback_data=f"c:{result.submission_id}:{result.revision}:{index}",
+    )] for index, candidate in enumerate(result.candidates)]
+    rows.append([InlineKeyboardButton(text=messages.NONE, callback_data=f"n:{result.submission_id}:{result.revision}")])
+    if chat:
+        rows.append([InlineKeyboardButton(text=copy('close'),
+                     callback_data=f'close:{result.submission_id}:{result.revision}', style='danger')])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def candidate_heading(result, *, chat=False):
+    heading = messages.CHOOSE + ('\n\n' + copy('search_refine') if chat else '')
+    if any(candidate.youtube_views is not None for candidate in result.candidates):
+        heading += '\n\n' + copy('search_views')
+    return heading
+
+
 async def present(message, result, user_id, workflow, enrichment, chat_service=None, status_message=None):
     if result.kind == "confirmed":
         rating_mode = False
@@ -45,25 +65,17 @@ async def present(message, result, user_id, workflow, enrichment, chat_service=N
         if not rating_mode:
             enrichment.schedule(result.track_id)
     elif result.kind == "candidates":
-        rows = [[InlineKeyboardButton(
-            text=messages.candidate_label(candidate.artist, candidate.title) + (
-                f' · YouTube {candidate.youtube_views:,}' if candidate.youtube_views is not None else ''),
-            callback_data=f"c:{result.submission_id}:{result.revision}:{index}",
-        )] for index, candidate in enumerate(result.candidates)]
-        rows.append([InlineKeyboardButton(text=messages.NONE, callback_data=f"n:{result.submission_id}:{result.revision}")])
-        if chat_service is not None:
-            rows.append([InlineKeyboardButton(text=copy('close'),
-                         callback_data=f'close:{result.submission_id}:{result.revision}', style='danger')])
-        heading = messages.CHOOSE + ('\n\n' + copy('search_refine') if chat_service is not None else '')
-        if any(candidate.youtube_views is not None for candidate in result.candidates):
-            heading += '\n\n' + copy('search_views')
+        keyboard = candidate_keyboard(result, chat=chat_service is not None)
+        heading = candidate_heading(result, chat=chat_service is not None)
         if status_message is not None:
-            await status_message.edit_text(heading, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+            await status_message.edit_text(heading, reply_markup=keyboard)
             sent = status_message
         else:
-            sent = await message.answer(heading, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+            sent = await message.answer(heading, reply_markup=keyboard)
         if chat_service is not None:
             await workflow.bind_candidates(result, user_id, sent.message_id)
+            if result.search_key is not None:
+                workflow.schedule_search_update(result, user_id, sent)
     elif result.kind == "limit":
         await message.answer(messages.LIMIT)
     else:

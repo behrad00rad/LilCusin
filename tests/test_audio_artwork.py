@@ -65,6 +65,48 @@ class AudioArtworkTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.audio.read_bytes(), b'original audio')
         self.assertFalse((self.folder/'tagged.m4a').exists())
 
+    async def test_missing_mutagen_is_diagnostic_and_preserves_audio(self):
+        error = ModuleNotFoundError('private URL must not appear', name='mutagen')
+        with patch('music_bot.audio_artwork.image_bytes', AsyncMock(return_value=b'image')), \
+             patch('music_bot.audio_artwork.embed', side_effect=error), \
+             self.assertLogs('music_bot', level='WARNING') as logs:
+            self.assertEqual(await prepare(self.fetcher, self.track, self.audio, self.folder, self.alive), (None, None))
+        self.assertIn('Mutagen', ' '.join(logs.output))
+        self.assertNotIn('private URL', ' '.join(logs.output))
+        self.assertEqual(self.audio.read_bytes(), b'original audio')
+
+    async def test_retrieval_and_conversion_have_distinct_safe_diagnostics(self):
+        for stage in ('retrieval', 'conversion'):
+            self.fetcher.process.side_effect = RuntimeError('secret URL') if stage == 'conversion' else None
+            download = AsyncMock(side_effect=RuntimeError('secret URL')) if stage == 'retrieval' else AsyncMock(return_value=b'image')
+            with patch('music_bot.audio_artwork.image_bytes', download), self.assertLogs('music_bot', level='WARNING') as logs:
+                self.assertEqual(await prepare(self.fetcher, self.track, self.audio, self.folder, self.alive), (None, None))
+            self.assertIn(stage, ' '.join(logs.output))
+            self.assertNotIn('secret URL', ' '.join(logs.output))
+
+    def test_mp3_metadata_and_cover_round_trip(self):
+        from mutagen.id3 import ID3
+        from music_bot.audio_artwork import embed
+        path = self.folder / 'audio.mp3'
+        path.write_bytes(b'placeholder audio')
+        embed(path, JPEG, self.track)
+        tags = ID3(path)
+        self.assertEqual(str(tags['TIT2']), 'Song')
+        self.assertEqual(str(tags['TPE1']), 'Artist')
+        self.assertEqual(str(tags['TALB']), 'Album')
+        self.assertEqual(tags.getall('APIC')[0].data, JPEG)
+
+    def test_m4a_metadata_and_cover(self):
+        from music_bot.audio_artwork import embed
+        with patch('mutagen.mp4.MP4', return_value={}) as mp4:
+            tags = mp4.return_value = MockDict()
+            embed(self.audio, JPEG, self.track)
+        self.assertEqual(tags['covr'][0], JPEG)
+        self.assertEqual(tags['\xa9nam'], ['Song'])
+        self.assertEqual(tags['\xa9ART'], ['Artist'])
+        self.assertEqual(tags['\xa9alb'], ['Album'])
+        self.assertTrue(tags.saved)
+
     async def test_download_rejects_redirects_and_oversized_streams(self):
         class Context:
             def __init__(self, value): self.value = value
@@ -80,3 +122,9 @@ class AudioArtworkTests(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaises(ValueError):
                     await image_bytes(ART)
             session.get.assert_called_once_with(ART, allow_redirects=False)
+
+
+class MockDict(dict):
+    saved = False
+    def save(self):
+        self.saved = True

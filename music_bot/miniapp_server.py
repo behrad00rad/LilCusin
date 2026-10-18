@@ -4,6 +4,9 @@ import os
 from contextlib import AsyncExitStack
 
 import aiohttp
+from aiogram import Bot
+from aiogram.client.session.aiohttp import AiohttpSession
+from aiogram.client.telegram import TelegramAPIServer
 
 from .cache import CachedProviders
 from .chat_service import ChatService
@@ -33,9 +36,15 @@ async def main():
             providers = CachedProviders(database, LastFMClient(session, config.lastfm_api_key), MusicBrainzClient(session))
         workflow = Workflow(database, providers)
         chat = ChatService(database, RecommendationService(database, providers))
+        identity = Bot(config.telegram_bot_token, session=AiohttpSession(
+            api=TelegramAPIServer.from_base(config.telegram_api_base_url)))
+        stack.push_async_callback(identity.session.close)
+        chat.social_bot = identity
+        bot_username = (await identity.me()).username
         runner = await start_server(config.telegram_bot_token, chat, workflow,
                                     os.environ.get('MINIAPP_HOST', '127.0.0.1'),
-                                    int(os.environ.get('MINIAPP_PORT', '8091')))
+                                    int(os.environ.get('MINIAPP_PORT', '8091')),
+                                    bot_username=bot_username)
         stack.push_async_callback(runner.cleanup)
         print('Lil Cusin Mini App ready; Telegram polling is handled by the existing bot.', flush=True)
         await asyncio.Event().wait()

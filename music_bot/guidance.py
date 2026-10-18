@@ -102,7 +102,7 @@ async def configure_commands(bot):
     keys={'start':'search','search':'search','rate':'heard','recommend':'for_you','profile':'taste','taste':'taste','help':'guide',
           'language':'language','privacy':'privacy_hint','forgetme':'yes_delete','cancel':'cancel',
           'connectchannel':'connect','channels':'channels','disconnectchannel':'disconnect','setup':'setup_title',
-          'recognize':'recognize_command'}
+          'recognize':'recognize_command','tastecard':'card_title','cardimage':'card_image','pickfavorites':'onboard_pick','invitations':'invite_list','swaps':'social_inbox','socialsettings':'social_settings','savedsongs':'social_saves'}
     for code in LANGUAGES:
         context=language.set(code)
         try:

@@ -5,3 +5,11 @@ SQLAlchemy==2.0.48
 aiosqlite==0.22.1
 shazamio==0.8.1
 imageio-ffmpeg==0.6.0
+# Known working Pydantic line, within aiogram 3.31's <2.14 requirement.
+pydantic>=2.13.5,<2.14
+# pydub (via ShazamIO) imports audioop, removed from Python 3.13.
+audioop-lts>=0.2.1,<0.3; python_version >= "3.13"
+packaging>=24,<27
+Pillow>=11.3,<13
+arabic-reshaper>=3,<4
+python-bidi>=0.6,<1

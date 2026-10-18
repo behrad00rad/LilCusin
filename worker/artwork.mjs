@@ -8,12 +8,15 @@ export async function cover(request) {
     url=new URL(raw);
     if (url.protocol!=='https:' || !imageHosts.has(url.hostname) || url.username || url.password || url.port || url.hash || url.search || url.pathname.includes('2a96cbd8b46e442fc41c2b86b821562f')) throw new Error();
   } catch { return new Response(null,{status:400}); }
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),8000);
   try {
-    const response=await fetch(url.href,{redirect:'error',signal:AbortSignal.timeout(8000),headers:{Accept:'image/jpeg,image/png,image/webp,image/avif'},cf:{cacheTtl:86400,cacheEverything:true}});
+    const response=await fetch(url.href,{redirect:'manual',signal:controller.signal,headers:{Accept:'image/jpeg,image/png,image/webp,image/avif'},cf:{cacheTtl:86400,cacheEverything:true}});
     const type=response.headers.get('Content-Type')?.split(';')[0];
     if (!response.ok || !['image/jpeg','image/png','image/webp','image/avif'].includes(type) || Number(response.headers.get('Content-Length'))>2097152) return new Response(null,{status:404});
     const bytes=await response.arrayBuffer();
     if (bytes.byteLength>2097152) return new Response(null,{status:413});
     return new Response(request.method==='HEAD'?null:bytes,{headers:{'Content-Type':type,'Cache-Control':'public, max-age=86400','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'}});
   } catch { return new Response(null,{status:502}); }
+  finally { clearTimeout(timeout); }
 }

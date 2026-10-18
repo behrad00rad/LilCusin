@@ -1,13 +1,15 @@
 """Outbound HTTPS connector pinned to the Mini App API, with no public VPS port."""
 import asyncio
 import json
+import os
 from pathlib import Path
 import re
 
 import aiohttp
 
 WORKER = 'https://lilcusin-ui.ghazanfaribehrad.workers.dev'
-ROUTES = {'/api/artwork':'POST', '/api/channels/songs':'POST', '/api/channels/review':'POST', '/api/preferences':'GET', '/api/preferences/update':'POST', '/api/profile':'GET', '/api/recommendations':'POST', '/api/search':'POST', '/api/rate':'POST',
+ROUTES = {'/api/social/unsave':'POST', '/api/social':'GET', '/api/social/compare':'POST', '/api/social/choices':'POST', '/api/social/draft':'POST', '/api/social/action':'POST', '/api/social/settings':'GET', '/api/social/settings/update':'POST', '/api/social/relationship':'POST', '/api/social/get-song':'POST', '/api/artwork':'POST', '/api/channels/songs':'POST', '/api/channels/review':'POST', '/api/preferences':'GET', '/api/preferences/update':'POST', '/api/profile':'GET', '/api/recommendations':'POST', '/api/search':'POST', '/api/rate':'POST',
+          '/api/taste-card/image':'POST', '/api/comparison-invitations':'GET', '/api/comparison-invitations/create':'POST', '/api/comparison-invitations/decide':'POST', '/api/taste-card':'GET', '/api/taste-card/update':'POST', '/api/taste-card/share':'POST', '/api/taste-card/view':'POST',
           '/api/similar':'POST', '/api/channels':'GET', '/api/channels/connect':'POST',
           '/api/channels/disconnect':'POST', '/api/taste-setup':'GET', '/api/taste-setup/update':'POST'}
 
@@ -53,7 +55,9 @@ async def answer(session, socket, message, capacity):
 
 
 async def connect():
-    token=(Path(__file__).resolve().parent.parent/'.cloudflared/token').read_text().strip()
+    token_file = Path(os.environ.get('LILCUSIN_CONNECTOR_TOKEN_FILE') or
+                      Path(__file__).resolve().parent.parent/'.cloudflared/token')
+    token=token_file.read_text().strip()
     capacity=asyncio.Semaphore(4)
     async with aiohttp.ClientSession() as session:
         delay=1

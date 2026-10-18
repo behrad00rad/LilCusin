@@ -31,7 +31,7 @@ from one song.
 
 ## Run your own bot
 
-You need Python 3.12+, a [Telegram bot token from @BotFather](https://t.me/BotFather),
+You need Python 3.12 or 3.13, a [Telegram bot token from @BotFather](https://t.me/BotFather),
 and a [Last.fm API key](https://www.last.fm/api/account/create). Your computer
 or server must be able to reach the APIs described in [Network access](#network-access).
 
@@ -49,8 +49,11 @@ or server must be able to reach the APIs described in [Network access](#network-
    | Windows PowerShell | `.venv\Scripts\Activate.ps1` |
 
    ```bash
-   python -m pip install -r requirements.txt
+   python -m pip install -r requirements.txt -r requirements-audio.txt
    ```
+
+   For Debian 13 / Python 3.13, offline preflight and safe systemd upgrades, follow
+   [the deployment procedure](DEPLOYMENT.md). Get Song also requires system FFmpeg/ffprobe.
 
 2. **Create your private configuration file.** Copy `.env.example` to `.env`,
    then open `.env` and fill in the empty values. On macOS/Linux, use
@@ -348,3 +351,12 @@ user confirmations from production deployment and remaining unverified behavior.
 
 The chat flow, rating controls, delivery performance and metadata recovery changes
 are summarized in [the October 17 release record](docs/chat-release-2026-10-17.md).
+
+
+### Local social-loop additions (not deployed)
+
+The current uncommitted implementation includes consented selected-song comparisons,
+reciprocal picks and interaction controls in chat and the Mini App. Bot commands:
+`/swaps`, `/savedsongs`, `/socialsettings`; existing `/cardimage` and `/invitations`
+remain. Operator review uses `/socialreports` only for explicitly configured
+`LILCUSIN_MODERATOR_IDS`. See [contract, tests and release gates](docs/social-loop-release-2026-10-19.md).

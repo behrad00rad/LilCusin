@@ -2,12 +2,14 @@
 import asyncio
 import hashlib
 import shutil
+import logging
 from pathlib import Path
 import aiohttp
 from .chat_ui import safe_url
 from .youtube_fetch import FetchError
 
 MAX_IMAGE_BYTES = 2_000_000
+logger = logging.getLogger('music_bot')
 
 
 def artwork_key(track):
@@ -77,10 +79,12 @@ async def prepare(fetcher, track, path, directory, alive):
         return None, None
     folder = Path(directory)
     source, thumbnail = folder/'cover.input', folder/'cover.jpg'
+    stage = 'retrieval'
     try:
         source.write_bytes(await image_bytes(url))
         if not await alive():
             raise FetchError('Request cancelled.')
+        stage = 'conversion'
         # Decode within the existing bounded subprocess/disk/cancellation boundary.
         await fetcher.process(['ffmpeg', '-nostdin', '-v', 'error', '-i', str(source),
             '-frames:v', '1', '-vf', 'scale=320:320:force_original_aspect_ratio=decrease',
@@ -94,6 +98,7 @@ async def prepare(fetcher, track, path, directory, alive):
         if occupied + path.stat().st_size + len(cover) + 65536 > fetcher.settings.disk_bytes:
             thumbnail.unlink(missing_ok=True)
             return None, None
+        stage = 'embedding'
         task = asyncio.create_task(asyncio.to_thread(embed_atomic, path, cover, track, fetcher.settings.max_bytes))
         try:
             await asyncio.shield(task)
@@ -103,10 +108,14 @@ async def prepare(fetcher, track, path, directory, alive):
         return thumbnail, artwork_key(track)
     except asyncio.CancelledError:
         raise
-    except Exception:
+    except Exception as error:
         # A cancelled request must never become a send simply because artwork is optional.
         if not await alive():
             raise FetchError('Request cancelled.') from None
+        if isinstance(error, ModuleNotFoundError) and (error.name or '').split('.')[0] == 'mutagen':
+            logger.warning('Artwork embedding unavailable: install requirements-audio.txt (Mutagen).')
+        else:
+            logger.warning('Artwork %s failed; audio remains available. Details omitted for privacy.', stage)
         thumbnail.unlink(missing_ok=True)
         return None, None
     finally:

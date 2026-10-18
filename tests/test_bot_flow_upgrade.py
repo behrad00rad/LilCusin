@@ -212,11 +212,13 @@ class UpgradeTests(ServiceTestCase):
         async with self.database.sessions() as session:
             return (await session.get(AudioRequest, request)).job_id
 
-    async def test_start_skips_questionnaire_and_has_no_rating(self):
+    async def test_start_offers_two_paths_without_creating_ratings(self):
         with patch.object(Message, 'answer', new_callable=AsyncMock) as answer:
             await start(message('/start'), self.chat)
-        self.assertIn('Forward a song', answer.await_args.args[0])
-        self.assertIn('/setup', answer.await_args.args[0])
+        from music_bot.i18n import tr
+        self.assertEqual(answer.await_args.args[0],tr('onboard_welcome'))
+        rows=answer.await_args.kwargs['reply_markup'].inline_keyboard
+        self.assertEqual([[button.callback_data for button in row] for row in rows],[['ob:send'],['ob:pick']])
         async with self.database.sessions() as session:
             self.assertIsNone(await session.scalar(select(Rating)))
 
@@ -302,7 +304,7 @@ class UpgradeTests(ServiceTestCase):
         self.assertEqual([b.style for b in ratings.inline_keyboard[0]], ['success', 'success', None, 'danger'])
         self.assertFalse(any(':get:' in (b.callback_data or '') for r in ratings.inline_keyboard for b in r))
 
-    async def test_delivery_uses_one_status_and_offers_optional_rating_after_audio(self):
+    async def test_delivery_removes_status_and_sends_plain_audio(self):
         pending = NS(message_id=77, edit_text=AsyncMock())
         source = NS(answer=AsyncMock(return_value=pending))
         req = await self.service.begin(source, 123, self.track_id)
@@ -310,8 +312,8 @@ class UpgradeTests(ServiceTestCase):
         self.bot.send_audio.assert_awaited_once()
         self.bot.send_message.assert_not_awaited()
         self.assertTrue(all(call.kwargs['message_id'] == 77 for call in self.bot.edit_message_text.await_args_list))
-        keyboard = self.bot.edit_message_text.await_args.kwargs['reply_markup']
-        self.assertIn(':rate:', keyboard.inline_keyboard[2][0].callback_data)
+        self.bot.delete_message.assert_awaited_with(123, 77)
+        self.assertIsNone(self.bot.send_audio.await_args.kwargs.get('reply_markup'))
         async with self.database.sessions() as session:
             self.assertIsNone(await session.scalar(select(Rating)))
         async with self.database.write() as session:
@@ -322,6 +324,16 @@ class UpgradeTests(ServiceTestCase):
         self.assertEqual(self.bot.send_audio.await_count, 2)
         self.assertEqual(self.fetcher.fetch.await_count, 1)
         self.service.artwork_loader.load.assert_not_awaited()
+
+    async def test_next_request_removes_failed_status_without_deleting_audio(self):
+        request_id = await self.service.request(123, self.track_id)
+        async with self.database.write() as session:
+            req = await session.get(AudioRequest, request_id)
+            req.state, req.status_message_id, req.message_id = 'failed', 42, 99
+        pending = NS(message_id=77, edit_text=AsyncMock())
+        await self.service.begin(NS(answer=AsyncMock(return_value=pending)), 123, self.track_id)
+        self.bot.delete_message.assert_any_await(123, 42)
+        self.assertNotIn(((123, 99), {}), [(call.args, call.kwargs) for call in self.bot.delete_message.await_args_list])
 
     async def test_status_edit_failure_does_not_fail_delivery(self):
         req = await self.service.request(123, self.track_id)

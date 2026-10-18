@@ -64,8 +64,12 @@ use to authorized sources and users. Leave disabled if this cannot be establishe
 
 ## Install and deploy
 
+For current Debian 13 / Python 3.13 installation, preflight, production-difference
+preservation and systemd restart steps, use [DEPLOYMENT.md](DEPLOYMENT.md).
+The settings below describe application configuration.
+
 1. Back up the SQLite database. Stop the existing bot (one process per token/database).
-2. Install Python 3.12+ and `pip install -r requirements.txt`.
+2. Install Python 3.12 or 3.13 and `pip install -r requirements.txt`.
 3. Install yt-dlp: `pip install -r requirements-audio.txt`. Install FFmpeg and ffprobe
    on PATH (e.g. Debian/Ubuntu `apt install ffmpeg`; Windows use an official FFmpeg
    distribution and add its bin directory to PATH). Verify `python -m yt_dlp --version`,

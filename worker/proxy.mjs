@@ -1,5 +1,8 @@
 // The binding is pinned to the bot's loopback HTTP service, never a caller URL.
 export const routes = new Map([
+  ['/api/social/unsave','POST'],
+  ['/api/social','GET'], ['/api/social/compare','POST'], ['/api/social/choices','POST'], ['/api/social/draft','POST'], ['/api/social/action','POST'], ['/api/social/settings','GET'], ['/api/social/settings/update','POST'], ['/api/social/relationship','POST'], ['/api/social/get-song','POST'],
+  ['/api/taste-card/image','POST'], ['/api/comparison-invitations','GET'], ['/api/comparison-invitations/create','POST'], ['/api/comparison-invitations/decide','POST'], ['/api/taste-card','GET'], ['/api/taste-card/update','POST'], ['/api/taste-card/share','POST'], ['/api/taste-card/view','POST'],
   ['/api/taste-setup','GET'], ['/api/taste-setup/update','POST'],
   ['/api/preferences', 'GET'], ['/api/preferences/update', 'POST'], ['/api/profile', 'GET'], ['/api/recommendations', 'POST'],
   ['/api/search', 'POST'], ['/api/rate', 'POST'], ['/api/similar', 'POST'],
@@ -8,7 +11,7 @@ export const routes = new Map([
 export const headers = {
   'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow',
   'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer',
-  'Content-Security-Policy': "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self'; img-src 'self' https://lastfm.freetls.fastly.net https://lastfm-img.freetls.fastly.net https://lastfm-img2.akamaized.net; connect-src 'self'; object-src 'none'; base-uri 'none'",
+  'Content-Security-Policy': "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self'; img-src 'self' data: https://lastfm.freetls.fastly.net https://lastfm-img.freetls.fastly.net https://lastfm-img2.akamaized.net; connect-src 'self'; object-src 'none'; base-uri 'none'",
 };
 export function error(message, status) {
   return Response.json({error:message},{status,headers});
@@ -26,7 +29,7 @@ export async function proxy(request, env) {
   try {
     const response = await backend.fetch(new Request(`http://127.0.0.1:8091${url.pathname}`, {
       method: request.method, headers:{'Content-Type':'application/json','X-Telegram-Init-Data':auth},
-      body: request.method==='POST' ? request.body : undefined, redirect:'manual',
+      body: request.method==='POST' ? request.body : undefined, redirect:'manual', duplex:'half',
     }));
     if (response.status >= 300 && response.status < 400) return error('Music service unavailable.',503);
     return new Response(response.body,{status:response.status,headers:{...headers,'Content-Type':'application/json'}});

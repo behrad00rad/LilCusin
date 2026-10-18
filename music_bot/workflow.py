@@ -48,6 +48,7 @@ class Result:
     artist: str | None = None
     title: str | None = None
     rating: str | None = None
+    search_key: str | None = None
 
 
 async def owned_submission(session, submission_id, telegram_user_id):
@@ -88,8 +89,16 @@ class Workflow:
         self.providers = providers
         self.lyrics = lyrics
         self.warm_tasks = set()
+        from .search_pipeline import SearchPipeline
+        self.searches = SearchPipeline(self._catalogue_search, self._discovery_search)
+        self.background_tasks = set()
+        self.cleanup_tasks = {}
 
     async def close(self):
+        for task in list(self.background_tasks):
+            task.cancel()
+        await asyncio.gather(*list(self.background_tasks), return_exceptions=True)
+        await self.searches.close()
         for task in self.warm_tasks:
             task.cancel()
         await asyncio.gather(*self.warm_tasks, return_exceptions=True)
@@ -137,17 +146,89 @@ class Workflow:
         return (self.lyrics is not None and getattr(type(self.lyrics), 'search_titles', None) is not None
                 and getattr(getattr(self.lyrics, 'settings', None), 'provider', None) == 'youtube')
 
-    async def search_chat_title(self, title):
+    async def _catalogue_search(self, title):
+        discovery = self.title_discovery_enabled() and len(title.split()) <= 8
+        return await self.search_title(title, discover_lyrics=not discovery)
+
+    async def _discovery_search(self, title):
         if not self.title_discovery_enabled() or len(title.split()) > 8:
-            return await self.search_title(title)
-        catalogue, discovered = await asyncio.gather(
-            self.search_title(title, discover_lyrics=False), self.lyrics.search_titles(title))
-        rows, failed = catalogue
-        suggestions, discovery_failed = discovered
+            return [], True  # No discovery source is available to cover a catalogue failure.
+        suggestions, discovery_failed = await self.lyrics.search_titles(title)
         # Views rank only within validated discovery results; do not equate a
         # YouTube view count with a Deezer rank or Last.fm listener count.
         suggestions = [row for row in suggestions if search_query_matches_song(title, row.artist, row.title)]
-        return deduplicate(suggestions + rows)[:20], failed and discovery_failed
+        return suggestions, discovery_failed
+
+    async def search_chat_title(self, title, *, progressive=False):
+        return await self.searches.search(title, progressive=progressive, fast=CHAT_FAST.get())
+
+    def _background(self, coroutine):
+        task = asyncio.create_task(coroutine)
+        self.background_tasks.add(task)
+        def finished(done):
+            self.background_tasks.discard(done)
+            if not done.cancelled() and done.exception() is not None:
+                logger.warning('Background search presentation unavailable; details omitted.')
+        task.add_done_callback(finished)
+        return task
+
+    def schedule_cleanup(self, message):
+        user_id = message.from_user.id
+        previous = self.cleanup_tasks.get(user_id)
+        if previous is not None and not previous.done():
+            return
+        if sum(not task.done() for task in self.cleanup_tasks.values()) >= 4:
+            return
+        async def cleanup():
+            from .chat_cleanup import clear_previous_search
+            try:
+                async with asyncio.timeout(8):
+                    await clear_previous_search(message, self.database)
+            except TimeoutError:
+                pass
+            finally:
+                self.cleanup_tasks.pop(user_id, None)
+        self.cleanup_tasks[user_id] = self._background(cleanup())
+
+    def schedule_search_update(self, result, user_id, message):
+        if result.search_key is not None and len(self.background_tasks) < 32:
+            self._background(self._append_search_results(result, user_id, message))
+
+    async def _append_search_results(self, result, user_id, message):
+        rows, _ = await self.searches.complete(result.search_key)
+        if not rows:
+            return
+        from .matching import identity_key
+        async with self.database.write() as session:
+            try:
+                await owned_submission(session, result.submission_id, user_id)
+            except FlowError:
+                return
+            flow = await session.get(IdentificationFlow, result.submission_id)
+            if (flow is None or flow.state != 'candidates' or flow.revision != result.revision
+                    or flow.prompt_message_id != message.message_id or flow.expires_at <= utc_now()):
+                return
+            existing = [decode_track(data) for data in flow.candidates]
+            names = {identity_key(c.artist, c.title) for c in existing}
+            identifiers = {pair for c in existing for pair in c.external_ids.items()}
+            combined = list(existing)
+            for candidate in rows:
+                name = identity_key(candidate.artist, candidate.title)
+                if name not in names and not identifiers.intersection(candidate.external_ids.items()) and len(combined) < 20:
+                    combined.append(candidate)
+                    names.add(name)
+                    identifiers.update(candidate.external_ids.items())
+            if len(combined) == len(existing):
+                return
+            flow.candidates = [encode_track(c) for c in combined]
+        # Only append. Existing callback indices and revision never change.
+        from .interactions import candidate_keyboard, candidate_heading
+        try:
+            updated = Result('candidates', result.submission_id, result.revision, combined)
+            await message.edit_text(candidate_heading(updated, chat=True),
+                                    reply_markup=candidate_keyboard(updated, chat=True))
+        except Exception:
+            pass
 
     async def search_title(self, title, artist=None, *, discover_lyrics=True):
         """Browse titles and bounded title/artist hints; require explicit selection."""
@@ -179,6 +260,44 @@ class Workflow:
             else:
                 available = True
                 candidates += result
+        artist_rows = []
+        if not artist and not any(c.title and title_query_match(title, c.title, exact=True)
+                and ((c.deezer_rank or 0) >= 400000 or (c.listeners or 0) >= 10000) for c in candidates):
+            try:
+                async with asyncio.timeout(5):
+                    result = await self.providers.call('musicbrainz', 'search_artist_tracks', title)
+                if isinstance(result, list):
+                    artist_rows = [c for c in result if c.artist and (match_text(c.artist) == match_text(title)
+                        or any(match_text(alias) == match_text(title) for alias in c.artist_aliases))]
+                    candidates += artist_rows
+            except (ProviderError, TimeoutError):
+                failed = True
+        if artist_rows:
+            from collections import Counter
+            from dataclasses import replace
+            canonical_artist = Counter(c.artist for c in artist_rows).most_common(1)[0][0]
+            artist_calls = [('lastfm', 'get_artist_top_tracks', canonical_artist)]
+            if getattr(self.providers, 'has_deezer', False) is True:
+                artist_calls.append(('deezer', 'search_tracks', canonical_artist, ''))
+            async def artist_call(args):
+                try:
+                    async with asyncio.timeout(3):
+                        return await self.providers.call(*args)
+                except TimeoutError:
+                    return []
+            for result in await asyncio.gather(*(artist_call(args) for args in artist_calls), return_exceptions=True):
+                if isinstance(result, ProviderError):
+                    continue
+                if isinstance(result, BaseException):
+                    raise result
+                if isinstance(result, list):
+                    rows = [replace(c, artist_aliases=(title,)) for c in result if c.artist and c.title
+                            and match_text(c.artist) == match_text(canonical_artist)]
+                    artist_rows += rows
+                    candidates += rows
+        from .matching import remove_reversed_candidates
+        candidates = remove_reversed_candidates(candidates)
+        artist_identities = {(match_text(c.artist), match_text(c.title)) for c in artist_rows if c.artist and c.title}
         # Keep the literal query, but also try a few title + artist boundaries.
         # These are catalogue searches, never automatic identity confirmations.
         hints = []
@@ -214,7 +333,8 @@ class Workflow:
         wanted = match_text(title)
         def artist_match(candidate):
             performer = match_text(candidate.artist)
-            return not artist and (performer == wanted or performer.startswith(wanted + ' '))
+            return not artist and (performer == wanted or performer.startswith(wanted + ' ')
+                or (performer, match_text(candidate.title)) in artist_identities)
         matches=[c for c in candidates if c.artist and c.title and (title_query_match(title, c.title) or hint_match(c) or artist_match(c))
                  and (not artist or match_text(artist) in match_text(c.artist))]
         # Within relevant prefix matches, popularity precedes literal title length.
@@ -223,10 +343,12 @@ class Workflow:
         has_rank = any((c.deezer_rank or 0) > 0 for c in matches)
         artist_intent = not any(match_text(c.title) == wanted and (
             (c.deezer_rank or 0) >= 400000 or (c.listeners or 0) >= 10000) for c in matches)
+        if artist_intent and any(artist_match(c) for c in matches):
+            matches = [c for c in matches if artist_match(c)]
         def popularity(candidate):
             return (candidate.deezer_rank or 0) if has_rank else (candidate.listeners or 0)
         matches.sort(key=lambda c:(not (artist_intent and artist_match(c)),not hint_match(c),
-                                   not (match_text(c.title).startswith(wanted) or title_query_match(title, c.title, exact=True)),
+                                   not artist_intent and not (match_text(c.title).startswith(wanted) or title_query_match(title, c.title, exact=True)),
                                    -popularity(c),not title_query_match(title, c.title, exact=True),
                                    0 if title_query_match(title, c.title, exact=True) else len(match_text(c.title))))
         unique=[];seen=set()
@@ -246,6 +368,7 @@ class Workflow:
                     unique = deduplicate(discovered + unique)
                     available = True
                 failed = failed or lyrics_failed
+        unique = remove_reversed_candidates(unique)
         visible = unique[:20]
         # Missing popularity is unknown. A crowded ranked catalogue must not
         # suppress every exact-title result from an independent catalogue.
@@ -295,7 +418,8 @@ class Workflow:
                     available = True
                     candidates += result
         # Irrelevant matches are not useful choices; both fields must be plausible.
-        candidates = [c for c in deduplicate(candidates) if min(similarities(artist, title, c)) >= 0.45]
+        from .matching import remove_reversed_candidates
+        candidates = [c for c in remove_reversed_candidates(deduplicate(candidates)) if min(similarities(artist, title, c)) >= 0.45]
         candidates.sort(key=lambda c: confidence(artist, title, c), reverse=True)
         return candidates[:5], failed and not available
 
@@ -357,6 +481,7 @@ class Workflow:
             flow.candidates = []
         title_only = not artist
         recovered_audio_tags = False
+        search_key = None
         context = CHAT_FAST.set(fast)
         try:
             local = await self.local_matches(title, artist) if fast else []
@@ -367,7 +492,9 @@ class Workflow:
                     self.warm_search(title, artist)
             else:
                 async with asyncio.timeout(7 if fast else None):
-                    candidates, failed = await self.search_chat_title(title) if title_only and fast else (
+                    if title_only and fast:
+                        search_key = self.searches.key(title, True, True)
+                    candidates, failed = await self.search_chat_title(title, progressive=True) if title_only and fast else (
                         await self.search_title(title) if title_only else await self.search(artist, title))
                     if not candidates and artist and submission.submission_type == 'telegram_audio':
                         candidates, rescue_failed = await self.search_audio_title(artist, title)
@@ -401,7 +528,7 @@ class Workflow:
                 return await confirmed_result(session, submission)
             if candidates:
                 flow.state = "candidates"
-                return Result("candidates", submission_id, revision, candidates)
+                return Result("candidates", submission_id, revision, candidates, search_key=search_key)
             flow.state = "correction" if flow.attempts < MAX_ATTEMPTS else "exhausted"
             # Uploaded files often contain channel/promotional text in their tags.
             # A healthy empty catalogue response is a request for corrected tags,
@@ -415,9 +542,9 @@ class Workflow:
             submission = await owned_submission(session, submission_id, user_id)
             flow = await session.get(IdentificationFlow, submission_id)
             active(flow, revision, recover=recover)
-            if flow.state == "confirmed":
+            if flow.state == "confirmed" and not (recover and submission.submission_type == 'text' and flow.candidates):
                 return await confirmed_result(session, submission)
-            if flow.state != "candidates" or not 0 <= index < len(flow.candidates):
+            if flow.state not in {"candidates", "confirmed"} or not 0 <= index < len(flow.candidates):
                 raise FlowError("stale")
             try:
                 track = await canonical_track(session, decode_track(flow.candidates[index]))

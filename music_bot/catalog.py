@@ -22,6 +22,12 @@ async def attach_ids(session, track_id, identifiers):
 
 
 async def canonical_track(session, candidate):
+    if candidate.source in {'lastfm', 'youtube'}:
+        reverse = await session.scalar(select(Track).where(
+            Track.artist == comparison_text(candidate.title), Track.title == comparison_text(candidate.artist),
+            Track.metadata_source.in_(['musicbrainz', 'deezer', 'itunes', 'user_corrected'])))
+        if reverse is not None and comparison_text(candidate.artist) != comparison_text(candidate.title):
+            raise IdentityConflict('Reversed low-trust catalogue identity')
     clauses = [
         (TrackExternalID.provider == provider) & (TrackExternalID.external_identifier == value)
         for provider, value in candidate.external_ids.items()

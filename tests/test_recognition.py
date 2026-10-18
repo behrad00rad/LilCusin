@@ -24,6 +24,12 @@ def media():
 
 
 class RecognitionTests(unittest.IsolatedAsyncioTestCase):
+    def test_supported_link_inside_share_text_and_youtube_shapes(self):
+        from music_bot.recognition import recognition_link
+        self.assertEqual(recognition_link('listen: https://vm.tiktok.com/ZN8StPdC1/'), 'https://vm.tiktok.com/ZN8StPdC1/')
+        self.assertEqual(recognition_link('https://youtube.com/live/dQw4w9WgXcQ?si=test'), 'dQw4w9WgXcQ')
+        self.assertIsNone(recognition_link('https://127.0.0.1/internal'))
+
     async def asyncSetUp(self):
         self.bot = NS(get_file=AsyncMock(return_value=NS(file_path='private/path', file_size=100)),
                       download_file=AsyncMock())
@@ -167,6 +173,41 @@ class RecognitionTests(unittest.IsolatedAsyncioTestCase):
         other = message(user=456, text='https://example.com/file.mp3')
         await self.service.submit(other)
         self.assertIn('public YouTube', other.answer.await_args.args[0])
+
+    async def test_conflicting_link_fingerprints_are_not_cached_or_delivered(self):
+        msg = message(text='https://vm.tiktok.com/ZN8StPdC1/')
+        async def fetch(url, directory, alive):
+            path = Path(directory) / 'social.mp4'
+            path.write_bytes(b'audio')
+            return path
+        self.service.fetcher.fetch_social = AsyncMock(side_effect=fetch)
+        self.provider.recognize.side_effect = [RecognizedSong('One', 'A'), RecognizedSong('Two', 'B'), RecognizedSong('Three', 'C')]
+        self.service.delivery = NS(request_recognized=AsyncMock())
+        await self.service.submit(msg)
+        await self.finish()
+        self.assertIn('confidently identify', msg.answer.await_args.args[0])
+        self.assertFalse(self.service.cache)
+        self.service.delivery.request_recognized.assert_not_awaited()
+
+    async def test_social_video_uses_its_embedded_audio_like_an_upload(self):
+        import json
+        msg = message(text='https://vm.tiktok.com/ZN8StPdC1/')
+        async def fetch(url, directory, alive):
+            path = Path(directory) / 'social.mp4'
+            path.write_bytes(b'video')
+            return path
+        async def process(args, directory, alive, output=False):
+            if args[0] == 'ffprobe':
+                return json.dumps({'format': {'duration': 29.2}, 'streams': [{'codec_type': 'video'}, {'codec_type': 'audio'}]}).encode()
+            Path(args[-1]).write_bytes(b'sample' * 300)
+        self.service.fetcher.fetch_social = AsyncMock(side_effect=fetch)
+        self.service.fetcher.process = AsyncMock(side_effect=process)
+        self.provider.recognize.return_value = RecognizedSong('Mac DeMarco', 'Another One')
+        self.service.delivery = NS(request_recognized=AsyncMock())
+        await self.service.submit(msg)
+        await self.finish()
+        self.provider.recognize.assert_awaited_once()
+        self.service.delivery.request_recognized.assert_awaited_once_with(123, 'Mac DeMarco', 'Another One')
 
     async def test_persian_response(self):
         token = language.set('fa')

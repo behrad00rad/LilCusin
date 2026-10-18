@@ -231,16 +231,23 @@ class ChatFlowTests(ServiceTestCase):
         await self.click(card)
         self.assertEqual(self.ack.call_args.args[0], M.RATING_SAVED)
 
-    async def test_candidate_prompt_becomes_song_card_after_selection(self):
+    async def test_candidate_prompt_survives_selection_and_accepts_another_song(self):
         from dataclasses import replace
         from tests.test_workflow import EXACT
-        self.providers.call.return_value = [replace(EXACT, title='Song remix', external_ids={})]
+        self.providers.call.return_value = [replace(EXACT, title='Song remix', external_ids={}),
+                                            replace(EXACT, title='Song live', external_ids={})]
         await self.feed(message=self.message(text='Artist - Song'))
-        self.assertEqual(self.outgoing[-1][1], M.CHOOSE)
-        self.deleted_messages.assert_not_awaited()
-        await self.click(self.outgoing[-1])
+        self.assertTrue(self.outgoing[-1][1].startswith(M.CHOOSE))
+        self.assertEqual(self.deleted_messages.await_count, 1)  # Submitted text is tidied.
+        search = self.outgoing[-1]
+        await self.click(search)
         self.assertIn(':get:', self.outgoing[-1][2]['reply_markup'].inline_keyboard[0][0].callback_data)
-        self.assertEqual(self.deleted_messages.await_count, 0)
+        self.assertEqual(self.deleted_messages.await_count, 1)
+        self.assertNotEqual(search[0].message_id, self.outgoing[-1][0].message_id)
+        first_song = self.outgoing[-1][1]
+        await self.click(search, row=1)
+        self.assertNotEqual(first_song, self.outgoing[-1][1])
+        self.assertEqual({first_song, self.outgoing[-1][1]}, {'Artist — Song live', 'Artist — Song remix'})
 
     async def test_recommendation_has_direct_delivery_without_handoff(self):
         await self.feed(message=self.message(text='/recommend'))

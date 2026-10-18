@@ -148,12 +148,14 @@ class DiscoveryWorkflowTests(ServiceTestCase):
             saved = await self.submissions.submit_search(self.user, query)
             result = await self.workflow.start(saved.id, 123, fast=True)
             self.assertEqual(result.kind, 'candidates')
-            self.assertEqual(result.candidates[0].artist, 'Kendrick Lamar')
-            self.assertEqual(result.candidates[0].youtube_views, 3800000)
+            completed, _ = await self.workflow.searches.complete(result.search_key)
+            expected = next(row for row in completed if row.artist == 'Kendrick Lamar')
+            self.assertEqual(expected.youtube_views, 3800000)
         self.assertEqual(fetcher.process.await_count, 2)
         from music_bot.interactions import present
         pending = NS(message_id=99, edit_text=AsyncMock())
         await present(NS(), result, 123, self.workflow, NS(), NS(), status_message=pending)
-        label = pending.edit_text.call_args.kwargs['reply_markup'].inline_keyboard[0][0].text
-        self.assertIn('YouTube 3,800,000', label)
+        await asyncio.gather(*list(self.workflow.background_tasks))
+        labels = [row[0].text for row in pending.edit_text.call_args.kwargs['reply_markup'].inline_keyboard]
+        self.assertTrue(any('YouTube 3,800,000' in label for label in labels))
         self.assertIn('not total song plays', pending.edit_text.call_args.args[0])
