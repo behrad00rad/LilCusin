@@ -1,6 +1,19 @@
 # Current handoff
 
-Updated: 2026-10-19 (Asia/Tehran). Comparison, swaps and controls locally checked; not deployed.
+Updated: 2026-10-19 (Asia/Tehran). Release committed, pushed and deployed.
+
+## Latest verified release
+
+See [deployment evidence and limits](deployment-2026-10-19.md). Runtime commit
+`f7f0739` is deployed on the VPS; all three services are active, the verified
+moderator is configured, and local authentication gates reject unsigned requests.
+Cloudflare accepted the new frozen Worker. Public URL checks encountered connection
+errors/403; actual two-account Telegram delivery remains unverified. Concurrent
+recording-search edits are preserved outside the release. 424 distinct Linux
+staging cases passed cumulatively, plus five Node checks.
+
+The following sections retain historical local-slice observations; the release
+record above supersedes their undeployed/uncommitted status.
 
 ## Current implementation
 

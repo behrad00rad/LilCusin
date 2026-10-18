@@ -178,3 +178,8 @@ source hash verified, restart succeeded; all 20 isolated regressions passed agai
 the deployed module. The identical candidate retrieved/validated actual audio.
 Telegram receipt/playback remains unverified; Mini App unchanged.
 [Deployment evidence](navan-medley-fix-2026-10-19.md).
+
+
+## 2026-10-19 — Verified release
+
+The music-identity release now joins consented taste cards, explainable comparisons and reciprocal song exchange across chat and Mini App. It is committed and deployed, with measured staging and runtime evidence; public connectivity and real two-account delivery remain explicit validation gaps. See [release evidence](deployment-2026-10-19.md).

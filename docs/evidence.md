@@ -222,3 +222,8 @@ source hash verified, restart succeeded; all 20 isolated regressions passed agai
 the deployed module. The identical candidate retrieved/validated actual audio.
 Telegram receipt/playback remains unverified; Mini App unchanged.
 [Deployment evidence](navan-medley-fix-2026-10-19.md).
+
+
+## 2026-10-19 — Verified release
+
+Runtime f7f0739 pushed and deployed; 424 cumulative Linux staging cases and five Node checks passed. VPS hashes/services/moderator/auth gates verified; Cloudflare publication confirmed. Public retrieval and real Telegram journeys remain unverified. See [release evidence](deployment-2026-10-19.md).

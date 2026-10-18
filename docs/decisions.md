@@ -215,3 +215,8 @@ source hash verified, restart succeeded; all 20 isolated regressions passed agai
 the deployed module. The identical candidate retrieved/validated actual audio.
 Telegram receipt/playback remains unverified; Mini App unchanged.
 [Deployment evidence](navan-medley-fix-2026-10-19.md).
+
+
+## 2026-10-19 — Verified release
+
+Deploy the frozen, tested snapshot using explicit Git blobs and runtime hashes, preserving concurrent recording-search edits. Keep private configuration and persistent data; use a consistent backup and rollback guard. Longer cold-start readiness succeeded after a safe rollback. See [release evidence](deployment-2026-10-19.md).
