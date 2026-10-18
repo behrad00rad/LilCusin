@@ -8,6 +8,54 @@ from music_bot.youtube_fetch import YouTubeFetcher, FetchError, confident, rank_
 
 
 class YouTubeSearchTests(unittest.IsolatedAsyncioTestCase):
+    async def test_stored_medley_identity_and_clip_duration_recover_to_choice(self):
+        track = NS(artist='navan', title='soltane ghalbha x voilà live montreal concert',
+                   display_artist='Navan', display_title='Soltane Ghalbha X Voilà (Live Montreal Concert)', duration=220)
+        entry = dict(id='GEaFdwO9YoA',
+            title='VOILA x SOLTANE GHALBHA (Live in Montreal) — French x Persian Emotional Cover | Navan',
+            channel='Navan', uploader='Navan', duration=272)
+        fetcher = YouTubeFetcher(FetchSettings())
+        fetcher.process = AsyncMock(return_value=json.dumps({'entries':[entry]}).encode())
+        rows = await fetcher.search(track, '.', AsyncMock(return_value=True))
+        self.assertEqual([r['id'] for r in rows], [entry['id']])
+        self.assertTrue(rows[0]['duration_mismatch'])
+        self.assertFalse(confident(rows))
+        wrong = dict(entry, title=entry['title'].replace('Montreal','NYC'))
+        fetcher.process = AsyncMock(return_value=json.dumps({'entries':[wrong]}).encode())
+        self.assertFalse(await fetcher.search(track, '.', AsyncMock(return_value=True)))
+
+    def test_other_medley_versions_still_require_artist_components_and_choice(self):
+        track = NS(artist='Navan', title='Soltane Ghalbha X Voilà', duration=None, allow_versions=True)
+        entry = dict(id='GEaFdwO9YoA', title='VOILA x SOLTANE GHALBHA (Live in Montreal) — Cover | Navan',
+                     channel='Navan', uploader='Navan', duration=272)
+        rows = rank_candidates(track,[entry],900)
+        self.assertEqual(len(rows),1)
+        self.assertFalse(confident(rows))
+        for change in [dict(uploader='Other',channel='Other'),dict(title=entry['title']+' Karaoke'),
+                       dict(title=entry['title']+' Remix'),dict(title='Other Song (Live Cover)')]:
+            self.assertFalse(rank_candidates(track,[{**entry,**change}],900))
+
+    def test_selected_live_medley_can_offer_reversed_cover_but_never_auto_send(self):
+        track = NS(artist='Navan', title='Soltane Ghalbha X Voilà (Live Montreal Concert)', duration=272)
+        entry = dict(id='GEaFdwO9YoA',
+            title='VOILA x SOLTANE GHALBHA (Live in Montreal) — French x Persian Emotional Cover | Navan',
+            channel='Navan', uploader='Navan', duration=272)
+        rows = rank_candidates(track, [entry], 900)
+        self.assertEqual([row['id'] for row in rows], ['GEaFdwO9YoA'])
+        self.assertEqual(set(rows[0]['version']), {'live', 'cover'})
+        self.assertFalse(rows[0]['exact'])
+        self.assertFalse(confident(rows))
+        for changes in [dict(channel='Other', uploader='Other'), dict(artist='Other'),
+                        dict(title=entry['title'].replace('Montreal', 'NYC')),
+                        dict(title=entry['title'].replace('Montreal', '')),
+                        dict(title=entry['title'].replace('SOLTANE GHALBHA', 'OTHER SONG')),
+                        dict(title=entry['title'].replace('Live in Montreal', 'Montreal')),
+                        dict(title=entry['title'] + ' Karaoke'),
+                        dict(title=entry['title'] + ' Remix'), dict(duration=950),
+                        dict(is_live=True), dict(track='Different Song')]:
+            with self.subTest(changes=changes):
+                self.assertFalse(rank_candidates(track, [{**entry, **changes}], 900))
+
     def test_extra_upload_title_text_is_a_choice_not_an_automatic_match(self):
         track = NS(artist='Artist', title='Song Name', duration=200)
         rows = rank_candidates(track, [dict(id='abcdefghijk', title='Artist - Song Name extra upload credits and packaging',

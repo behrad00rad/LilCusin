@@ -4,6 +4,7 @@ import json
 import re
 import sys
 import shutil
+import unicodedata
 from difflib import SequenceMatcher
 from pathlib import Path
 from types import SimpleNamespace
@@ -56,10 +57,41 @@ class FetchError(Exception):
     """Only fixed, sanitized messages may cross this boundary."""
 
 
+def medley_key(value, artist):
+    value = without_artist_credit(value, artist)
+    value = re.split(r'\s+[-–—|]\s+', value, maxsplit=1)[0]
+    value = re.sub(r'\([^()]*\)|\[[^\[\]]*\]',
+                   lambda match: '' if version_words(match[0]) else match[0], value)
+    parts = re.split(r'\s+(?:x|×|/|&)\s+', value, flags=re.I)
+    parts = [match_text(''.join(c for c in unicodedata.normalize('NFD', part)
+                               if unicodedata.category(c) != 'Mn')) for part in parts]
+    return tuple(sorted(parts)) if 2 <= len(parts) <= 4 and all(len(p) >= 3 for p in parts) else ()
+
+
+def same_medley_performance(track, raw):
+    wanted = medley_key(track.title, track.artist)
+    title = str(raw.get('title') or '')
+    if not wanted or medley_key(title, track.artist) != wanted:
+        return False
+    if raw.get('track') and medley_key(str(raw['track']), track.artist) != wanted:
+        return False
+    artist = artist_key(track.artist)
+    if raw.get('artist') and artist_key(str(raw['artist'])) != artist:
+        return False
+    if not any(artist_key(str(raw.get(field) or '')) == artist for field in ('artist', 'uploader', 'channel')):
+        return False
+    # Keep explicitly requested location/year tokens, while ignoring label syntax.
+    contexts = re.findall(r'\([^()]*\)|\[[^\[\]]*\]', track.title)
+    context = ' '.join(part for part in contexts if 'live' in version_words(part))
+    required = set(match_text(context).split()) - {'live', 'in', 'at', 'concert', 'performance'}
+    return required <= set(match_text(title).split())
+
+
 def rank_candidates(track, entries, max_duration):
     result = []
     wanted = version_words(track.title)
     variants = getattr(track, 'allow_versions', False)
+    medley_target = ('live' in wanted or variants) and medley_key(track.title, track.artist)
     for raw in entries:
         video = raw.get('id', '')
         title = str(raw.get('track') or raw.get('title') or '')[:200]
@@ -68,9 +100,13 @@ def rank_candidates(track, entries, max_duration):
         words = version_words(without_artist_credit(str(raw.get('title') or title), track.artist))
         if raw.get('track'):
             words |= version_words(title)
+        medley = bool(medley_target) and same_medley_performance(track, raw)
+        if medley_target and not medley:
+            continue
+        selected_cover = medley and ('live' in words) and words == (wanted | {'cover'} if not variants else {'live', 'cover'})
         if (not VIDEO.fullmatch(video) or raw.get('is_live') or raw.get('live_status') in {'is_live', 'is_upcoming'}
                 or (raw.get('live_status') == 'was_live' and 'live' not in wanted)
-                or (bool(words & {'cover', 'karaoke'}) if variants else words != wanted)
+                or (bool(words & {'cover', 'karaoke'}) and not selected_cover if variants else words != wanted and not selected_cover)
                 or not isinstance(duration, (int, float))
                 or not 0 < duration <= max_duration):
             continue
@@ -91,7 +127,7 @@ def rank_candidates(track, entries, max_duration):
             recording = str(raw.get('track') or without_artist_credit(str(raw.get('title') or title), track.artist))
             normalized = song_title(base_title(recording), base_title(track.title))
         context = match_text(artist + ' ' + title)
-        a = 1.0 if (artist_key(artist) == wanted_artists or all(
+        a = 1.0 if (medley or artist_key(artist) == wanted_artists or all(
             re.search(r'(?<!\w)' + re.escape(name) + r'(?!\w)', context) for name in wanted_artists)) else 0.0
         if variants and a != 1:
             continue
@@ -104,7 +140,7 @@ def rank_candidates(track, entries, max_duration):
         title_mismatch = t < .82
         identifiable = len(target.replace(' ', '')) >= 3
         contains_title = bool(identifiable and re.search(r'(?<!\w)' + re.escape(target) + r'(?!\w)', normalized))
-        if title_mismatch and not (a == 1 and contains_title):
+        if title_mismatch and not (a == 1 and contains_title) and not medley:
             continue
         uploader = match_text(str(raw.get('uploader') or raw.get('channel') or ''))
         official = uploader in {artist_text, artist_text + ' topic', artist_text.replace(' ', '') + 'vevo'}
@@ -118,7 +154,7 @@ def rank_candidates(track, entries, max_duration):
         if raw.get('track') or re.search(r'\baudio\b', str(raw.get('title', '')), re.I):
             preference += .03
         result.append(dict(id=video, title=title, artist=artist, duration=duration, score=score + preference,
-                           exact=bool(not title_mismatch and duration_ok and (rich or (official and a == 1 and t == 1))),
+                           exact=bool(not medley and not title_mismatch and duration_ok and (rich or (official and a == 1 and t == 1))),
                            title_mismatch=title_mismatch,
                            identity_title=normalized, identity_artist='|'.join(wanted_artists) if a else match_text(artist),
                            version=sorted(words), recording_title=str(raw.get('track') or without_artist_credit(title, track.artist))))
@@ -193,6 +229,9 @@ class YouTubeFetcher:
         # Canonical DB keys remove punctuation; search with the original catalogue spelling.
         artist = getattr(track, 'display_artist', None) or track.artist
         title = getattr(track, 'display_title', None) or track.title
+        # Stored identity keys remove punctuation needed to interpret version context.
+        track = SimpleNamespace(artist=artist, title=title, duration=track.duration,
+                                allow_versions=getattr(track, 'allow_versions', False))
         query = ' '.join((artist + ' ' + title).split())[:300]
         if not version_words(track.title):
             query += ' official audio'
@@ -288,7 +327,10 @@ class YouTubeFetcher:
             'TikTok.*,vm.tiktok,Instagram.*,Pinterest.*,Twitter.*,Soundcloud.*,Vimeo',
             '--max-filesize', str(self.settings.max_bytes), '--playlist-end', '1',
             '--match-filter', f'duration <= {self.settings.max_duration} & !is_live',
-            '-f', 'bestaudio/best', '-o', 'social.%(ext)s', '--', safe], directory, alive)
+            # Social platforms can expose a separately credited soundtrack that
+            # differs from what the viewer actually hears. Fingerprint the
+            # video's embedded audio, matching an uploaded-video request.
+            '-f', 'best[vcodec!=none]/bestaudio/best', '-o', 'social.%(ext)s', '--', safe], directory, alive)
         files = [p for p in Path(directory).glob('social.*')
                  if p.suffix.lower() in {'.mp4', '.m4a', '.webm', '.mkv', '.mp3', '.ogg', '.wav', '.flac', '.aac'}]
         if len(files) != 1 or not 0 < files[0].stat().st_size <= self.settings.max_bytes:
