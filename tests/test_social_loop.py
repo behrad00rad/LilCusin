@@ -61,6 +61,24 @@ class SocialLoopTests(ServiceTestCase):
         self.assertTrue(value['sparse']);self.assertEqual(value['minimum'],3)
         self.assertNotIn('ratings',str(value))
 
+    async def test_swap_artwork_and_time_keep_existing_consent_boundary(self):
+        async with self.database.write() as session:
+            track = await session.get(Track, self.ids[0])
+            track.artwork_url = 'https://lastfm-img.freetls.fastly.net/i/u/300x300/test.png'
+        swap = await self.send()
+        received = await self.social.read(456, swap['token'])
+        self.assertEqual(received['song']['artwork'], 'https://lastfm-img.freetls.fastly.net/i/u/300x300/test.png')
+        self.assertIsNotNone(received['sent_at'])
+        self.assertNotIn('photo', received)
+        self.assertNotIn('bio', received)
+        async with self.database.write() as session:
+            track = await session.get(Track, self.ids[0])
+            track.artwork_url = 'http://127.0.0.1/private'
+        self.assertFalse((await self.social.read(456, swap['token']))['song']['artwork'])
+        await self.invites.decide(123, self.token, 'revoke')
+        with self.assertRaises(CardError):
+            await self.social.read(456, swap['token'])
+
     async def test_duplicate_send_save_and_reciprocal_reply(self):
         draft=await self.social.draft(123,self.token,self.ids[1])
         self.assertEqual((await self.social.draft(123,self.token,self.ids[1]))['token'],draft['token'])

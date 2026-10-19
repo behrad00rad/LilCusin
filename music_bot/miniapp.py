@@ -280,6 +280,8 @@ def create_app(token, chat, workflow, *, bot_username=None):
     register_taste_card_api(app, chat, body, bot_username=bot_username)
     from .social_api import register_social_api
     register_social_api(app, chat, body, bot_username=bot_username)
+    from .delivery_status import register_delivery_status
+    register_delivery_status(app, chat)
     return app
 
 

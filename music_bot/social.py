@@ -7,7 +7,7 @@ from sqlalchemy import CheckConstraint, ForeignKey, UniqueConstraint, select, fu
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.sqlite import insert
 from .models import Base, User, Track, Rating, UTCDateTime, normalize_name, utc_now
-from .taste_cards import CardError, TasteCard
+from .taste_cards import CardError, TasteCard, song_json
 from .comparison_invitations import ComparisonInvitation, invitation_state, public_snapshot
 
 
@@ -215,9 +215,10 @@ class Social:
         track = await session.get(Track, row.track_id)
         card = await session.get(TasteCard, row.recipient_id if actor == row.sender_id else row.sender_id)
         return dict(token=row.token, invitation=row.invitation, role='sender' if actor == row.sender_id else 'recipient',
-            state=row.state, song=dict(id=track.id, artist=track.display_artist or track.artist, title=track.display_title or track.title),
+            state=row.state, song=song_json(track, owner=True),
             partner=card.nickname if card else '', note=row.note, saved=row.saved, loved=row.loved,
-            reply_to=row.reply_to, expires_at=row.expires_at.isoformat())
+            reply_to=row.reply_to, sent_at=row.sent_at.isoformat() if row.sent_at else None,
+            expires_at=row.expires_at.isoformat())
 
     async def read(self, telegram_id, token):
         async with self.database.sessions() as session:
