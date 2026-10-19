@@ -1,5 +1,15 @@
 # Current handoff
 
+## Recommendation recovery - 2026-10-19
+
+Approved one-file release `27ccddcae8221606` deployed; source hash verified,
+bot active and polling. Recently displayed songs no longer suppress refill;
+empty For You pools recover using positive artists. 26 recommendation tests
+passed on Windows and again in isolated Linux staging. Unrelated runtime sources,
+configuration and Mini App API PID unchanged. Existing missing `packaging` blocks
+full preflight; baseline unchanged, runtime imports passed. Actual Telegram
+recommendation receipt remains unverified. See [evidence](recommendation-recovery-2026-10-19.md).
+
 Updated: 2026-10-19 (Asia/Tehran). Release committed, pushed and deployed.
 
 ## Latest verified release

@@ -1,5 +1,18 @@
 # Recognition and search evidence
 
+## 2026-10-19 - Recommendation recovery
+
+26 isolated recommendation tests passed on Windows, including two new regressions
+for For You artist recovery and cooldown-aware online refill. In-memory syntax
+and scoped whitespace checks passed. Initial permission/iteration failures are
+retained in the [verification record](recommendation-recovery-2026-10-19.md).
+User-approved release `27ccddcae8221606` deployed: 26 tests also passed in isolated
+Linux staging, deployed SHA-256 matches the tested module, bot active and polling.
+Unrelated sources/configuration and Mini App API PID unchanged. Initial deployment
+rolled back safely; full preflight remains blocked by pre-existing missing
+`packaging`, with identical old/new baseline and separate runtime imports passing.
+Actual Telegram recommendation receipt remains unverified.
+
 ## Verification during this session
 
 - Initial inspection recorded pre-existing Worker/deployment changes and a

@@ -77,6 +77,37 @@ class ScoringTests(unittest.TestCase):
 
 
 class RecommendationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_for_you_empty_similarity_uses_artist_fallback(self):
+        async with self.database.write() as session:
+            user = User(telegram_user_id=TELEGRAM_ID)
+            seed = Track(artist="band", title="seed", metadata_source="fixture")
+            session.add_all([user, seed])
+            await session.flush()
+            session.add(Rating(user_id=user.id, track_id=seed.id, value="love"))
+        providers = AsyncMock()
+        providers.call.side_effect = [[], [TrackCandidate("New", "Band", "lastfm"),
+                                          TrackCandidate("Wrong", "Other", "lastfm")]]
+        result = await RecommendationService(self.database, providers).recommend_for_user(TELEGRAM_ID)
+        self.assertEqual(result.status, "ok")
+        self.assertEqual([row.title for row in result.recommendations], ["New"])
+        self.assertEqual(result.recommendations[0].sources, ("artist_top_tracks",))
+        self.assertEqual(await self.count(Rating), 1)
+
+    async def test_recent_local_pool_does_not_suppress_online_refill(self):
+        async with self.database.write() as session:
+            user = User(telegram_user_id=TELEGRAM_ID)
+            seed = Track(artist="band", title="seed", metadata_source="fixture")
+            shown = Track(artist="band", title="shown", metadata_source="fixture")
+            session.add_all([user, seed, shown])
+            await session.flush()
+            session.add(Rating(user_id=user.id, track_id=seed.id, value="like"))
+            session.add(RecommendationHistory(user_id=user.id, track_id=shown.id, recommended_at=utc_now()))
+        providers = AsyncMock()
+        providers.call.return_value = [TrackCandidate("Fresh", "Band", "lastfm", score=1)]
+        result = await RecommendationService(self.database, providers).recommend_for_user(TELEGRAM_ID, limit=1)
+        self.assertEqual([row.title for row in result.recommendations], ["Fresh"])
+        providers.call.assert_awaited_once_with("lastfm", "get_similar_tracks", "band", "seed")
+
     async def test_dna_empty_similarity_falls_back_without_ratings(self):
         async with self.database.write() as session:
             session.add(User(telegram_user_id=TELEGRAM_ID))

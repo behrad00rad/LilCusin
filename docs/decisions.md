@@ -1,5 +1,22 @@
 # Recognition and discovery decisions
 
+## 2026-10-19 - Recommendation starvation
+
+Scope: chat For You and shared recommendation candidate generation only.
+Count only eligible, unseen candidates before deciding whether online refill is
+needed. When similarity/local discovery is exhausted, use top tracks from an
+existing positive seed artist for For You as well as selected-song discovery.
+Reserve one of the existing three provider calls for this recovery; keep per-call
+timeouts, canonical identity checks, ratings and recent-history exclusions.
+Artist fallback is narrower than cross-artist discovery, but gives an honest
+artist-based result rather than inventing similarity or treating searches as Likes.
+No unsolicited notifications or changes to stored user preferences. User then
+approved deployment, commit and push. Deploy only the tested candidate module,
+preserving existing runtime settings and unrelated work. The first deployment
+rolled back on preflight failure; retry verified the failure also occurs on the
+old module (missing `packaging` checker), checked runtime imports independently
+and retained the unchanged baseline limitation rather than upgrading dependencies.
+
 Navigation: [current state](STATE.md), [priorities](TASKS.md),
 [architecture](ARCHITECTURE.md), [product vision](social-product-vision.md).
 This existing lowercase file is the canonical decision history; do not create

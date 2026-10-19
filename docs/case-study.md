@@ -1,5 +1,17 @@
 # From unknown recordings to playable songs
 
+### Recommendation recovery - 2026-10-19
+
+Focused inspection found that recently displayed songs could suppress online
+refill even though they could not be recommended, and artist fallback excluded
+For You. Local changes remove both dead ends without changing explicit ratings
+or weakening repeat/dislike exclusions. Recovery uses an existing positive
+artist, not a fabricated similarity score. Verification and release limits are
+recorded in [recommendation recovery](recommendation-recovery-2026-10-19.md).
+The user-approved one-module release is now deployed and polling, with 26 tests
+passing against a production-code snapshot. Real Telegram receipt remains a
+separate check; a pre-existing dependency-checker limitation is retained explicitly.
+
 LilCusin previously identified songs from title/artist metadata. The user requested
 recognition from recordings and shared links, then asked for playable audio rather
 than only a song title and Shazam link.

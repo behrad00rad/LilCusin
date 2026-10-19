@@ -138,12 +138,15 @@ async def generate(database, profile, providers, limit):
     # Only fill a sparse pool. Fresh empty caches also prevent another request.
     available = [item for values in (relationships[seed_id] for seed_id in positive_ids)
                  for metadata in values if (item := candidate_item(metadata)) is not None]
-    available = [item for item in deduplicate(local + available) if not item.identities & profile.rated_aliases]
+    available = [item for item in deduplicate(local + available)
+                 if item.track_id not in profile.rated_ids and not item.identities & profile.rated_aliases
+                 and not any(profile.history_aliases.get(key, now - S.HISTORY_WINDOW) > now - S.HISTORY_COOLDOWN
+                             for key in item.identities)]
+    calls = 0
     if providers is not None and len(available) < limit:
-        calls = 0
         for seed in profile.positives:
             seed_id = seed.item.track_id
-            if seed_id in fresh or calls >= S.MAX_PROVIDER_CALLS:
+            if seed_id in fresh or calls >= max(0, S.MAX_PROVIDER_CALLS - 1):
                 continue
             calls += 1
             try:
@@ -190,15 +193,19 @@ async def generate(database, profile, providers, limit):
     candidates = [item for item in candidates if not any(
         profile.history_aliases.get(key, now - S.HISTORY_WINDOW) > now - S.HISTORY_COOLDOWN
         for key in item.identities)]
-    # A selected song needs no ratings. Sparse/empty track similarity data must
-    # still allow discovery from its artist, without inventing similarity scores.
-    if not candidates and providers is not None and profile.selected_track_id is not None:
-        seed = profile.positives[0].item
+    fallback_artists = {}
+    for positive in sorted(profile.positives, key=seed_weight, reverse=True):
+        artist = positive.item.metadata.artist
+        fallback_artists.setdefault(comparison_text(artist), artist)
+    for artist in list(fallback_artists.values())[:S.MAX_PROVIDER_CALLS]:
+        if providers is None or candidates or calls >= S.MAX_PROVIDER_CALLS:
+            break
+        calls += 1
         try:
             async with asyncio.timeout(S.PROVIDER_TIMEOUT):
-                values = await providers.call("lastfm", "get_artist_top_tracks", seed.metadata.artist)
-            fallback = [item for metadata in values if (item := candidate_item(metadata)) is not None
-                        and comparison_text(metadata.artist) == comparison_text(seed.metadata.artist)] if isinstance(values, list) else []
+                values = await providers.call("lastfm", "get_artist_top_tracks", artist)
+            fallback = [item for metadata in values[:S.MAX_EDGES_PER_SEED] if (item := candidate_item(metadata)) is not None
+                        and comparison_text(metadata.artist) == comparison_text(artist)] if isinstance(values, list) else []
             async with database.sessions() as session:
                 resolved, tracks = await resolve_tracks(session, fallback)
                 canonical = await load_items(session, tracks)
