@@ -1,5 +1,17 @@
 # Current handoff
 
+## UI release - 2026-10-19
+
+User-approved UI commit `cdcc4d2` is pushed to `codex/safe-publish` and deployed
+to the existing direct VPS Mini App origin. This supersedes the local-only UI
+status below. The scoped file update preserves production hosting differences
+and unrelated concurrent work. Mini App API active; bot PID, Nginx and inactive
+connector unchanged during the successful application. Five public UI assets
+returned HTTPS 200 with exact source hashes; unsigned delivery-status returned 401.
+31 affected tests passed in isolated Linux staging against the reconciled runtime.
+No schema/configuration changes or full-checkout synchronization. Real Telegram
+delivery and physical swipe remain unverified. See [UI evidence](ux-clarity-2026-10-19.md).
+
 ## Active local task - recommendation loop
 
 Items 1-3 are implemented locally: weak request learning, the existing private
