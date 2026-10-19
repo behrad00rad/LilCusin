@@ -120,3 +120,25 @@ The fixture deliberately has missing artwork, demonstrating the fallback.
 Real signed Telegram delivery, physical swipe gestures, mobile keyboard/safe-area
 behavior and retention improvements remain unverified. Portrait card image and
 new social features were not redesigned. No commit, push or deployment performed.
+
+## Approved release verification
+
+User authorized commit, push and deploy. UI commit `cdcc4d2` is pushed on
+`codex/safe-publish` and installed at the existing direct VPS HTTPS origin.
+19 scoped code/test/evidence files were committed; concurrent chat/recommendation
+changes and the already-deployed hosting registration were excluded from staging.
+Production miniapp.py retains that hosting registration plus the receipt endpoint.
+
+The first deployment attempt rolled back its UI files after verification failed
+while another release changed protected bot files/PID. The second isolated staging
+run reconciled against that new runtime: all 31 affected Python tests passed again.
+Successful application retained rollback copies and restarted only the Mini App
+API. Target hashes matched; other Python files/private configuration and bot,
+Nginx and inactive connector states/PIDs matched the refreshed baseline. No database
+or environment changes were made. The old Cloudflare Worker was not republished;
+generated Worker assets remain committed for compatibility.
+
+External HTTPS checks returned 200 with byte-for-byte source hashes for index,
+app.js, social.js, style.css and locales.json. Unsigned delivery-status returned
+401. Real signed Telegram opening, audio receipt and physical touch gestures
+remain unverified; these operational checks do not establish those journeys.
