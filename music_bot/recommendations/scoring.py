@@ -11,6 +11,9 @@ from .types import Item, Ranked, Seed
 
 
 def seed_weight(seed):
+    if seed.rating in {'requested', 'saved'}:
+        return min(S.SAVED_WEIGHT if seed.rating == 'saved' else S.REPEAT_REQUEST_WEIGHT,
+                   max(0, seed.signal_weight or 0))
     if seed.rating == "playlist_channel":
         return min(S.PLAYLIST_CHANNEL_WEIGHT, max(0, seed.signal_weight or 0))
     return S.SELECTED_SEED_WEIGHT if seed.rating is None else S.RATING_WEIGHTS[seed.rating]
@@ -105,6 +108,8 @@ def rank_candidate(candidate, profile, related_artists, now):
         reason = messages.REC_SELECTED_REASONS[reason]
     elif seed.rating == "playlist_channel":
         reason = messages.REC_PLAYLIST_REASONS[reason]
+    elif seed.rating in {'requested', 'saved'}:
+        reason = 'Based on songs you saved' if seed.rating == 'saved' else 'Based on songs you requested, not confirmed listening'
     return Ranked(candidate, score, reason, seed.item.track_id, affinity)
 
 

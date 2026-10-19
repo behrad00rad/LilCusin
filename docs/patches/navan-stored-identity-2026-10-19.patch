@@ -1,0 +1,34 @@
+--- a/music_bot/youtube_fetch.py
++++ b/music_bot/youtube_fetch.py
+@@ -89,7 +89,7 @@
+     result = []
+     wanted = version_words(track.title)
+     variants = getattr(track, 'allow_versions', False)
+-    medley_target = 'live' in wanted and medley_key(track.title, track.artist)
++    medley_target = ('live' in wanted or variants) and medley_key(track.title, track.artist)
+     for raw in entries:
+         video = raw.get('id', '')
+         title = str(raw.get('track') or raw.get('title') or '')[:200]
+@@ -101,10 +101,10 @@
+         medley = bool(medley_target) and same_medley_performance(track, raw)
+         if medley_target and not medley:
+             continue
+-        selected_cover = not variants and medley and 'live' in wanted and words == wanted | {'cover'}
++        selected_cover = medley and ('live' in words) and words == (wanted | {'cover'} if not variants else {'live', 'cover'})
+         if (not VIDEO.fullmatch(video) or raw.get('is_live') or raw.get('live_status') in {'is_live', 'is_upcoming'}
+                 or (raw.get('live_status') == 'was_live' and 'live' not in wanted)
+-                or (bool(words & {'cover', 'karaoke'}) if variants else words != wanted and not selected_cover)
++                or (bool(words & {'cover', 'karaoke'}) and not selected_cover if variants else words != wanted and not selected_cover)
+                 or not isinstance(duration, (int, float))
+                 or not 0 < duration <= max_duration):
+             continue
+@@ -227,6 +227,9 @@
+         # Canonical DB keys remove punctuation; search with the original catalogue spelling.
+         artist = getattr(track, 'display_artist', None) or track.artist
+         title = getattr(track, 'display_title', None) or track.title
++        # Stored identity keys remove punctuation needed to interpret version context.
++        track = SimpleNamespace(artist=artist, title=title, duration=track.duration,
++                                allow_versions=getattr(track, 'allow_versions', False))
+         query = ' '.join((artist + ' ' + title).split())[:300]
+         if not version_words(track.title):
+             query += ' official audio'

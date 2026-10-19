@@ -7,10 +7,12 @@ from sqlalchemy import func, or_, select, tuple_
 from sqlalchemy.dialects.sqlite import insert
 
 from ..matching import comparison_text, identity_key
-from ..models import Rating, RecommendationHistory, SimilarTrack, Track, TrackExternalID, TrackTag, User, UserTrackSignal, utc_now
+from ..models import Rating, RecommendationHistory, SimilarTrack, Track, TrackExternalID, TrackTag, User, UserTrackSignal, ChannelPost, PlaylistChannel, utc_now
 from ..providers.common import TrackCandidate
+from ..taste_learning import LearningState, REQUEST_WINDOW, TasteRequest, TrackPreference
+from ..social import SavedSong
 from . import settings as S
-from .scoring import tag_weight
+from .scoring import seed_weight, tag_weight
 from .types import Item, Profile, Recommendation, RecommendationResult, Seed
 
 
@@ -43,6 +45,25 @@ async def load_items(session, tracks):
     return result
 
 
+async def load_exclusions(session, user_id, extra_ids=()):
+    queries = [select(Rating.track_id).where(Rating.user_id == user_id),
+        select(TrackPreference.track_id).where(TrackPreference.user_id == user_id, TrackPreference.feedback.is_not(None)),
+        select(SavedSong.track_id).where(SavedSong.user_id == user_id),
+        select(TasteRequest.track_id).where(TasteRequest.user_id == user_id,
+            TasteRequest.created_at > utc_now() - REQUEST_WINDOW),
+        select(UserTrackSignal.track_id).where(UserTrackSignal.user_id == user_id),
+        select(ChannelPost.track_id).join(PlaylistChannel).where(PlaylistChannel.user_id == user_id),
+        select(RecommendationHistory.track_id).where(RecommendationHistory.user_id == user_id,
+            RecommendationHistory.recommended_at > utc_now() - S.HISTORY_COOLDOWN)]
+    ids = set(await session.scalars(queries[0].union(*queries[1:]))) | set(extra_ids)
+    ids.discard(None)
+    items = await load_items(session, list(await session.scalars(select(Track).where(Track.id.in_(ids)))))
+    identities = set()
+    for item in items.values():
+        identities.update(item.identities)
+    return ids, identities
+
+
 def balanced_seeds(rows, values, maximum):
     groups = defaultdict(deque)
     for rating, track in rows:
@@ -69,6 +90,40 @@ async def load_profile(session, telegram_user_id, selected_track_id=None):
     if selected_track_id is not None and selected is None:
         return None
     positives = [(rating, track) for rating, track in rows if rating.value in {"love", "like"}] if selected is None else []
+    rated_track_ids = {track.id for _, track in rows}
+    preferences = (await session.execute(select(TrackPreference, Track).join(Track)
+        .where(TrackPreference.user_id == user_id))).all()
+    saved_rows = (await session.execute(select(Track, SavedSong.created_at).join(SavedSong)
+        .where(SavedSong.user_id == user_id))).all()
+    saved_tracks = [track for track, _ in saved_rows]
+    state = await session.get(LearningState, user_id)
+    behavior = []
+    preference_negatives = []
+    if selected is None:
+        requests = (await session.execute(select(Track, func.count(TasteRequest.id)).join(TasteRequest)
+            .where(TasteRequest.user_id == user_id, TasteRequest.created_at > utc_now() - REQUEST_WINDOW)
+            .group_by(Track.id).order_by(func.count(TasteRequest.id).desc(), Track.id))).all()
+        choices = {track.id: (track, 'requested', min(S.REPEAT_REQUEST_WEIGHT, count * S.REQUEST_WEIGHT))
+                   for track, count in requests if track.id not in rated_track_ids}
+        choices.update({track.id: (track, 'saved', S.SAVED_WEIGHT) for track, when in saved_rows
+                        if track.id not in rated_track_ids and (state is None or state.saves_since is None or when > state.saves_since)})
+        for preference, track in preferences:
+            if track.id in rated_track_ids:
+                continue
+            if preference.feedback == 'not_for_me':
+                choices.pop(track.id, None)
+        groups = defaultdict(deque)
+        for choice in sorted(choices.values(), key=lambda choice: (-choice[2], choice[0].id)):
+            groups[comparison_text(choice[0].artist)].append(choice)
+        while groups and len(behavior) < S.MAX_BEHAVIOR_SEEDS:
+            for artist in sorted(list(groups)):
+                behavior.append(groups[artist].popleft())
+                if not groups[artist]:
+                    del groups[artist]
+                if len(behavior) == S.MAX_BEHAVIOR_SEEDS:
+                    break
+    preference_negatives = [track for preference, track in preferences
+                            if preference.feedback == 'not_for_me' and track.id not in rated_track_ids]
     implicit = []
     if selected is None:
         implicit = (await session.execute(select(Track, func.max(UserTrackSignal.weight))
@@ -77,10 +132,14 @@ async def load_profile(session, telegram_user_id, selected_track_id=None):
                 UserTrackSignal.weight > 0,
                 ~Track.id.in_(select(Rating.track_id).where(Rating.user_id == user_id)))
             .group_by(Track.id).order_by(Track.id))).all()
-    if not positives and not implicit and selected is None:
+        rejected = {track.id for preference, track in preferences if preference.feedback == 'not_for_me'}
+        implicit = [(track, weight) for track, weight in implicit if track.id not in rejected]
+    if not positives and not implicit and not behavior and selected is None:
         return None
     negatives = balanced_seeds(rows, {"dislike"}, S.MAX_NEGATIVE_SEEDS)
     items = await load_items(session, [track for _, track in positives + negatives] + [track for track, _ in implicit]
+                             + [track for track, _, _ in behavior] + [track for _, track in preferences]
+                             + saved_tracks
                              + ([selected] if selected is not None else []))
     rated_aliases = set()
     for _, track in rows:
@@ -102,21 +161,55 @@ async def load_profile(session, telegram_user_id, selected_track_id=None):
             key = ("id", row.provider, row.external_identifier)
             history_aliases[key] = max(history_aliases.get(key, history[row.track_id]), history[row.track_id])
     positive_seeds = [Seed(items[track.id], rating.value) for rating, track in positives]
+    inferred_exclusions = set(rated_aliases)
+    for preference, track in preferences:
+        if preference.feedback == 'not_for_me':
+            inferred_exclusions.update(items[track.id].identities)
     positive_seeds += [Seed(items[track.id], "playlist_channel", weight) for track, weight in implicit
-                       if not items[track.id].identities & rated_aliases]
+                       if not items[track.id].identities & inferred_exclusions]
+    positive_seeds += [Seed(items[track.id], kind, weight) for track, kind, weight in behavior
+                       if not items[track.id].identities & inferred_exclusions]
+    unique_seeds, positive_aliases = [], set()
+    for seed in sorted(positive_seeds, key=seed_weight, reverse=True):
+        if not seed.item.identities & positive_aliases:
+            unique_seeds.append(seed)
+            positive_aliases.update(seed.item.identities)
+    positive_seeds = unique_seeds
     if not positive_seeds and selected is None:
         return None
     excluded_ids = {track.id for _, track in rows}
     for track, _ in implicit:
         excluded_ids.add(track.id)
         rated_aliases.update(items[track.id].identities)
+    for track, _, _ in behavior:
+        excluded_ids.add(track.id)
+        rated_aliases.update(items[track.id].identities)
+    if selected is None:
+        requested_items = await load_items(session, [track for track, _ in requests])
+        for item in requested_items.values():
+            excluded_ids.add(item.track_id)
+            rated_aliases.update(item.identities)
+    for preference, track in preferences:
+        if preference.feedback:
+            excluded_ids.add(track.id)
+            rated_aliases.update(items[track.id].identities)
+    for track in saved_tracks:
+        excluded_ids.add(track.id)
+        rated_aliases.update(items[track.id].identities)
+    channel_tracks = (await session.scalars(select(Track).join(ChannelPost, ChannelPost.track_id == Track.id)
+        .join(PlaylistChannel, PlaylistChannel.id == ChannelPost.channel_id)
+        .where(PlaylistChannel.user_id == user_id).distinct())).all()
+    for item in (await load_items(session, channel_tracks)).values():
+        excluded_ids.add(item.track_id)
+        rated_aliases.update(item.identities)
     if selected is not None:
         positive_seeds = [Seed(items[selected.id], None)]
         # Exclude the focus track and its aliases even if it has never been rated.
         excluded_ids.add(selected.id)
         rated_aliases.update(items[selected.id].identities)
     return Profile(user_id, positive_seeds,
-                   [Seed(items[track.id], rating.value) for rating, track in negatives],
+                   ([Seed(items[track.id], rating.value) for rating, track in negatives]
+                    + [Seed(items[track.id], 'dislike') for track in preference_negatives])[:S.MAX_NEGATIVE_SEEDS],
                    excluded_ids, rated_aliases, history, history_aliases, selected_track_id)
 
 

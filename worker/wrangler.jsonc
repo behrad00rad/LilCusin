@@ -1,0 +1,11 @@
+{
+  "name": "lilcusin-ui",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-10-13",
+  "workers_dev": true,
+  "preview_urls": true,
+  "observability": { "enabled": true },
+  "account_id": "817fafb53e07c89817d2ea25a9cff7e2",
+  "durable_objects": {"bindings":[{"name":"BOT_BRIDGE","class_name":"LilCusinBridge"}]},
+  "exports": {"LilCusinBridge":{"type":"durable-object","storage":"sqlite"}}
+}

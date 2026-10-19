@@ -1,0 +1,4 @@
+# Optional audio worker; install a current maintained release and pin the version
+# verified for your deployment. YouTube extractor compatibility changes frequently.
+yt-dlp[default,curl-cffi]>=2026.2.4,<2027
+mutagen>=1.47,<2

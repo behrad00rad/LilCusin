@@ -7,11 +7,15 @@ from music_bot.config import ConfigError, load_config
 
 
 class ConfigTests(unittest.TestCase):
+    def test_popularity_catalogue_can_be_disabled(self):
+        environment={'TELEGRAM_BOT_TOKEN':'123:secret','LASTFM_API_KEY':'key','SEARCH_DEEZER_ENABLED':'false'}
+        with patch.dict('os.environ',environment,clear=True),patch('music_bot.config.load_environment'):
+            self.assertFalse(load_config().search_deezer_enabled)
+
     def test_missing_and_empty_names_only(self):
         for environment, missing in [
             ({}, "TELEGRAM_BOT_TOKEN"),
             ({"TELEGRAM_BOT_TOKEN": "123:fake"}, "LASTFM_API_KEY"),
-            ({"TELEGRAM_BOT_TOKEN": "123:fake", "LASTFM_API_KEY": "key"}, "TELEGRAM_API_BASE_URL"),
             ({"TELEGRAM_BOT_TOKEN": " ", "LASTFM_API_KEY": "secret"}, "TELEGRAM_BOT_TOKEN"),
         ]:
             with self.subTest(missing=missing), patch.dict("os.environ", environment, clear=True), patch("music_bot.config.load_environment"):
@@ -28,7 +32,7 @@ class ConfigTests(unittest.TestCase):
             config = load_config()
             self.assertEqual(repr(config), "Config()")
 
-    def test_telegram_api_base_url_is_required_and_normalized(self):
+    def test_explicit_telegram_api_base_url_is_normalized(self):
         environment = {
             "TELEGRAM_BOT_TOKEN": "123:secret",
             "LASTFM_API_KEY": "key",
@@ -52,3 +56,12 @@ class ConfigTests(unittest.TestCase):
         output = SafeFormatter().format(record)
         for private in ("secret", "token", "private"):
             self.assertNotIn(private, output)
+
+
+    def test_missing_or_blank_telegram_api_origin_defaults_to_direct(self):
+        for value in (None, '', '   '):
+            environment = {'TELEGRAM_BOT_TOKEN': '123:secret', 'LASTFM_API_KEY': 'key'}
+            if value is not None:
+                environment['TELEGRAM_API_BASE_URL'] = value
+            with self.subTest(value=value), patch.dict('os.environ', environment, clear=True), patch('music_bot.config.load_environment'):
+                self.assertEqual(load_config().telegram_api_base_url, 'https://api.telegram.org')

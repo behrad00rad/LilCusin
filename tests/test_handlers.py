@@ -4,7 +4,9 @@ from unittest.mock import AsyncMock, patch
 from aiogram import Bot
 from aiogram.types import Update
 
+from music_bot.i18n import tr
 from music_bot import messages
+from music_bot.bot_copy import text as copy
 from music_bot.submissions import InvalidSubmission
 from tests.support import dispatcher
 
@@ -17,10 +19,11 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.bot = Bot("123456:TEST_ONLY_FAKE_TOKEN")
         self.service = AsyncMock()
+        self.workflow = AsyncMock()
         self.answer_patch = patch("aiogram.types.Message.answer", new_callable=AsyncMock)
         self.answer = self.answer_patch.start()
         self.present_patch = patch("music_bot.handlers.present", new_callable=AsyncMock)
-        self.present_patch.start()
+        self.present = self.present_patch.start()
 
     async def asyncTearDown(self):
         self.answer_patch.stop()
@@ -35,28 +38,31 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
             **fields,
         }})
         await self.dispatcher.feed_update(self.bot, update, submissions=self.service,
-                                          workflow=AsyncMock(), enrichment=AsyncMock())
+                                          workflow=self.workflow, enrichment=AsyncMock())
 
     async def test_commands_preserved_and_not_saved(self):
-        for command, response in [("/start", messages.START), ("/help", messages.HELP)]:
+        for command, response in [("/start", tr('onboard_welcome')), ("/help", copy('guide'))]:
             await self.send(text=command)
-            self.assertEqual(self.answer.call_args.args[0], response)
+            self.assertEqual(response, self.answer.call_args.args[0])
+            self.assertNotIn('guide:1', str(self.answer.call_args.kwargs['reply_markup']))
             self.assertIsNotNone(self.answer.call_args.kwargs.get("reply_markup"))
         await self.send(text="/unknown - song")
-        self.service.submit_text.assert_not_called()
+        self.service.submit_search.assert_not_called()
 
     async def test_text_dispatches_and_responds(self):
-        self.service.submit_text.return_value.parsed_artist = "گوگوش"
-        self.service.submit_text.return_value.parsed_title = "Song"
-        await self.send(text="گوگوش — Song")
-        self.service.submit_text.assert_awaited_once()
-        self.assertIn("گوگوش", self.answer.call_args.args[0])
-        self.assertIn(messages.PENDING, self.answer.call_args.args[0])
+        self.service.submit_search.return_value.parsed_artist = "Ú¯ÙˆÚ¯ÙˆØ´"
+        self.service.submit_search.return_value.parsed_title = "Song"
+        await self.send(text="Ú¯ÙˆÚ¯ÙˆØ´ â€” Song")
+        self.service.submit_search.assert_awaited_once()
+        self.assertEqual(copy('lookup'), self.answer.call_args.args[0])
+        self.workflow.start.assert_awaited_once_with(self.service.submit_search.return_value.id, 123, fast=False)
+        self.present.assert_awaited_once()
+        self.assertIs(self.present.call_args.args[1], self.workflow.start.return_value)
 
-    async def test_bad_text_explains_format(self):
-        self.service.submit_text.side_effect = InvalidSubmission()
-        await self.send(text="invalid")
-        self.answer.assert_called_with(messages.INVALID_TEXT)
+    async def test_invalid_text_explains_search(self):
+        self.service.submit_search.side_effect = InvalidSubmission()
+        await self.send(text="x" * 241)
+        self.answer.return_value.edit_text.assert_awaited_once_with(messages.INVALID_TEXT, reply_markup=None)
 
     async def test_forwarded_audio_without_metadata(self):
         await self.send(
@@ -67,7 +73,9 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(user.telegram_user_id, 123)
         self.assertIsNone(audio.performer)
         self.assertIsNone(audio.title)
-        self.assertIn(messages.UNKNOWN, self.answer.call_args.args[0])
+        self.assertEqual(copy('lookup'), self.answer.call_args.args[0])
+        self.workflow.start.assert_awaited_once_with(self.service.submit_audio.return_value.id, 123, fast=False)
+        self.present.assert_awaited_once()
 
     async def test_voice_not_saved(self):
         await self.send(voice={"file_id": "f", "file_unique_id": "u", "duration": 10})

@@ -53,6 +53,10 @@ class TrackCandidate:
     tags: tuple[Tag, ...] = ()
     score: float | None = None
     releases: tuple[Release, ...] = ()
+    listeners: float | None = None  # Public catalogue popularity, never personal listening history.
+    deezer_rank: float | None = None  # Provider popularity index; not a listener count.
+    youtube_views: int | None = None  # Observed discovery upload views, not song-wide totals.
+    artist_aliases: tuple[str, ...] = ()  # Verified catalogue aliases; search only.
 
     @property
     def missing_metadata(self) -> tuple[str, ...]:

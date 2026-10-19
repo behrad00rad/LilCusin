@@ -41,6 +41,73 @@ def match_text(value: str) -> str:
     return comparison_text(value)
 
 
+def remove_reversed_candidates(candidates):
+    """Prefer structured catalogues over reversed scrobble/video identities."""
+    trusted = {(match_text(c.artist), match_text(c.title)) for c in candidates
+               if c.artist and c.title and c.source in {'musicbrainz', 'deezer', 'itunes', 'user_corrected'}}
+    return [c for c in candidates if not (c.artist and c.title
+            and c.source in {'lastfm', 'youtube'}
+            and (match_text(c.title), match_text(c.artist)) in trusted
+            and match_text(c.title) != match_text(c.artist))]
+
+
+def title_query_match(query: str, title: str, *, exact=False) -> bool:
+    """Search-only equivalence for catalogue censorship; never an identity key."""
+    wanted, actual = match_text(query), match_text(title)
+    if wanted and (wanted == actual if exact else wanted in actual):
+        return True
+    marker = '\ue000'
+    left = match_text(query.replace('*', marker)).split()
+    right = match_text(title.replace('*', marker)).split()
+    if not left or (exact and len(left) != len(right)) or len(left) > len(right):
+        return False
+    def word_match(a, b):
+        if a == b:
+            return True
+        if marker in a and marker in b:
+            return False
+        masked, plain = (a, b) if marker in a else (b, a)
+        if marker not in masked or len(masked.replace(marker, '')) < 2:
+            return False
+        pattern = re.sub(marker + '+', lambda _: r'[^\W_]{1,8}', re.escape(masked))
+        return re.fullmatch(pattern, plain) is not None
+    return any(all(word_match(a, b) for a, b in zip(left, right[start:start + len(left)]))
+               for start in range(len(right) - len(left) + 1))
+
+
+def search_text_match(query: str, value: str, *, exact=False) -> bool:
+    """Discovery-only prefix/one-edit matching, never automatic confirmation."""
+    left, right = match_text(query).split(), match_text(value).split()
+    if not left or len(left) > len(right) or exact and len(left) != len(right):
+        return False
+    def close(a, b):
+        if a == b or not exact and len(a) >= 3 and b.startswith(a):
+            return True
+        if min(len(a), len(b)) < 4 or abs(len(a) - len(b)) > 1:
+            return False
+        if len(a) == len(b):
+            changes = [i for i in range(len(a)) if a[i] != b[i]]
+            return len(changes) == 1 or (len(changes) == 2 and changes[1] == changes[0] + 1
+                and a[changes[0]] == b[changes[1]] and a[changes[1]] == b[changes[0]])
+        shorter, longer = (a, b) if len(a) < len(b) else (b, a)
+        return any(longer[:i] + longer[i + 1:] == shorter for i in range(len(longer)))
+    return any(all(close(a, b) for a, b in zip(left, right[start:start + len(left)]))
+               for start in range(len(right) - len(left) + 1))
+
+
+def search_query_matches_song(query: str, artist: str, title: str) -> bool:
+    if title_query_match(query, title) or search_text_match(query, title):
+        return True
+    words = query.split()
+    for boundary in range(1, min(len(words), 4)):
+        song, performer = ' '.join(words[:boundary]), ' '.join(words[boundary:])
+        performer = re.sub(r'^by\s+', '', performer, flags=re.I)
+        if ((title_query_match(song, title, exact=True) or search_text_match(song, title, exact=True))
+                and search_text_match(performer, artist)):
+            return True
+    return False
+
+
 def identifier_key(provider: str, value: str):
     """Last.fm song URLs can differ only in typography or URL encoding."""
     if provider == 'lastfm':
@@ -70,6 +137,7 @@ def decode_track(data: dict) -> TrackCandidate:
     return TrackCandidate(**{
         **data, "tags": tuple(Tag(**tag) for tag in data.get("tags", [])),
         "releases": tuple(Release(**release) for release in data.get("releases", [])),
+        "artist_aliases": tuple(data.get('artist_aliases', ())),
     })
 
 

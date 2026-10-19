@@ -14,7 +14,9 @@ class MigrationTests(ServiceTestCase):
             session.add(TrackTag(track_id=track.id, name="rock", source="lastfm"))
         # Reproduce the previous schema only in this disposable test database.
         async with self.database.engine.begin() as connection:
-            for table, column in [("tracks", "display_artist"), ("tracks", "display_title"), ("track_tags", "display_name")]:
+            for table, column in [("tracks", "display_artist"), ("tracks", "display_title"), ("track_tags", "display_name"),
+                                  ("audio_deliveries", "artwork_key"), ("audio_requests", "delivered_video_id"),
+                                  ('audio_requests', 'status_message_id')]:
                 await connection.exec_driver_sql(f'ALTER TABLE "{table}" DROP COLUMN "{column}"')
         await self.database.initialize()
         await self.database.initialize()

@@ -138,12 +138,24 @@ async def generate(database, profile, providers, limit):
     # Only fill a sparse pool. Fresh empty caches also prevent another request.
     available = [item for values in (relationships[seed_id] for seed_id in positive_ids)
                  for metadata in values if (item := candidate_item(metadata)) is not None]
-    available = [item for item in deduplicate(local + available) if not item.identities & profile.rated_aliases]
+    available = [item for item in deduplicate(local + available)
+                 if item.track_id not in profile.rated_ids and not item.identities & profile.rated_aliases
+                 and not any(profile.history_aliases.get(key, now - S.HISTORY_WINDOW) > now - S.HISTORY_COOLDOWN
+                             for key in item.identities)]
+    calls = 0
     if providers is not None and len(available) < limit:
-        calls = 0
+        artist_seeds = defaultdict(deque)
         for seed in profile.positives:
+            artist_seeds[comparison_text(seed.item.metadata.artist)].append(seed)
+        online_seeds = []
+        while artist_seeds:
+            for artist in list(artist_seeds):
+                online_seeds.append(artist_seeds[artist].popleft())
+                if not artist_seeds[artist]:
+                    del artist_seeds[artist]
+        for seed in online_seeds:
             seed_id = seed.item.track_id
-            if seed_id in fresh or calls >= S.MAX_PROVIDER_CALLS:
+            if seed_id in fresh or calls >= max(0, S.MAX_PROVIDER_CALLS - 1):
                 continue
             calls += 1
             try:
@@ -190,6 +202,38 @@ async def generate(database, profile, providers, limit):
     candidates = [item for item in candidates if not any(
         profile.history_aliases.get(key, now - S.HISTORY_WINDOW) > now - S.HISTORY_COOLDOWN
         for key in item.identities)]
+    fallback_artists = {}
+    for positive in sorted(profile.positives, key=seed_weight, reverse=True):
+        artist = positive.item.metadata.artist
+        fallback_artists.setdefault(comparison_text(artist), artist)
+    for artist in list(fallback_artists.values())[:S.MAX_PROVIDER_CALLS]:
+        if providers is None or candidates or calls >= S.MAX_PROVIDER_CALLS:
+            break
+        calls += 1
+        try:
+            async with asyncio.timeout(S.PROVIDER_TIMEOUT):
+                values = await providers.call("lastfm", "get_artist_top_tracks", artist)
+            fallback = [item for metadata in values[:S.MAX_EDGES_PER_SEED] if (item := candidate_item(metadata)) is not None
+                        and comparison_text(metadata.artist) == comparison_text(artist)] if isinstance(values, list) else []
+            async with database.sessions() as session:
+                resolved, tracks = await resolve_tracks(session, fallback)
+                canonical = await load_items(session, tracks)
+            for index, item in enumerate(fallback):
+                track_id = resolved[index]
+                if track_id == -1:
+                    continue
+                if track_id is not None:
+                    item = merge(canonical[track_id], item)
+                if item.track_id in profile.rated_ids or item.identities & profile.rated_aliases:
+                    continue
+                if any(profile.history_aliases.get(key, now - S.HISTORY_WINDOW) > now - S.HISTORY_COOLDOWN
+                       for key in item.identities):
+                    continue
+                item.sources.add("artist_top_tracks")
+                candidates.append(item)
+            candidates = deduplicate(candidates)
+        except (ProviderError, TimeoutError):
+            logger.warning("Recommendation artist fallback unavailable.")
     for item in candidates:
         for key in sorted(item.identities):
             for seed_id, score in negative_links[key].items():

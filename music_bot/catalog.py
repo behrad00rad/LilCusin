@@ -13,7 +13,7 @@ class IdentityConflict(ValueError):
 
 async def attach_ids(session, track_id, identifiers):
     for provider, identifier in identifiers.items():
-        if provider not in ("lastfm", "musicbrainz") or not identifier:
+        if provider not in ("lastfm", "musicbrainz", "deezer") or not identifier:
             continue
         # An identifier already attached elsewhere is never reassigned.
         await session.execute(insert(TrackExternalID).values(
@@ -22,6 +22,12 @@ async def attach_ids(session, track_id, identifiers):
 
 
 async def canonical_track(session, candidate):
+    if candidate.source in {'lastfm', 'youtube'}:
+        reverse = await session.scalar(select(Track).where(
+            Track.artist == comparison_text(candidate.title), Track.title == comparison_text(candidate.artist),
+            Track.metadata_source.in_(['musicbrainz', 'deezer', 'itunes', 'user_corrected'])))
+        if reverse is not None and comparison_text(candidate.artist) != comparison_text(candidate.title):
+            raise IdentityConflict('Reversed low-trust catalogue identity')
     clauses = [
         (TrackExternalID.provider == provider) & (TrackExternalID.external_identifier == value)
         for provider, value in candidate.external_ids.items()
@@ -44,6 +50,10 @@ async def canonical_track(session, candidate):
         )
         session.add(track)
         await session.flush()
+    else:
+        for field in ('album', 'artwork_url', 'duration'):
+            if getattr(track, field) is None and getattr(candidate, field) is not None:
+                setattr(track, field, getattr(candidate, field))
     await attach_ids(session, track.id, candidate.external_ids)
     return track
 

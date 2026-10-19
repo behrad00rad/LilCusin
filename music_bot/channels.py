@@ -150,9 +150,10 @@ class ChannelService:
             channel = await session.scalar(select(PlaylistChannel).where(PlaylistChannel.id == control.payload['links'][index],
                                                                         PlaylistChannel.user_id == control.user_id))
             key = f'{action}:{index}'
-            if channel is None or key in control.payload['used']:
+            if channel is None or (action != 'review' and key in control.payload['used']):
                 raise FlowError('stale')
-            control.payload = {**control.payload, 'used': [*control.payload['used'], key]}
+            if action != 'review':
+                control.payload = {**control.payload, 'used': [*control.payload['used'], key]}
             if action in {'keep', 'remove'}:
                 await session.delete(control)
             return channel
@@ -165,6 +166,8 @@ class ChannelService:
                 raise FlowError('stale')
             channel.status = 'disconnected'
             if remove_signals:
+                from .taste_learning import invalidate
+                await invalidate(session, channel.user_id)
                 await session.execute(delete(UserTrackSignal).where(UserTrackSignal.channel_id == channel.id))
                 # Pending confirmations or a later reconnection must not restore erased signals.
                 await session.execute(update(ChannelPost).where(ChannelPost.channel_id == channel.id).values(learn_allowed=False))

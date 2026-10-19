@@ -23,6 +23,22 @@ def parse_song(value: str) -> tuple[str, str]:
     return tuple(part.strip() for part in parts)
 
 
+def parse_search_query(value: str) -> tuple[str | None, str]:
+    """Shared chat/Mini App input: a title, optionally qualified by an artist."""
+    if not isinstance(value, str) or not 2 <= len(value) <= 240:
+        raise InvalidSubmission('Enter a song title (2–240 characters).')
+    value = value.strip()
+    if not value or value.startswith('/'):
+        raise InvalidSubmission('Enter a song title.')
+    from .matching import match_text
+    if not match_text(value):
+        raise InvalidSubmission('Enter a song title.')
+    try:
+        return parse_song(value)
+    except InvalidSubmission:
+        return None, value
+
+
 @dataclass(frozen=True)
 class Submitter:
     telegram_user_id: int
@@ -70,6 +86,11 @@ class SubmissionService:
             user, submission_type="text", raw_text=raw_text,
             parsed_artist=artist, parsed_title=title,
         )
+
+    async def submit_search(self, user: Submitter, raw_text: str) -> SongSubmission:
+        artist, title = parse_search_query(raw_text)
+        return await self._save(user, submission_type='text', raw_text=raw_text,
+                                parsed_artist=artist, parsed_title=title)
 
     async def submit_audio(self, user: Submitter, audio: AudioMetadata) -> SongSubmission:
         return await self._save(

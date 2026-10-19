@@ -3,18 +3,18 @@
 START = (
     "🎵 Welcome to Lil Cousin\n\n"
     "Send a song, tell me how you feel about it, and discover your next favourite.\n\n"
-    "Forward an audio file or type Artist - Song title to begin."
+    "Forward an audio file or type a song name or a short lyric fragment to begin."
 )
 HELP = (
     "🎵 Send or forward a song, then choose Love, Like, Neutral or Dislike.\n\n"
     "✨ Recommendations finds songs for you. More Like This starts from one song.\n"
     "🧠 My Taste shows what I’ve learned.\n\n"
-    "Need to correct a match? Reply to the correction prompt with Artist - Song title. "
+    "Need to correct a match? Reply to the correction prompt with a song name. "
     "Use /cancel to stop, /privacy to review stored data, or /forgetme to remove it."
 )
 
-INVALID_TEXT = "Use this format: Artist - Song title"
-UNSUPPORTED = "Send a Telegram audio message or text as Artist - Song title."
+INVALID_TEXT = "Type a song name or a short lyric fragment (2–240 characters). You can optionally add the artist: Radiohead - Creep."
+UNSUPPORTED = "Send a Telegram audio message or type a song name."
 NO_USER = "Please submit songs from your personal Telegram account."
 SAVE_FAILED = "Could not save your submission. Please try again."
 PENDING = "🔎 Finding your song…"
@@ -24,11 +24,13 @@ AUDIO_RECEIVED = TEXT_RECEIVED
 
 
 def audio_received(audio) -> str:
+    from .i18n import tr
     def display(value):
         # Keep replies below Telegram's message limit even with long metadata.
-        return str(value)[:400] if value is not None else UNKNOWN
+        return str(value)[:400] if value is not None else tr('unknown')
 
-    return AUDIO_RECEIVED.format(
+    from .i18n import tr
+    return tr('bot_AUDIO_RECEIVED').format(
         artist=display(audio.performer), title=display(audio.title),
         duration=display(audio.duration), filename=display(audio.filename),
         mime_type=display(audio.mime_type), file_size=display(audio.file_size),
@@ -36,13 +38,14 @@ def audio_received(audio) -> str:
 
 
 def text_received(artist: str, title: str) -> str:
-    return TEXT_RECEIVED.format(artist=artist[:1000], title=title[:1000])
+    from .i18n import tr
+    return tr('bot_TEXT_RECEIVED').format(artist=artist[:1000], title=title[:1000])
 
 
 PRIVATE_ONLY = "Please send songs and use these buttons in a private chat with me."
 CHOOSE = "🎵 I found a few possible matches. Which one is yours?"
 NONE = "None of these"
-CORRECTION = "Reply here with Artist - Song title, or use /cancel to stop."
+CORRECTION = "Reply here with a song name, optionally Artist - Song title, or use /cancel to stop."
 MISSING = "The audio needs an artist and title. " + CORRECTION
 NOT_FOUND = "No suitable match found. " + CORRECTION
 PROVIDER_FAILED = "Music metadata is temporarily unavailable. You can retry with a correction. " + CORRECTION
@@ -61,11 +64,13 @@ def candidate_label(artist, title):
 
 
 def rating_prompt(artist, title):
-    return f"Matched: {artist[:500]} — {title[:500]}\n\n{RATING_QUESTION}"
+    from .i18n import tr
+    return tr('bot_CARD_TITLE').format(artist=artist[:500], title=title[:500])
 
 
 def rating_label(value, selected):
-    return ("✓ " if value == selected else "") + RATING_LABELS[value]
+    labels = getattr(_sys.modules[__name__], 'RATING_LABELS')
+    return ('✓ ' if value == selected else '') + labels[value]
 
 
 REC_SIMILAR_LOVE = "Similar to a song you loved"
@@ -90,7 +95,7 @@ MENU_PROFILE = '🧠 My Taste'
 MENU_CHANNELS = '📻 Playlist Channels'
 MENU_SETTINGS = '⚙️ Settings'
 MENU_HELP = 'ℹ️ Help'
-SEND_SONG_PROMPT = 'Send or forward a Telegram audio file, or type Artist - Song title.'
+SEND_SONG_PROMPT = 'Type a song name, or send or forward a Telegram audio file.'
 MORE_LIKE = '🎯 More Like This'
 AFTER_FOR_YOU = '✨ Recommendations for You'
 DONE = 'Done'
@@ -135,6 +140,7 @@ BACK = '‹ Back'
 CANCEL = 'Cancel'
 RESET_CONFIRM = 'Yes, reset'
 PRIVACY = (
+    'Music recognition sends an audio fingerprint to Shazam. Temporary media is deleted after processing; results may be cached in memory for one hour. '
     'I store your Telegram user ID and basic profile fields, song submissions, explicit ratings, '
     'recommendation history, and music metadata. Short-lived button state '
     'keeps your controls private. Song artist/title metadata is sent to Last.fm and sometimes MusicBrainz '
@@ -202,3 +208,27 @@ REC_PLAYLIST_REASONS = {
     REC_ARTIST: 'Same artist as a song in your saved playlist',
     REC_RELATED_ARTIST: 'An artist connected to your playlist through similar-track metadata',
 }
+# Translate module attributes at read time without changing canonical metadata or
+# sharing a mutable locale between concurrent handlers.
+import sys as _sys
+from types import ModuleType as _ModuleType
+
+class _LocalizedMessages(_ModuleType):
+    def __getattribute__(self, name):
+        value = super().__getattribute__(name)
+        if name.isupper():
+            from .i18n import CATALOGUE, language
+            code = language.get()
+            strings = CATALOGUE.get(code, CATALOGUE['en'])
+            if name == 'RATING_LABELS':
+                return {key: mark+' '+strings[key] for key,mark in [('love','♥'),('like','↑'),('neutral','–'),('dislike','↓')]}
+            if name == 'CHANNEL_STATUSES':
+                return {key: strings[key] for key in ['connected','disconnected','unavailable']}
+            if name == 'CHANNEL_OUTCOMES':
+                return {key: strings[{'connected':'connected','already':'connected','expired':'stale',
+                    'not_admin':'connect1','permissions':'connect1','in_use':'error','limit':'error'}[key]]
+                    for key in value}
+            return strings.get('bot_'+name, value)
+        return value
+
+_sys.modules[__name__].__class__ = _LocalizedMessages

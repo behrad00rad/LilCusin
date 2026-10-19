@@ -85,13 +85,44 @@ class MusicBrainzClient:
                 params={"fmt": "json", **params}, headers={"User-Agent": USER_AGENT},
             )
 
-    async def search_recordings(self, artist: str, title: str) -> list[TrackCandidate]:
+    async def search_recordings(self, artist: str, title: str, limit: int = 5) -> list[TrackCandidate]:
         payload = await self._request(
-            query=f"artist:{quoted_query(artist)} AND recording:{quoted_query(title)}", limit=5,
+            query=' AND '.join([part for part in (f"artist:{quoted_query(artist)}" if artist.strip() else '',f"recording:{quoted_query(title)}" if title.strip() else '') if part]), limit=limit if artist.strip() else 15,
         )
         if "recordings" not in payload or not isinstance(payload["recordings"], list):
             raise ProviderError(Failure.INVALID_RESPONSE)
         return [normalize_recording(item) for item in items(payload["recordings"])]
+
+    async def search_titles_by_artist(self, artist: str, title: str) -> list[TrackCandidate]:
+        """Broader catalogue browsing for a possibly partial artist hint."""
+        return await self.search_recordings(artist, title, limit=100)
+
+    async def search_titles(self, title: str) -> list[TrackCandidate]:
+        payload = await self._request(query=f"recording:{quoted_query(title)}",limit=100)
+        if not isinstance(payload.get('recordings'),list):raise ProviderError(Failure.INVALID_RESPONSE)
+        return [normalize_recording(item) for item in items(payload['recordings'])]
+
+    async def search_artist_tracks(self, query: str) -> list[TrackCandidate]:
+        """Resolve native-script aliases before looking up an artist's recordings."""
+        from ..matching import match_text
+        from dataclasses import replace
+        async with shared_limiter():
+            payload = await request_json(self.session, 'https://musicbrainz.org/ws/2/artist/',
+                params={'fmt': 'json', 'query': f'artist:{quoted_query(query)} OR alias:{quoted_query(query)}', 'limit': 5},
+                headers={'User-Agent': USER_AGENT})
+        wanted = match_text(query)
+        ids = []
+        for artist in items(payload.get('artists')):
+            names = [artist.get('name'), artist.get('sort-name')]
+            names += [alias.get('name') for alias in items(artist.get('aliases'))]
+            identifier = text(artist.get('id'))
+            if (identifier and re.fullmatch(r'[0-9a-fA-F-]{36}', identifier)
+                    and any(isinstance(name, str) and match_text(name) == wanted for name in names)):
+                ids.append(identifier)
+        if not ids:
+            return []
+        payload = await self._request(query=' OR '.join('arid:' + identifier for identifier in ids[:2]), limit=100)
+        return [replace(normalize_recording(row), artist_aliases=(query,)) for row in items(payload.get('recordings'))]
 
     async def get_recording(self, recording_id: str) -> TrackCandidate:
         # Identifiers form a URL path; never allow arbitrary paths or query strings.

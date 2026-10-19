@@ -33,5 +33,6 @@ class ServiceTestCase(unittest.IsolatedAsyncioTestCase):
         self.user = Submitter(123, "test", "Test")
 
     async def asyncTearDown(self):
+        await self.workflow.close()
         await self.database.close()
         self.temp.cleanup()

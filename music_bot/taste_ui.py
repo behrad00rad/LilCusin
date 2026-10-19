@@ -7,13 +7,15 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery, InlineKeyboardButton as Button, InlineKeyboardMarkup, Message
 
 from . import messages as M
+from .i18n import tr
+from .bot_copy import text as copy
 from .chat_ui import clean, dismiss, main_menu
 from .workflow import FlowError, RATINGS
 
 router = Router()
 
 
-def taste_keyboard(token):
+def taste_keyboard(token, learning_enabled=True):
     def key(text, action):
         return Button(text=text, callback_data=f't:{token}:{action}')
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -21,6 +23,8 @@ def taste_keyboard(token):
         [key(M.TASTE_CLUSTERS, 'clusters'), key(M.TASTE_RECENT, 'recent')],
         [key(M.TASTE_CORRECT, 'correct')], [key(M.TASTE_RESET, 'reset')],
         [key(M.MAIN_MENU, 'menu')],
+        [key(copy('pause_learning' if learning_enabled else 'resume_learning'), 'pause' if learning_enabled else 'resume')],
+        [key(copy('saved_songs'), 'saved')],
     ])
 
 
@@ -34,7 +38,9 @@ def overview(data):
         artists=names(data['artists']), tags=names(data['tags']), songs=data['songs'],
         signals=data['signals'], channels=data['channels'], explanation=(
             M.TASTE_EXPLANATION + '\n' + (M.TASTE_RELIABILITY_GOOD if data['reliable'] else M.TASTE_RELIABILITY_LOW)),
-        **{value: counts.get(value, 0) for value in RATINGS})
+        **{value: counts.get(value, 0) for value in RATINGS}) + '\n\n' + copy('learning_summary',
+            saves=data.get('saves', 0), requests=data.get('requests', 0)) + '\n' + copy(
+                'learning_on' if data.get('learning_enabled', True) else 'learning_off')
 
 
 async def show_taste(message, service, user_id):
@@ -43,7 +49,7 @@ async def show_taste(message, service, user_id):
         await message.answer(M.TASTE_EMPTY, reply_markup=main_menu())
         return
     token = await service.create_control(user_id, kind='taste')
-    sent = await message.answer(overview(data), parse_mode=None, reply_markup=taste_keyboard(token))
+    sent = await message.answer(overview(data), parse_mode=None, reply_markup=taste_keyboard(token, data['learning_enabled']))
     await service.bind_control(token, sent.message_id)
 
 
@@ -61,7 +67,7 @@ async def edit(message, text, keyboard):
 
 
 async def callback(query: CallbackQuery, chat_service):
-    match = re.fullmatch(r't:([a-f0-9]{32}):(overview|artists|tags|clusters|recent|correct|pick[0-9]|reset|confirmreset|menu|cancel)', query.data or '')
+    match = re.fullmatch(r't:([a-f0-9]{32}):(overview|artists|tags|clusters|recent|correct|pick[0-9]|reset|confirmreset|menu|cancel|pause|resume|saved|open[0-9])', query.data or '')
     if (not match or not isinstance(query.message, Message) or query.message.chat.type != 'private'
             or query.message.chat.id != query.from_user.id or query.from_user.is_bot):
         await query.answer(M.STALE)
@@ -75,21 +81,42 @@ async def callback(query: CallbackQuery, chat_service):
         elif action in {'overview', 'cancel'}:
             await chat_service.taste_control(token, query.from_user.id, query.message.message_id,
                                             state={'view': 'overview'})
-            await edit(query.message, overview(data), taste_keyboard(token))
+            await edit(query.message, overview(data), taste_keyboard(token, data['learning_enabled']))
+        elif action in {'pause', 'resume'}:
+            await chat_service.set_learning(query.from_user.id, action == 'resume')
+            data = await chat_service.taste_summary(query.from_user.id)
+            await edit(query.message, overview(data), taste_keyboard(token, data['learning_enabled']))
+        elif action == 'saved':
+            tracks = await chat_service.saved_tracks(query.from_user.id)
+            await chat_service.taste_control(token, query.from_user.id, query.message.message_id,
+                state={'view': 'saved', 'saved_tracks': [track.id for track in tracks]})
+            keys = [[Button(text=clean((track.display_artist or track.artist) + ' — ' +
+                (track.display_title or track.title), 60), callback_data=f't:{token}:open{index}')]
+                for index, track in enumerate(tracks)]
+            keys.extend(back(token).inline_keyboard)
+            await edit(query.message, copy('saved_help' if tracks else 'saved_empty'), InlineKeyboardMarkup(inline_keyboard=keys))
+        elif action.startswith('open'):
+            payload = await chat_service.taste_control(token, query.from_user.id, query.message.message_id, require='saved')
+            index = int(action[4:])
+            tracks = payload.get('saved_tracks', [])
+            if index >= len(tracks) or not await chat_service.is_saved(query.from_user.id, tracks[index]):
+                raise FlowError('stale')
+            from .chat_ui import show_card
+            await show_card(query.message, chat_service, query.from_user.id, await chat_service.track(tracks[index]))
         elif action == 'artists':
-            await edit(query.message, 'Explicit from ratings: ' + names(data['artists']) + '\n\nInferred from playlists: ' + names(data['inferred_artists']), back(token))
+            await edit(query.message, tr('from_ratings') + names(data['artists']) + '\n\n'+copy('from_activity') + names(data['inferred_artists']), back(token))
         elif action == 'tags':
-            await edit(query.message, 'Explicit from ratings: ' + names(data['tags']) + '\n\nInferred from playlists: ' + names(data['inferred_tags']), back(token))
+            await edit(query.message, tr('from_ratings') + names(data['tags']) + '\n\n'+copy('from_activity') + names(data['inferred_tags']), back(token))
         elif action == 'clusters':
             clusters = names(data['tags'][:3])
-            await edit(query.message, 'Current taste clusters: ' + clusters + '\n\n' + (M.TASTE_RELIABILITY_GOOD if data['reliable'] else M.TASTE_RELIABILITY_LOW), back(token))
+            await edit(query.message, tr('tags')+': ' + clusters + '\n\n' + (M.TASTE_RELIABILITY_GOOD if data['reliable'] else M.TASTE_RELIABILITY_LOW), back(token))
         elif action == 'recent':
             marks = {'love': '❤️', 'like': '👍', 'neutral': '😐', 'dislike': '👎'}
             rows = []
             for source, _, value, artist_display, artist, title_display, title in data['recent']:
                 marker = marks.get(value, '📻') if source == 'rating' else '📻'
                 rows.append(f"{marker} {clean(artist_display or artist, 70)} — {clean(title_display or title, 90)}")
-            await edit(query.message, 'Recent learning signals:\n' + ('\n'.join(rows) or M.UNKNOWN), back(token))
+            await edit(query.message, tr('recent')+':\n' + ('\n'.join(rows) or M.UNKNOWN), back(token))
         elif action == 'correct':
             targets = await chat_service.taste_targets(query.from_user.id)
             await chat_service.taste_control(token, query.from_user.id, query.message.message_id,
@@ -112,7 +139,7 @@ async def callback(query: CallbackQuery, chat_service):
                                             state={'view': 'reset'})
             keys = [[Button(text=M.RESET_CONFIRM, callback_data=f't:{token}:confirmreset')],
                     [Button(text=M.CANCEL, callback_data=f't:{token}:cancel')]]
-            await edit(query.message, M.TASTE_RESET_CONFIRM, InlineKeyboardMarkup(inline_keyboard=keys))
+            await edit(query.message, M.TASTE_RESET_CONFIRM + '\n\n' + copy('reset_library_note'), InlineKeyboardMarkup(inline_keyboard=keys))
         elif action == 'confirmreset':
             await chat_service.taste_control(token, query.from_user.id, query.message.message_id,
                                             require='reset', state={'view': 'overview'})

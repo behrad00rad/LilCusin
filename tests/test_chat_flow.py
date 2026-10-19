@@ -31,12 +31,17 @@ class ChatFlowTests(ServiceTestCase):
             message = self.message(self.serial, text=text)
             self.outgoing.append((message, text, kwargs))
             return message
+        async def edited(message, text, **kwargs):
+            self.outgoing.append((message, text, kwargs))
+            return message
         self.patches = [patch('aiogram.types.Message.answer', side_effect=answer),
                         patch('aiogram.types.Message.edit_reply_markup', new_callable=AsyncMock),
-                        patch('aiogram.types.CallbackQuery.answer', new_callable=AsyncMock)]
-        self.answer, self.edit, self.ack = [p.start() for p in self.patches]
+                        patch('aiogram.types.CallbackQuery.answer', new_callable=AsyncMock),
+                        patch('aiogram.types.Message.edit_text', autospec=True, side_effect=edited)]
+        self.answer, self.edit, self.ack, self.edit_text = [p.start() for p in self.patches]
 
     async def asyncTearDown(self):
+        await self.chat.recommendations.close()
         for p in self.patches:
             p.stop()
         await self.bot.session.close()
@@ -67,7 +72,8 @@ class ChatFlowTests(ServiceTestCase):
         async with self.database.write() as session:
             await session.execute(update(Rating).where(Rating.value.in_(['love', 'like'])).values(value='neutral'))
         await self.feed(message=self.message(text='/recommend'))
-        self.assertEqual(self.outgoing[-1][1], M.PREFERENCES_NEEDED)
+        from music_bot.bot_copy import text as copy
+        self.assertEqual(self.outgoing[-1][1], copy('recommend_start'))
         self.assertEqual(await self.count(RecommendationHistory), 0)
         async with self.database.write() as session:
             await session.execute(update(Rating).where(Rating.track_id == self.tracks['metal_seed']).values(value='love'))
@@ -91,13 +97,14 @@ class ChatFlowTests(ServiceTestCase):
         row = replace(result.recommendations[0], artist='<b>Artist</b>', title='Unsafe & title',
                       artwork_url='https://127.0.0.1/private', external_ids={'lastfm': 'javascript:alert(1)'})
         self.chat.recommendations = AsyncMock()
-        self.chat.recommendations.recommend_for_user.return_value = RecommendationResult('ok', (row, row))
+        self.chat.recommendations.queue.reserve.return_value = RecommendationResult('ok', (row, row))
+        self.chat.recommendations.queue.warm = Mock()
         await self.feed(message=self.message(text='/recommend'))
         self.assertEqual(await self.count(RecommendationHistory), 1)
         _, text, options = self.outgoing[-1]
         self.assertEqual(text.count('&lt;b&gt;Artist&lt;/b&gt;'), 1)
         self.assertEqual(options['parse_mode'], 'HTML')
-        self.assertIn('https://t.me/musicbehbot?text=', text)
+        self.assertNotIn('https://t.me/', text)
         self.assertFalse(any(b.url for r in options['reply_markup'].inline_keyboard for b in r))
         self.assertIsNone(safe_url('https://www.last.fm@evil.example/music'))
         self.assertEqual(safe_url('https://www.last.fm/music/A/_/B'), 'https://www.last.fm/music/A/_/B')
@@ -111,9 +118,10 @@ class ChatFlowTests(ServiceTestCase):
         seed = control.payload['tracks'][0]
         engine = self.chat.recommendations
         with patch.object(engine, 'recommend_similar_to_track', wraps=engine.recommend_similar_to_track) as similar:
-            await self.click(listing, 0, 1)
+            await self.click(listing, 0, 2)
+            await self.click(self.outgoing[-1], 1, 0)
             similar.assert_awaited_once_with(TELEGRAM_ID, seed, limit=5)
-        self.assertIn('More Like This', self.outgoing[-1][1])
+        self.assertIn(M.MORE_LIKE, self.outgoing[-1][1])
         async with self.database.sessions() as session:
             after = (await session.execute(select(Rating.track_id, Rating.value).order_by(Rating.id))).all()
         self.assertEqual(before, after)
@@ -121,7 +129,7 @@ class ChatFlowTests(ServiceTestCase):
 
     async def test_rating_recommendation_owner_repeat_and_change(self):
         await self.feed(message=self.message(text='/recommend'))
-        await self.click(self.outgoing[-1])
+        await self.click(self.outgoing[-1], column=1)
         card = self.outgoing[-1]
         await self.click(card, user=999)
         self.ack.assert_called_with(M.STALE)
@@ -132,7 +140,7 @@ class ChatFlowTests(ServiceTestCase):
         self.assertEqual(await self.count(Rating), 5)
         self.assertTrue(self.edit.call_args.kwargs['reply_markup'].inline_keyboard[0][3].text.startswith('✓'))
         await self.feed(message=self.message(text='/profile'))
-        self.assertIn('Disliked: 2', self.outgoing[-1][1])
+        self.assertIn('↓ 2', self.outgoing[-1][1])
         self.assertIn('Recommendations shown: 5', self.outgoing[-1][1])
 
     async def test_another_list_is_navigation_and_repeated_click_safe(self):
@@ -197,47 +205,135 @@ class ChatFlowTests(ServiceTestCase):
             dashboard = self.outgoing[-1]
             self.assertIn(M.TASTE_TITLE, dashboard[1])
             await self.click(dashboard)
-            self.assertIn('Explicit from ratings', edit_text.call_args.args[0])
+            self.assertIn('From your ratings', edit_text.call_args.args[0])
             for row, column in ((0, 1), (1, 0), (1, 1), (2, 0), (3, 0)):
                 await self.click(dashboard, row=row, column=column)
                 self.assertNotEqual(self.ack.call_args.args[0], M.STALE)
             await self.feed(message=self.message(text=M.MENU_PROFILE))
             self.assertIn(M.TASTE_TITLE, self.outgoing[-1][1])
             await self.feed(message=self.message(text='/recommend'))
-            await self.click(self.outgoing[-1])
+            await self.click(self.outgoing[-1], column=2)
             card = self.outgoing[-1]
-            await self.click(card)
             before = len(self.outgoing)
-            await self.click(card, row=2)
+            await self.click(card, row=3, column=1)
             delete_message.assert_awaited_once()
             self.assertEqual(len(self.outgoing), before)
 
-    async def test_audio_exact_match_immediately_rates_without_optional_lookup(self):
+    async def test_audio_exact_match_rates_immediately_without_download_actions(self):
         from dataclasses import replace
         from tests.test_workflow import EXACT
         self.providers.call.return_value = [replace(EXACT, album=None, duration=None)]
         await self.feed(message=self.message(audio={'file_id': 'test', 'file_unique_id': 'unique',
             'duration': 120, 'performer': 'Artist', 'title': 'Song'}))
         self.assertIn(M.RATING_QUESTION, self.outgoing[-1][1])
+        self.assertIn(':love:', self.outgoing[-1][2]['reply_markup'].inline_keyboard[0][0].callback_data)
         self.assertFalse(any(text == M.CHOOSE for _, text, _ in self.outgoing))
         self.assertEqual(self.providers.call.await_count, 1)
-        self.deleted_messages.assert_awaited_once()
-        await self.click(self.outgoing[-1])
+        self.deleted_messages.assert_not_awaited()
+        card = self.outgoing[-1]
+        await self.click(card)
         self.assertEqual(self.ack.call_args.args[0], M.RATING_SAVED)
 
-    async def test_candidate_prompt_is_deleted_after_selection(self):
+    async def test_candidate_prompt_survives_selection_and_accepts_another_song(self):
         from dataclasses import replace
         from tests.test_workflow import EXACT
-        self.providers.call.return_value = [replace(EXACT, title='Song remix', external_ids={})]
+        self.providers.call.return_value = [replace(EXACT, title='Song remix', external_ids={}),
+                                            replace(EXACT, title='Song live', external_ids={})]
         await self.feed(message=self.message(text='Artist - Song'))
-        self.assertEqual(self.outgoing[-1][1], M.CHOOSE)
-        self.deleted_messages.assert_awaited_once()  # Lookup status.
-        await self.click(self.outgoing[-1])
-        self.assertIn(M.RATING_QUESTION, self.outgoing[-1][1])
-        self.assertEqual(self.deleted_messages.await_count, 2)  # Selection prompt too.
+        self.assertTrue(self.outgoing[-1][1].startswith(M.CHOOSE))
+        self.assertEqual(self.deleted_messages.await_count, 1)  # Submitted text is tidied.
+        search = self.outgoing[-1]
+        await self.click(search)
+        self.assertIn(':get:', self.outgoing[-1][2]['reply_markup'].inline_keyboard[0][0].callback_data)
+        self.assertEqual(self.deleted_messages.await_count, 1)
+        self.assertNotEqual(search[0].message_id, self.outgoing[-1][0].message_id)
+        first_song = self.outgoing[-1][1]
+        await self.click(search, row=1)
+        self.assertNotEqual(first_song, self.outgoing[-1][1])
+        self.assertEqual({first_song, self.outgoing[-1][1]}, {'Artist — Song live', 'Artist — Song remix'})
 
-    async def test_recommendation_has_handoff_but_no_catalogue_button(self):
+    async def test_recommendation_has_direct_delivery_without_handoff(self):
         await self.feed(message=self.message(text='/recommend'))
         _, text, options = self.outgoing[-1]
-        self.assertIn('https://t.me/musicbehbot?text=', text)
+        self.assertNotIn('https://t.me/', text)
+        self.assertEqual(len(options['reply_markup'].inline_keyboard[0]), 4)
+        self.assertIn(':save:', options['reply_markup'].inline_keyboard[0][3].callback_data)
         self.assertFalse(any(button.text == M.CATALOGUE for row in options['reply_markup'].inline_keyboard for button in row))
+
+    async def test_private_save_feedback_and_saved_library_round_trip(self):
+        from music_bot.bot_copy import text as copy
+        from music_bot.taste_learning import TrackPreference
+        await self.feed(message=self.message(text='/recommend'))
+        listing = self.outgoing[-1]
+        await self.click(listing, column=3, user=999)
+        self.ack.assert_called_with(M.STALE)
+        self.assertEqual(await self.count(TrackPreference), 0)
+        before = len(self.outgoing)
+        await self.click(listing, column=3)
+        await self.click(listing, column=3)
+        self.ack.assert_called_with(copy('feedback_save'))
+        self.assertEqual(len(self.outgoing), before)
+        self.assertEqual(await self.count(TrackPreference), 1)
+        await self.feed(message=self.message(text='/taste'))
+        dashboard = self.outgoing[-1]
+        row = next(index for index, buttons in enumerate(dashboard[2]['reply_markup'].inline_keyboard)
+                   if buttons[0].callback_data.endswith(':saved'))
+        await self.click(dashboard, row=row)
+        await self.click(self.outgoing[-1])
+        card = self.outgoing[-1]
+        self.assertIn(':unsave:', card[2]['reply_markup'].inline_keyboard[4][0].callback_data)
+        await self.click(card, row=4)
+        self.ack.assert_called_with(copy('feedback_unsave'))
+        self.assertFalse(await self.chat.saved_tracks(TELEGRAM_ID))
+
+    async def test_known_and_not_for_me_controls_keep_ratings_unchanged(self):
+        from music_bot.bot_copy import text as copy
+        await self.feed(message=self.message(text='/recommend'))
+        await self.click(self.outgoing[-1], column=2)
+        card = self.outgoing[-1]
+        await self.click(card, row=5, column=1)
+        self.ack.assert_called_with(copy('feedback_known'))
+        await self.click(card, row=5, column=0)
+        self.ack.assert_called_with(copy('feedback_notforme'))
+        self.assertEqual(await self.count(Rating), 4)
+
+    async def test_learning_pause_and_resume_are_owner_bound(self):
+        await self.feed(message=self.message(text='/taste'))
+        dashboard = self.outgoing[-1]
+        row = next(index for index, buttons in enumerate(dashboard[2]['reply_markup'].inline_keyboard)
+                   if buttons[0].callback_data.endswith(':pause'))
+        await self.click(dashboard, row=row, user=999)
+        self.assertTrue((await self.chat.taste_summary(TELEGRAM_ID))['learning_enabled'])
+        await self.click(dashboard, row=row)
+        self.assertFalse((await self.chat.taste_summary(TELEGRAM_ID))['learning_enabled'])
+        paused = self.outgoing[-1]
+        await self.click(paused, row=row)
+        self.assertTrue((await self.chat.taste_summary(TELEGRAM_ID))['learning_enabled'])
+
+    async def test_english_persian_feedback_copy_and_callback_bounds(self):
+        from music_bot.bot_copy import text as copy
+        from music_bot.chat_ui import card_keyboard, parse_control
+        from music_bot.i18n import language, localized_reason
+        for locale in ('en', 'fa'):
+            context = language.set(locale)
+            try:
+                keyboard = card_keyboard('a' * 32)
+                for row in keyboard.inline_keyboard:
+                    for button in row:
+                        self.assertLessEqual(len(button.callback_data.encode()), 64)
+                        self.assertIsNotNone(parse_control(button.callback_data))
+                self.assertEqual(keyboard.inline_keyboard[5][0].text, copy('notforme'))
+                self.assertEqual(localized_reason('Based on songs you saved'), copy('reason_saved'))
+                self.assertTrue(copy('recommend_start'))
+                self.assertTrue(copy('recommend_empty'))
+                for action in ('save', 'unsave', 'known', 'notforme'):
+                    self.assertLessEqual(len(copy('feedback_' + action)), 200)
+            finally:
+                language.reset(context)
+
+    async def test_privacy_discloses_learning_within_message_limit(self):
+        from music_bot.bot_copy import text as copy
+        await self.feed(message=self.message(text='/privacy'))
+        text = self.outgoing[-1][1]
+        self.assertIn(copy('learning_privacy'), text)
+        self.assertLessEqual(len(text), 4096)

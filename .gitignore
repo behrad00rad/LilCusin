@@ -18,9 +18,17 @@ data/*.db
 *.sqlite3
 *.db
 *.log
+*.session
+*.session-journal
+*.session-wal
+*.session-shm
+*.session.setup.lock
 
 # Editor and operating-system files
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Cloudflare local state
+worker/.wrangler/

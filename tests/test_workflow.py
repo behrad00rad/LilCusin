@@ -177,7 +177,7 @@ class IdentificationTests(ServiceTestCase):
         for attempt in range(2):
             await self.workflow.bind_prompt(result, 123, 100 + attempt)
             with self.assertRaises(InvalidSubmission):
-                await self.workflow.correct(123, 100 + attempt, "bad")
+                await self.workflow.correct(123, 100 + attempt, "   ")
             result = await self.workflow.correct(123, 100 + attempt, "Artist - Song")
         self.assertEqual(result.kind, "limit")
 
