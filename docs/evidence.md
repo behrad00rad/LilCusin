@@ -1,5 +1,16 @@
 # Recognition and search evidence
 
+## 2026-10-19 - Private recommendation loop
+
+185 distinct affected Windows fixture tests passed in the final sequential
+nine-module run (260.772 s); 24 monitored source/test hashes stayed unchanged.
+Coverage includes private request/save learning, queue persistence/concurrency,
+feedback/ownership, bilingual copy, reset/forget and delivery/channel/social-save
+compatibility. Shutdown scenarios additionally passed seven repeated executions.
+All 16 chat cases passed again after final copy-only changes. Details are in the [resumable verification
+record](recommendation-loop-2026-10-19.md), which retains earlier non-green runs.
+Local, uncommitted and undeployed; no live Telegram/provider or phone claim.
+
 ## 2026-10-19 - Recommendation recovery
 
 26 isolated recommendation tests passed on Windows, including two new regressions

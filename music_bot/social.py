@@ -141,7 +141,11 @@ async def stop_invitation_swaps(session, invitations):
     await session.execute(update(SongSwap).where(SongSwap.invitation.in_(invitations),SongSwap.state.in_(['draft','sent'])).values(state='cancelled',note=''))
 
 
-async def remove_saved(session,actor,track_id):
+async def remove_saved(session,actor,track_id,*,update_taste=True):
+    if update_taste:
+        from .taste_learning import feedback
+        await feedback(session,actor,track_id,'unsave')
+        return
     await session.execute(delete(SavedSong).where(SavedSong.user_id==actor,SavedSong.track_id==track_id))
     swaps=select(SongSwap.token).where(SongSwap.recipient_id==actor,SongSwap.track_id==track_id)
     await session.execute(update(SocialNotice).where(SocialNotice.swap_token.in_(swaps),SocialNotice.event=='saved',SocialNotice.state=='queued').values(state='cancelled'))
@@ -248,7 +252,8 @@ class Social:
                     row.state = 'sent';row.sent_at = utc_now()
                     await notice(session, row, row.recipient_id, 'pick')
             elif action == 'save':
-                await session.execute(insert(SavedSong).values(user_id=actor, track_id=row.track_id).on_conflict_do_nothing())
+                from .taste_learning import feedback
+                await feedback(session,actor,row.track_id,'save')
                 if not row.saved:
                     row.saved = True;await notice(session, row, row.sender_id, 'saved')
             elif action == 'unsave':
@@ -256,8 +261,8 @@ class Social:
             elif action == 'love':
                 if not row.loved:
                     row.loved = True
-                    await session.execute(insert(Rating).values(user_id=actor, track_id=row.track_id, value='love')
-                        .on_conflict_do_update(index_elements=['user_id','track_id'], set_=dict(value='love', updated_at=utc_now())))
+                    from .workflow import save_rating
+                    await save_rating(session,actor,row.track_id,'love')
                     await notice(session, row, row.sender_id, 'loved')
             elif action in {'cancel','delete'}:
                 row.state = 'cancelled' if action == 'cancel' else 'deleted';row.note = ''

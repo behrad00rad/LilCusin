@@ -5,6 +5,10 @@ from datetime import timedelta
 RATING_WEIGHTS = {"love": 3.0, "like": 1.0, "neutral": 0.0, "dislike": -3.0}
 SELECTED_SEED_WEIGHT = 3.0  # Request focus only; never persisted as a rating.
 PLAYLIST_CHANNEL_WEIGHT = 0.25  # Weak presence signal: one quarter of an explicit Like.
+REQUEST_WEIGHT = 0.15
+REPEAT_REQUEST_WEIGHT = 0.30
+SAVED_WEIGHT = 1.5
+MAX_BEHAVIOR_SEEDS = 60
 SIGNAL_WEIGHTS = {"lastfm": 0.55, "tags": 0.35, "artist": 0.10}
 RELATED_ARTIST_WEIGHT = 0.5
 UNKNOWN_TAG_WEIGHT = 0.5

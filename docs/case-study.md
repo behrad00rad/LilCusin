@@ -1,5 +1,15 @@
 # From unknown recordings to playable songs
 
+### From one-off suggestions to a private discovery loop - 2026-10-19
+
+The local bot now learns weakly from accepted requests without inventing listening
+history, reuses deliberate private saves as stronger evidence and replenishes a
+durable recommendation queue. User feedback separates an unsuitable song from
+one already known. Pause/reset controls and saved-song retrieval keep the learning
+under user control; resetting taste does not destroy the saved library. 185 scoped
+integration cases passed, with release and real-user verification still separate.
+See [implementation, checks and limitations](recommendation-loop-2026-10-19.md).
+
 ### Recommendation recovery - 2026-10-19
 
 Focused inspection found that recently displayed songs could suppress online

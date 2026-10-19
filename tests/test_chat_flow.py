@@ -41,6 +41,7 @@ class ChatFlowTests(ServiceTestCase):
         self.answer, self.edit, self.ack, self.edit_text = [p.start() for p in self.patches]
 
     async def asyncTearDown(self):
+        await self.chat.recommendations.close()
         for p in self.patches:
             p.stop()
         await self.bot.session.close()
@@ -71,7 +72,8 @@ class ChatFlowTests(ServiceTestCase):
         async with self.database.write() as session:
             await session.execute(update(Rating).where(Rating.value.in_(['love', 'like'])).values(value='neutral'))
         await self.feed(message=self.message(text='/recommend'))
-        self.assertEqual(self.outgoing[-1][1], M.PREFERENCES_NEEDED)
+        from music_bot.bot_copy import text as copy
+        self.assertEqual(self.outgoing[-1][1], copy('recommend_start'))
         self.assertEqual(await self.count(RecommendationHistory), 0)
         async with self.database.write() as session:
             await session.execute(update(Rating).where(Rating.track_id == self.tracks['metal_seed']).values(value='love'))
@@ -95,7 +97,8 @@ class ChatFlowTests(ServiceTestCase):
         row = replace(result.recommendations[0], artist='<b>Artist</b>', title='Unsafe & title',
                       artwork_url='https://127.0.0.1/private', external_ids={'lastfm': 'javascript:alert(1)'})
         self.chat.recommendations = AsyncMock()
-        self.chat.recommendations.recommend_for_user.return_value = RecommendationResult('ok', (row, row))
+        self.chat.recommendations.queue.reserve.return_value = RecommendationResult('ok', (row, row))
+        self.chat.recommendations.queue.warm = Mock()
         await self.feed(message=self.message(text='/recommend'))
         self.assertEqual(await self.count(RecommendationHistory), 1)
         _, text, options = self.outgoing[-1]
@@ -253,5 +256,84 @@ class ChatFlowTests(ServiceTestCase):
         await self.feed(message=self.message(text='/recommend'))
         _, text, options = self.outgoing[-1]
         self.assertNotIn('https://t.me/', text)
-        self.assertEqual(len(options['reply_markup'].inline_keyboard[0]), 3)
+        self.assertEqual(len(options['reply_markup'].inline_keyboard[0]), 4)
+        self.assertIn(':save:', options['reply_markup'].inline_keyboard[0][3].callback_data)
         self.assertFalse(any(button.text == M.CATALOGUE for row in options['reply_markup'].inline_keyboard for button in row))
+
+    async def test_private_save_feedback_and_saved_library_round_trip(self):
+        from music_bot.bot_copy import text as copy
+        from music_bot.taste_learning import TrackPreference
+        await self.feed(message=self.message(text='/recommend'))
+        listing = self.outgoing[-1]
+        await self.click(listing, column=3, user=999)
+        self.ack.assert_called_with(M.STALE)
+        self.assertEqual(await self.count(TrackPreference), 0)
+        before = len(self.outgoing)
+        await self.click(listing, column=3)
+        await self.click(listing, column=3)
+        self.ack.assert_called_with(copy('feedback_save'))
+        self.assertEqual(len(self.outgoing), before)
+        self.assertEqual(await self.count(TrackPreference), 1)
+        await self.feed(message=self.message(text='/taste'))
+        dashboard = self.outgoing[-1]
+        row = next(index for index, buttons in enumerate(dashboard[2]['reply_markup'].inline_keyboard)
+                   if buttons[0].callback_data.endswith(':saved'))
+        await self.click(dashboard, row=row)
+        await self.click(self.outgoing[-1])
+        card = self.outgoing[-1]
+        self.assertIn(':unsave:', card[2]['reply_markup'].inline_keyboard[4][0].callback_data)
+        await self.click(card, row=4)
+        self.ack.assert_called_with(copy('feedback_unsave'))
+        self.assertFalse(await self.chat.saved_tracks(TELEGRAM_ID))
+
+    async def test_known_and_not_for_me_controls_keep_ratings_unchanged(self):
+        from music_bot.bot_copy import text as copy
+        await self.feed(message=self.message(text='/recommend'))
+        await self.click(self.outgoing[-1], column=2)
+        card = self.outgoing[-1]
+        await self.click(card, row=5, column=1)
+        self.ack.assert_called_with(copy('feedback_known'))
+        await self.click(card, row=5, column=0)
+        self.ack.assert_called_with(copy('feedback_notforme'))
+        self.assertEqual(await self.count(Rating), 4)
+
+    async def test_learning_pause_and_resume_are_owner_bound(self):
+        await self.feed(message=self.message(text='/taste'))
+        dashboard = self.outgoing[-1]
+        row = next(index for index, buttons in enumerate(dashboard[2]['reply_markup'].inline_keyboard)
+                   if buttons[0].callback_data.endswith(':pause'))
+        await self.click(dashboard, row=row, user=999)
+        self.assertTrue((await self.chat.taste_summary(TELEGRAM_ID))['learning_enabled'])
+        await self.click(dashboard, row=row)
+        self.assertFalse((await self.chat.taste_summary(TELEGRAM_ID))['learning_enabled'])
+        paused = self.outgoing[-1]
+        await self.click(paused, row=row)
+        self.assertTrue((await self.chat.taste_summary(TELEGRAM_ID))['learning_enabled'])
+
+    async def test_english_persian_feedback_copy_and_callback_bounds(self):
+        from music_bot.bot_copy import text as copy
+        from music_bot.chat_ui import card_keyboard, parse_control
+        from music_bot.i18n import language, localized_reason
+        for locale in ('en', 'fa'):
+            context = language.set(locale)
+            try:
+                keyboard = card_keyboard('a' * 32)
+                for row in keyboard.inline_keyboard:
+                    for button in row:
+                        self.assertLessEqual(len(button.callback_data.encode()), 64)
+                        self.assertIsNotNone(parse_control(button.callback_data))
+                self.assertEqual(keyboard.inline_keyboard[5][0].text, copy('notforme'))
+                self.assertEqual(localized_reason('Based on songs you saved'), copy('reason_saved'))
+                self.assertTrue(copy('recommend_start'))
+                self.assertTrue(copy('recommend_empty'))
+                for action in ('save', 'unsave', 'known', 'notforme'):
+                    self.assertLessEqual(len(copy('feedback_' + action)), 200)
+            finally:
+                language.reset(context)
+
+    async def test_privacy_discloses_learning_within_message_limit(self):
+        from music_bot.bot_copy import text as copy
+        await self.feed(message=self.message(text='/privacy'))
+        text = self.outgoing[-1][1]
+        self.assertIn(copy('learning_privacy'), text)
+        self.assertLessEqual(len(text), 4096)

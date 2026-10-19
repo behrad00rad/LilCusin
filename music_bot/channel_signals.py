@@ -13,8 +13,11 @@ async def learn_confirmed_channel_track(session, submission):
         return
     post.track_id, post.status = submission.track_id, "identified"
     if post.learn_allowed:
-        await session.execute(insert(UserTrackSignal).values(
+        result = await session.execute(insert(UserTrackSignal).values(
             user_id=submission.user_id, track_id=submission.track_id, channel_id=post.channel_id,
             channel_post_id=post.id, signal_type="playlist_channel", weight=PLAYLIST_CHANNEL_WEIGHT,
             created_at=utc_now(),
         ).on_conflict_do_nothing(index_elements=["user_id", "track_id", "channel_id"]))
+        if result.rowcount:
+            from .taste_learning import invalidate
+            await invalidate(session, submission.user_id)

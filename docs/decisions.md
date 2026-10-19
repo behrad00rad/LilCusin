@@ -1,5 +1,23 @@
 # Recognition and discovery decisions
 
+## 2026-10-19 - Continuous private recommendation loop
+
+User approved implementation of taste signals, replenishing recommendations and
+low-friction feedback, requesting resumable checkpoints. Keep delivery in chat
+and persist a bounded queue, not unsolicited notification delivery. Reuse the
+existing private SavedSong library; never create a parallel collection or convert
+requests into ratings/listening claims. Saves weigh 1.5, request evidence 0.15
+up to 0.30 per song, explicit Like 1 and Love 3. Explicit ratings take precedence;
+known is exclusion, not a negative preference. Reset keeps the saved library but
+ignores pre-reset saves until deliberately saved again.
+
+Queue leases, transactional serving exclusions, preference revisions and account
+generations guard concurrent taps, feedback, reset/forget and restarts. Rotate
+provider seeds across artists/refills while retaining existing provider budgets.
+Friends' taste is a later, separate opt-in/visible-source lane with serving-time
+relationship/block/visibility checks; private libraries are not social evidence.
+See [contract and current verification checkpoint](recommendation-loop-2026-10-19.md).
+
 ## 2026-10-19 - Recommendation starvation
 
 Scope: chat For You and shared recommendation candidate generation only.

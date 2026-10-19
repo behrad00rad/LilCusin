@@ -166,6 +166,8 @@ class ChannelService:
                 raise FlowError('stale')
             channel.status = 'disconnected'
             if remove_signals:
+                from .taste_learning import invalidate
+                await invalidate(session, channel.user_id)
                 await session.execute(delete(UserTrackSignal).where(UserTrackSignal.channel_id == channel.id))
                 # Pending confirmations or a later reconnection must not restore erased signals.
                 await session.execute(update(ChannelPost).where(ChannelPost.channel_id == channel.id).values(learn_allowed=False))

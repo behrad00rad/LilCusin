@@ -305,7 +305,14 @@ class GetSong:
             req = AudioRequest(id=uuid4().hex, user_id=user.id, job_id=job.id)
             s.add(req)
             await s.flush()
-            return req.id
+            if not other_versions:
+                from .taste_learning import record_request
+                await record_request(s, user.id, track_id, req.id)
+            request_id = req.id
+        recommendations = getattr(self, 'recommendations', None)
+        if recommendations is not None:
+            recommendations.queue.warm(user_id)
+        return request_id
 
     async def request_recognized(self, user_id, artist, title, *, artwork_url=None, album=None):
         """Queue an identified recording without inventing ratings or submissions."""

@@ -55,7 +55,7 @@ def button(token, action, text, index=None):
 def parse_control(data):
     if not isinstance(data, str) or len(data.encode()) > 64:
         return None
-    match = re.fullmatch(r'q:([a-f0-9]{32}):(get|versions|rate|details|more|love|like|neutral|dislike):([0-4])', data)
+    match = re.fullmatch(r'q:([a-f0-9]{32}):(get|versions|rate|details|more|love|like|neutral|dislike|save|unsave|known|notforme):([0-4])', data)
     if match:
         return match[1], match[2], int(match[3])
     match = re.fullmatch(r'q:([a-f0-9]{32}):(next|foryou|menu|delete|keep)', data)
@@ -118,7 +118,8 @@ def list_content(rows, token, seed_track=None):
         entry += '\n' + html.escape(clean(localized_reason(row.reason), 120))
         lines.append(entry)
         actions = [button(token, 'get', '↓ ' + clean(song_title, 22), index),
-                   button(token, 'rate', '♡', index), button(token, 'details', '⋯', index)]
+                   button(token, 'rate', '♡', index), button(token, 'details', copy('options'), index),
+                   button(token, 'save', copy('save'), index)]
         keyboard.append(actions)
     keyboard.append([button(token, 'next', M.ANOTHER_LIST), button(token, 'menu', copy('close'))])
     if seed_track is not None:
@@ -126,7 +127,7 @@ def list_content(rows, token, seed_track=None):
     return '\n\n'.join(lines), InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def card_keyboard(token, selected=None, submitted=False, expanded=False, rating_mode=False):
+def card_keyboard(token, selected=None, submitted=False, expanded=False, rating_mode=False, saved=False):
     if rating_mode:
         return InlineKeyboardMarkup(inline_keyboard=[[
             button(token, value, M.rating_label(value, selected), 0)
@@ -141,19 +142,22 @@ def card_keyboard(token, selected=None, submitted=False, expanded=False, rating_
         keyboard.append([button(token, 'rate', copy('rate'), 0)])
     keyboard.append([button(token, 'foryou' if submitted else 'next', M.AFTER_FOR_YOU if submitted else M.CONTINUE),
                      button(token, 'menu', copy('close'))])
+    keyboard.append([button(token, 'unsave' if saved else 'save', copy('unsave' if saved else 'save'), 0)])
+    keyboard.append([button(token, 'notforme', copy('notforme'), 0), button(token, 'known', copy('known'), 0)])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
 async def show_card(message, service, user_id, track, seed=None, rating=None, submitted=False, edit_existing=False, rating_mode=False):
+    saved = await service.is_saved(user_id, track.id)
     token = await service.create_control(user_id, tracks=[track.id], seed=seed, kind='rating' if rating_mode else 'card', submitted=submitted)
     text = copy('song', artist=clean(track.display_artist or track.artist), title=clean(track.display_title or track.title))
     if rating_mode:
         text += '\n\n' + M.RATING_QUESTION
     if edit_existing:
-        await message.edit_text(text, parse_mode=None, reply_markup=card_keyboard(token, rating, submitted, rating_mode=rating_mode))
+        await message.edit_text(text, parse_mode=None, reply_markup=card_keyboard(token, rating, submitted, rating_mode=rating_mode, saved=saved))
         sent = message
     else:
-        sent = await message.answer(text, parse_mode=None, reply_markup=card_keyboard(token, rating, submitted, rating_mode=rating_mode))
+        sent = await message.answer(text, parse_mode=None, reply_markup=card_keyboard(token, rating, submitted, rating_mode=rating_mode, saved=saved))
     await service.bind_control(token, sent.message_id)
 
 
@@ -163,7 +167,7 @@ async def show_recommendations(message, service, user_id, seed=None):
         await message.answer(M.NO_RECOMMENDATIONS, reply_markup=main_menu())
         return
     if seed is None:
-        result = await service.recommendations.recommend_for_user(user_id, limit=5)
+        result = await service.recommendations.queue.reserve(user_id, limit=5)
     else:
         result = await service.recommendations.recommend_similar_to_track(user_id, seed, limit=5)
     # Defensive presentation dedup; history always describes the exact displayed rows.
@@ -180,12 +184,21 @@ async def show_recommendations(message, service, user_id, seed=None):
         if len(rows) == 5:
             break
     if not rows:
-        await message.answer(M.PREFERENCES_NEEDED if result.status == 'insufficient_preferences' else M.NO_RECOMMENDATIONS,
+        if seed is None and result.batch_id:
+            await service.recommendations.queue.release(user_id, result.batch_id)
+        await message.answer(copy('recommend_start' if result.status == 'insufficient_preferences' else 'recommend_empty')
+                             if seed is None else M.NO_RECOMMENDATIONS,
                              reply_markup=main_menu())
         return
-    token = await service.create_control(user_id, tracks=[row.track_id for row in rows], seed=seed)
-    text, keyboard = list_content(rows, token, seed_track)
-    sent = await message.answer(text, parse_mode='HTML', reply_markup=keyboard,
-                               link_preview_options=LinkPreviewOptions(is_disabled=True))
-    await service.record_displayed(user_id, rows, token, seed)
-    await service.bind_control(token, sent.message_id)
+    try:
+        token = await service.create_control(user_id, tracks=[row.track_id for row in rows], seed=seed)
+        text, keyboard = list_content(rows, token, seed_track)
+        sent = await message.answer(text, parse_mode='HTML', reply_markup=keyboard,
+                                   link_preview_options=LinkPreviewOptions(is_disabled=True))
+        await service.record_displayed(user_id, rows, token, seed, queue_batch=result.batch_id if seed is None else None)
+        await service.bind_control(token, sent.message_id)
+    finally:
+        if seed is None and result.batch_id:
+            await service.recommendations.queue.release(user_id, result.batch_id)
+    if seed is None:
+        service.recommendations.queue.warm(user_id)

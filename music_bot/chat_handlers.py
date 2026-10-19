@@ -43,7 +43,7 @@ async def command(message, chat_service):
         counts, shown = await chat_service.profile(user.id)
         await message.answer(M.PROFILE_TEXT.format(**{value: counts.get(value, 0) for value in RATINGS}, shown=shown), reply_markup=main_menu())
     elif action == 'privacy':
-        await message.answer(M.PRIVACY + '\n\nSearch text is sent to music catalogues (Last.fm, MusicBrainz and Deezer), without Telegram identifiers. '
+        await message.answer(M.PRIVACY + '\n\n' + copy('learning_privacy') + '\n\nSearch text is sent to music catalogues (Last.fm, MusicBrainz and Deezer), without Telegram identifiers. '
             'Weak lyric-fragment searches may also send the phrase to YouTube or the configured lyrics provider. '
             'Existing private search input is removed by /forgetme; transient phrase results expire within 15 minutes. '
             'Get song sends artist/title searches to YouTube and temporarily downloads audio. '
@@ -90,7 +90,8 @@ async def callback(query, chat_service, get_song=None, workflow=None):
         token, action, index = data
         payload, track = await chat_service.control(token, query.from_user.id, query.message.message_id,
                 action, index, rating=action if action in RATINGS else None)
-        await query.answer(M.RATING_SAVED if action in RATINGS else M.WORKING)
+        await query.answer(copy('feedback_' + action) if action in {'save', 'unsave', 'known', 'notforme'}
+                           else M.RATING_SAVED if action in RATINGS else M.WORKING)
         acknowledged = True
         if action in RATINGS:
             try:
@@ -99,6 +100,7 @@ async def callback(query, chat_service, get_song=None, workflow=None):
                 pass
             from .onboarding import after_rating
             await after_rating(query.message, chat_service, query.from_user.id)
+            chat_service.recommendations.queue.warm(query.from_user.id)
         elif action in {'get', 'versions'}:
             from .youtube_fetch import FetchError
             if get_song is None:
@@ -112,6 +114,11 @@ async def callback(query, chat_service, get_song=None, workflow=None):
                 await show_card(query.message, chat_service, query.from_user.id, track, payload['seed'], rating_mode=True)
         elif action == 'details':
             await show_card(query.message, chat_service, query.from_user.id, track, payload['seed'])
+        elif action in {'save', 'unsave', 'known', 'notforme'}:
+            if payload.get('kind') == 'card':
+                await query.message.edit_reply_markup(reply_markup=card_keyboard(token,
+                    submitted=payload.get('submitted', False), saved=payload.get('saved', False)))
+            chat_service.recommendations.queue.warm(query.from_user.id)
         elif action in {'next', 'more', 'foryou'}:
             seed = track.id if action == 'more' else payload['seed'] if action == 'next' else None
             await show_recommendations(query.message, chat_service, query.from_user.id, seed)

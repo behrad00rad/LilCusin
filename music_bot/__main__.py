@@ -117,6 +117,8 @@ async def main() -> None:
             dispatcher.include_router(taste_router)
             dispatcher.include_router(router)
             chat_service = ChatService(database, RecommendationService(database, providers))
+            stack.push_async_callback(chat_service.recommendations.close)
+            get_song.recommendations = chat_service.recommendations
             chat_service.social_bot = bot
             if config.miniapp_url:
                 miniapp = await start_server(config.telegram_bot_token, chat_service, workflow,

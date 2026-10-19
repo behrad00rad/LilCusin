@@ -31,6 +31,10 @@ def menu_action(text):
 
 
 def localized_reason(text):
+    from .bot_copy import COPY, text as copy
+    for key in ('reason_saved', 'reason_requested'):
+        if text == COPY[key][0]:
+            return copy(key)
     # Provider names/titles are never translated; only our own explanation strings.
     keys=CATALOGUE['en']
     for key,value in keys.items():

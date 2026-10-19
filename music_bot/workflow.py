@@ -28,10 +28,13 @@ async def save_rating(session, user_id, track_id, value):
     if value not in RATINGS:
         raise FlowError("stale")
     now = utc_now()
-    await session.execute(insert(Rating).values(
+    result = await session.execute(insert(Rating).values(
         user_id=user_id, track_id=track_id, value=value, created_at=now, updated_at=now,
     ).on_conflict_do_update(index_elements=["user_id", "track_id"],
         set_={"value": value, "updated_at": now}, where=Rating.value != value))
+    if result.rowcount:
+        from .taste_learning import invalidate
+        await invalidate(session, user_id)
 
 
 class FlowError(ValueError):

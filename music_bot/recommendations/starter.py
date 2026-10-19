@@ -5,13 +5,13 @@ from ..taste_setup import read_setup,ARTISTS
 from ..matching import comparison_text,deduplicate
 from ..catalog import canonical_track,IdentityConflict
 from ..providers.common import ProviderError
-from .repository import load_items
+from .repository import aliases, load_exclusions, load_items
 from .types import Recommendation,RecommendationResult
 
 STYLE_TAGS={'hiphop':{'hip hop','rap'},'persian':{'persian','iranian'},'indie':{'indie','alternative'},'electronic':{'electronic','ambient'},'classical':{'classical','piano'}}
 MOOD_TAGS={'calm':{'ambient','chill','piano','acoustic','dream pop'},'energetic':{'dance','electronic','rock','hip hop'},'mixed':set()}
 
-async def starter_recommendations(database,telegram_id,providers,limit):
+async def starter_recommendations(database,telegram_id,providers,limit,*,excluded_track_ids=()):
     setup=await read_setup(database,telegram_id)
     if not setup['completed'] or not (setup['style'] or setup['artist']):return RecommendationResult('insufficient_preferences')
     style,mood=setup['style'],setup['mood'] or 'mixed'
@@ -19,13 +19,14 @@ async def starter_recommendations(database,telegram_id,providers,limit):
     artist=setup['artist'] or defaults[1 if mood=='energetic' else 0]
     async with database.sessions() as session:
         user=await session.scalar(select(User.id).where(User.telegram_user_id==telegram_id))
-        excluded=set(await session.scalars(select(Rating.track_id).where(Rating.user_id==user)))
-        excluded.update(await session.scalars(select(ChannelPost.track_id).join(PlaylistChannel).where(PlaylistChannel.user_id==user,ChannelPost.track_id.is_not(None))))
+        if user is None:return RecommendationResult('insufficient_preferences')
+        excluded,excluded_aliases=await load_exclusions(session,user,excluded_track_ids)
         rows=(await session.scalars(select(Track).where(Track.id.not_in(excluded)).order_by(Track.id.desc()).limit(300))).all()
         items=await load_items(session,rows)
     wanted=STYLE_TAGS.get(style,{style})
     choices=[]
     for item in items.values():
+        if item.identities&excluded_aliases:continue
         exact=comparison_text(artist)==comparison_text(item.metadata.artist)
         tags=set(item.tags)
         if exact or tags&wanted:
@@ -33,12 +34,16 @@ async def starter_recommendations(database,telegram_id,providers,limit):
     if providers is not None and sum(score>=4 for score,_ in choices)<limit:
         try:
             online=await providers.call('musicbrainz','search_recordings',artist,'')
-            choices.extend((4,c) for c in online if c.artist and c.title and comparison_text(artist) in comparison_text(c.artist))
+            choices.extend((4,c) for c in online if c.artist and c.title and comparison_text(artist)==comparison_text(c.artist))
         except ProviderError:pass
     choices.sort(key=lambda pair:pair[0],reverse=True)
     tracks=[]
     async with database.write() as session:
+        current=await session.scalar(select(User.id).where(User.telegram_user_id==telegram_id))
+        if current!=user:return RecommendationResult('insufficient_preferences')
+        excluded,excluded_aliases=await load_exclusions(session,user,excluded_track_ids)
         for candidate in deduplicate([c for _,c in choices]):
+            if aliases(candidate)&excluded_aliases:continue
             try:track=await canonical_track(session,candidate)
             except IdentityConflict:continue
             if track.id in excluded:continue

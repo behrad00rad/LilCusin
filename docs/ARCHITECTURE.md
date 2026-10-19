@@ -7,7 +7,7 @@ not a full code audit. Setup remains in [README](../README.md).
 | --- | --- | --- |
 | Telegram bot | `music_bot/__main__.py`, `handlers.py`, `chat_handlers.py`, `channel_handlers.py` | aiogram polling, commands/callbacks, chat and channel interactions |
 | Identity/search | `workflow.py`, `catalog.py`, `matching.py`, `providers/` | Shared catalogue selection and provider fallback; explicit match choice |
-| Recommendations | `recommendations/`, `preferences.py`, `taste_setup.py` | Taste signals, candidate selection and onboarding |
+| Recommendations | `recommendations/`, `taste_learning.py`, `preferences.py`, `taste_setup.py` | Separate request/explicit feedback evidence, durable leased For You queue, candidate ranking and optional onboarding |
 | Persistence | `database.py`, `models.py`, `migrations.py` | Async SQLAlchemy/aiosqlite SQLite records; preserve user data |
 | Recognition/delivery | `recognition.py`, `get_song.py`, `youtube_fetch.py`, `audio_artwork.py` | Bounded recognition, recording choice, delivery jobs, Telegram cache and artwork |
 | Taste cards | `taste_cards.py`, `taste_card_chat.py`, `taste_card_api.py` | Separate selected public identity, owner edits and revocable sharing |
@@ -40,3 +40,17 @@ do not assume it is the deployed serving path. See [Mini App deployment](../MINI
 
 Current release state belongs in [STATE](STATE.md); architecture rationale and
 tradeoffs remain in [decisions](decisions.md).
+
+## Private recommendation loop
+
+Chat For You reserves a persisted batch, sends it, then records actual display
+and removes those leased rows. Failed sends release the lease; abandoned leases
+expire. Refills are metadata-only tasks owned by the recommendation service and
+drained during shutdown; they never send messages. Current ratings, saves,
+feedback and recent alias history are checked again at serving.
+
+`SavedSong` remains the one private saved library for chat and exchanges.
+`taste_learning.py` adds request evidence, per-track feedback and a learning
+revision/generation guard; `recommendations/queue.py` adds the bounded queue.
+The additive tables are registered by `Database.initialize()`. No Mini App UI,
+Worker generation, friendship discovery or playlist builder belongs to this slice.

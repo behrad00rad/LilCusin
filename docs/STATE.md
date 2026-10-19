@@ -1,5 +1,15 @@
 # Current handoff
 
+## Active local task - recommendation loop
+
+Items 1-3 are implemented locally: weak request learning, the existing private
+saved library as a stronger signal, durable leased For You refill and owner-bound
+Save/known/not-for-me/Next controls. Pause/reset/library management are available
+in /taste. 185 affected tests passed with monitored source hashes unchanged;
+all 16 chat cases passed again after final copy changes. See [resumable checkpoint and
+limits](recommendation-loop-2026-10-19.md). Uncommitted, not pushed or deployed.
+Friends' taste remains a consent-scoped design, not an implemented recommender.
+
 ## UI release - 2026-10-19
 
 User-approved UI commit `cdcc4d2` is pushed to `codex/safe-publish` and deployed

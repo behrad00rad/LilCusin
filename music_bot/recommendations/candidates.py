@@ -144,7 +144,16 @@ async def generate(database, profile, providers, limit):
                              for key in item.identities)]
     calls = 0
     if providers is not None and len(available) < limit:
+        artist_seeds = defaultdict(deque)
         for seed in profile.positives:
+            artist_seeds[comparison_text(seed.item.metadata.artist)].append(seed)
+        online_seeds = []
+        while artist_seeds:
+            for artist in list(artist_seeds):
+                online_seeds.append(artist_seeds[artist].popleft())
+                if not artist_seeds[artist]:
+                    del artist_seeds[artist]
+        for seed in online_seeds:
             seed_id = seed.item.track_id
             if seed_id in fresh or calls >= max(0, S.MAX_PROVIDER_CALLS - 1):
                 continue

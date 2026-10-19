@@ -6,6 +6,7 @@ Unchecked means outstanding, not authorized for automatic implementation.
 
 | Priority | Action | Acceptance / evidence |
 | --- | --- | --- |
+| Local complete | Recommendation loop items 1-3, explicitly requested 2026-10-19 | [Contract and 185 affected tests](recommendation-loop-2026-10-19.md): private taste signals, durable queue/refill and owner-bound feedback; final 16-case chat rerun passed. Release preparation tracked in STATE; deployment requires approval. Friends' discovery, playlists and unsolicited delivery excluded. |
 | P0 | Close remaining T00/T01 release-baseline and live-journey gaps | Record current source/runtime identity and relevant flags/serving route without exposing configuration; a representative signed private-bot journey covers search, selection, cancellation, card sharing and delivery. Explicitly retain unavailable checks. Production changes require approval. |
 | P1 | Release and verify the local social slices | [Steps 5–8 and 60 scoped tests](social-loop-release-2026-10-19.md), plus [earlier onboarding/portrait](onboarding-portrait-consent-2026-10-18.md), are complete locally. Configure a moderator, obtain deployment authorization, then verify the real two-account Telegram loop. |
 | P1 | Confirm operational T02 ownership | The implemented contract covers sparse data, selected inputs, swaps, notification limits, access-driven retention and deletion. An accountable moderation operator and actual deployment remain release gates. |

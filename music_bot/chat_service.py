@@ -74,6 +74,15 @@ class ChatService:
                 track = await session.get(Track, payload["tracks"][index])
                 if track is None:
                     raise FlowError("stale")
+            if action in {'save', 'unsave', 'known', 'notforme'}:
+                if track is None or payload.get('kind') not in {'card', 'rating', 'list'}:
+                    raise FlowError('stale')
+                from .taste_learning import feedback
+                from .social import SavedSong
+                await feedback(session, row.user_id, track.id, action)
+                payload['saved'] = await session.get(SavedSong, (row.user_id, track.id)) is not None
+                row.payload = payload
+                return payload, track
             key = f"{action}:{index}"
             if rating is None:
                 if action not in {"get", "versions", "rate", "details"} and key in payload["used"]:
@@ -123,7 +132,20 @@ class ChatService:
         async with self.database.sessions() as session:
             return await session.get(Track, track_id)
 
-    async def record_displayed(self, user_id, recommendations, token, seed):
+    async def is_saved(self, user_id, track_id):
+        from .social import SavedSong
+        async with self.database.sessions() as session:
+            return await session.scalar(select(SavedSong.track_id).join(User)
+                .where(User.telegram_user_id == user_id, SavedSong.track_id == track_id)) is not None
+
+    async def saved_tracks(self, user_id):
+        from .social import SavedSong
+        async with self.database.sessions() as session:
+            return list(await session.scalars(select(Track).join(SavedSong).join(User)
+                .where(User.telegram_user_id == user_id)
+                .order_by(SavedSong.created_at.desc(), Track.id).limit(10)))
+
+    async def record_displayed(self, user_id, recommendations, token, seed, *, queue_batch=None):
         """Called only after sendMessage succeeded; record the exact displayed list."""
         if not recommendations:
             return
@@ -138,6 +160,11 @@ class ChatService:
                     for index, row in enumerate(recommendations, 1)]
             await session.execute(insert(RecommendationHistory).values(rows).on_conflict_do_nothing(
                 index_elements=["user_id", "batch_id", "track_id"]))
+            if queue_batch is not None:
+                from .recommendations.queue import QueuedRecommendation
+                await session.execute(delete(QueuedRecommendation).where(
+                    QueuedRecommendation.user_id == internal, QueuedRecommendation.lease == queue_batch,
+                    QueuedRecommendation.track_id.in_([row.track_id for row in recommendations])))
 
     async def profile(self, user_id):
         async with self.database.sessions() as session:
@@ -155,15 +182,23 @@ class ChatService:
                 return None
             counts = dict((await session.execute(select(Rating.value, func.count()).where(
                 Rating.user_id == internal).group_by(Rating.value))).all())
-            learning_tracks = select(Rating.track_id).where(Rating.user_id == internal).union(
-                select(UserTrackSignal.track_id).where(UserTrackSignal.user_id == internal,
-                                                       UserTrackSignal.weight > 0)).subquery()
-            songs = await session.scalar(select(func.count()).select_from(learning_tracks))
             signals = await session.scalar(select(func.count(UserTrackSignal.id)).where(UserTrackSignal.user_id == internal))
             channels = await session.scalar(select(func.count(PlaylistChannel.id)).where(PlaylistChannel.user_id == internal))
             positive_tracks = select(Rating.track_id).where(Rating.user_id == internal,
                                                              Rating.value.in_(['love', 'like']))
             inferred_tracks = select(UserTrackSignal.track_id).where(UserTrackSignal.user_id == internal)
+            from .taste_learning import LearningState, REQUEST_WINDOW, TasteRequest, TrackPreference
+            from .social import SavedSong
+            state = await session.get(LearningState, internal)
+            saved_tracks = select(SavedSong.track_id).where(SavedSong.user_id == internal)
+            if state is not None and state.saves_since is not None:
+                saved_tracks = saved_tracks.where(SavedSong.created_at > state.saves_since)
+            requested_tracks = select(TasteRequest.track_id).where(TasteRequest.user_id == internal,
+                TasteRequest.created_at > utc_now() - REQUEST_WINDOW)
+            inferred_tracks = inferred_tracks.union(saved_tracks, requested_tracks)
+            saved_count = await session.scalar(select(func.count()).select_from(SavedSong).where(SavedSong.user_id == internal))
+            request_count = await session.scalar(select(func.count()).select_from(TasteRequest).where(
+                TasteRequest.user_id == internal, TasteRequest.created_at > utc_now() - REQUEST_WINDOW))
             artists = (await session.execute(select(Track.display_artist, Track.artist, func.count())
                 .where(Track.id.in_(positive_tracks)).group_by(Track.artist)
                 .order_by(func.count().desc(), Track.artist).limit(5))).all()
@@ -186,10 +221,15 @@ class ChatService:
             recent = sorted([('rating', *row) for row in recent_ratings]
                             + [('inferred', *row) for row in recent_signals], key=lambda row: row[1], reverse=True)[:5]
             explicit = sum(counts.values())
-            return {'counts': counts, 'songs': songs or 0, 'signals': explicit + (signals or 0),
+            all_learning = select(Rating.track_id).where(Rating.user_id == internal).union(
+                select(inferred_tracks.subquery().c.track_id))
+            total_songs = await session.scalar(select(func.count()).select_from(all_learning.subquery()))
+            return {'counts': counts, 'songs': total_songs or 0,
+                    'signals': explicit + (signals or 0) + (saved_count or 0) + (request_count or 0),
                     'channels': channels or 0, 'artists': artists, 'inferred_artists': inferred_artists,
                     'tags': tags, 'inferred_tags': inferred_tags, 'recent': recent,
-                    'reliable': explicit + (signals or 0) >= 5}
+                    'reliable': explicit + (signals or 0) >= 5, 'saves': saved_count or 0,
+                    'requests': request_count or 0, 'learning_enabled': state is None or state.enabled}
 
     async def taste_targets(self, user_id):
         summary = await self.taste_summary(user_id)
@@ -217,6 +257,25 @@ class ChatService:
                                                                  UserTrackSignal.track_id.in_(tracks)))
             await session.execute(update(Rating).where(Rating.user_id == internal, Rating.track_id.in_(tracks),
                                                        Rating.value.in_(['love', 'like'])).values(value='neutral', updated_at=utc_now()))
+            from .taste_learning import TasteRequest, TrackPreference, invalidate
+            await session.execute(delete(TasteRequest).where(TasteRequest.user_id == internal, TasteRequest.track_id.in_(tracks)))
+            await session.execute(delete(TrackPreference).where(TrackPreference.user_id == internal, TrackPreference.track_id.in_(tracks)))
+            from .social import SavedSong
+            from .taste_learning import feedback
+            for track_id in list(await session.scalars(select(SavedSong.track_id).where(SavedSong.user_id == internal,
+                    SavedSong.track_id.in_(tracks)))):
+                await feedback(session, internal, track_id, 'notforme')
+            await invalidate(session, internal)
+
+    async def set_learning(self, user_id, enabled):
+        from .taste_learning import learning_state, invalidate
+        async with self.database.write() as session:
+            internal = await session.scalar(select(User.id).where(User.telegram_user_id == user_id))
+            if internal is None or type(enabled) is not bool:
+                raise FlowError('stale')
+            state = await learning_state(session, internal)
+            state.enabled = enabled
+            await invalidate(session, internal)
 
     async def reset_learning(self, user_id):
         async with self.database.write() as session:
@@ -225,6 +284,14 @@ class ChatService:
                 raise FlowError('stale')
             await session.execute(delete(Rating).where(Rating.user_id == internal))
             await session.execute(delete(UserTrackSignal).where(UserTrackSignal.user_id == internal))
+
+            from .taste_learning import TasteRequest, TrackPreference, invalidate
+            await session.execute(delete(TasteRequest).where(TasteRequest.user_id == internal))
+            await session.execute(delete(TrackPreference).where(TrackPreference.user_id == internal))
+            await invalidate(session, internal)
+            from .taste_learning import LearningState
+            state = await session.get(LearningState, internal)
+            state.saves_since = utc_now()
 
     async def cancel_controls(self, user_id):
         async with self.database.write() as session:

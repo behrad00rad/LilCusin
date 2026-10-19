@@ -37,6 +37,8 @@ async def save_setup(database,telegram_id,*,style=None,mood=None,artist=None,com
         if row is None:row=TasteSetup(user_id=user.id);session.add(row)
         row.style,row.mood,row.artist=style,mood,(artist.strip() or None) if artist else None
         row.completed,row.step=completed,step
+        from .taste_learning import invalidate
+        await invalidate(session,user.id)
 
 async def needed(database,telegram_id):
     from .models import Rating,UserTrackSignal

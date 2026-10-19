@@ -61,6 +61,8 @@ class Database:
         from .onboarding import Onboarding
         from . import social  # Additive relationship, exchange, report and notice tables.
         from .social_chat import SwapPrompt
+        from . import taste_learning
+        from .recommendations.queue import QueuedRecommendation
         async with self.engine.begin() as connection:
             await connection.exec_driver_sql("BEGIN IMMEDIATE")
             await connection.run_sync(migrate)
