@@ -7,21 +7,11 @@ saved library as a stronger signal, durable leased For You refill and owner-boun
 Save/known/not-for-me/Next controls. Pause/reset/library management are available
 in /taste. 185 affected tests passed with monitored source hashes unchanged;
 all 16 chat cases passed again after final copy changes. See [resumable checkpoint and
-limits](recommendation-loop-2026-10-19.md). Uncommitted, not pushed or deployed.
+limits](recommendation-loop-2026-10-19.md). Code committed/pushed as `cbad204`;
+remote SHA verified. Exact staged snapshot: 183 Windows tests passed. Deployment
+is blocked by automatic-review refusal of private-source transfer to the existing
+VPS, pending explicit destination/payload approval. No production mutation occurred.
 Friends' taste remains a consent-scoped design, not an implemented recommender.
-
-## UI release - 2026-10-19
-
-User-approved UI commit `cdcc4d2` is pushed to `codex/safe-publish` and deployed
-to the existing direct VPS Mini App origin. This supersedes the local-only UI
-status below. The scoped file update preserves production hosting differences
-and unrelated concurrent work. Mini App API active; bot PID, Nginx and inactive
-connector unchanged during the successful application. Five public UI assets
-returned HTTPS 200 with exact source hashes; unsigned delivery-status returned 401.
-31 affected tests passed in isolated Linux staging against the reconciled runtime.
-No schema/configuration changes or full-checkout synchronization. Real Telegram
-delivery and physical swipe remain unverified. See [UI evidence](ux-clarity-2026-10-19.md).
-
 
 ## Recommendation recovery - 2026-10-19
 

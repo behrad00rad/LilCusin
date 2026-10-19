@@ -9,7 +9,11 @@ feedback/ownership, bilingual copy, reset/forget and delivery/channel/social-sav
 compatibility. Shutdown scenarios additionally passed seven repeated executions.
 All 16 chat cases passed again after final copy-only changes. Details are in the [resumable verification
 record](recommendation-loop-2026-10-19.md), which retains earlier non-green runs.
-Local, uncommitted and undeployed; no live Telegram/provider or phone claim.
+Code committed/pushed as `cbad204`, remote SHA matched. Exact staged snapshot:
+183 Windows tests passed; two unrelated working-tree cases excluded. Deployment
+source transfer was blocked by automatic review, after safe staging/hash guards;
+no live writes or service changes. See the same checkpoint for approval/resume.
+No live Telegram/provider or phone claim.
 
 ## 2026-10-19 - Recommendation recovery
 

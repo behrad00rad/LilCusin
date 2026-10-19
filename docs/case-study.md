@@ -7,7 +7,9 @@ history, reuses deliberate private saves as stronger evidence and replenishes a
 durable recommendation queue. User feedback separates an unsuitable song from
 one already known. Pause/reset controls and saved-song retrieval keep the learning
 under user control; resetting taste does not destroy the saved library. 185 scoped
-integration cases passed, with release and real-user verification still separate.
+integration cases passed; the scoped commit is now pushed and its exact staged
+snapshot passed 183 release cases. Deployment is blocked at source-transfer
+approval, with real-user verification still separate.
 See [implementation, checks and limitations](recommendation-loop-2026-10-19.md).
 
 ### Recommendation recovery - 2026-10-19

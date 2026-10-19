@@ -4,8 +4,10 @@
 
 Implement items 1-3: separate explicit/implicit taste, a replenishing private
 recommendation queue, and Get/Save/More/Not for me/Already know/Next chat controls.
-No playlist builder, unsolicited messages, remote publication or deployment is
-authorized by this implementation request. Preserve concurrent dirty work.
+No playlist builder or unsolicited messages were authorized by the implementation
+request. The user later explicitly requested commit, push and deployment; see the
+release checkpoint below. Notion publication remains separately approval-gated.
+Preserve concurrent dirty work.
 
 ## Acceptance
 
@@ -110,8 +112,8 @@ production deployment, live provider probe or real Telegram/phone verification.
 
 ## Limits
 
-Implemented locally only; not committed, pushed, deployed or verified with real
-Telegram users. Cold or exhausted catalogues still require bounded online work
+Implementation is committed and pushed; deployment is blocked at source-transfer
+approval and real Telegram use is unverified. Cold or exhausted catalogues require bounded online work
 and can return no candidates; this is not an unlimited catalogue or Spotify-scale
 model. Queue warming follows user activity; no periodic message scheduler exists.
 English/Persian copy and callback contracts have fixture tests, not a real phone
@@ -124,6 +126,41 @@ using only deliberately shared/visible songs, with overlap weighting, mute contr
 and current friendship/block/visibility checks at serving. Private saves/requests
 must never leak into social candidates. Personal dislikes/exclusions take priority.
 This is design context for a later slice, not a completed social recommender.
+
+## Commit/push and deployment checkpoint
+
+User requested commit, push and deployment on 2026-10-19. Reviewed and committed
+only the recommendation slice as `cbad204401c84d04e345e2f1f64184b88fe6a712`,
+tree `7d31e75c0367016fc571e3a8e7af436369512e9e`. Pushed to the existing
+`codex/safe-publish` branch; `git ls-remote` matched the local commit SHA.
+The commit has 31 scoped files: 22 runtime modules, two affected test files and
+seven documentation files/sections. Mixed main/delivery/workflow/privacy files
+were staged hunk-by-hunk; unrelated delivery-copy keys and other local work remain
+outside this commit. The final exact staged snapshot passed **183 affected Windows
+tests** in 129.557 s. This excludes two unrelated uncommitted delivery tests from
+the earlier 185-case working-tree verification; counts are not added together.
+
+Read-only production inspection found existing runtime-only fixes in main,
+delivery, discovery and copy. Initial patch application failed in isolated staging;
+three-way reconciliation preserved those changes. A runtime-hash guard then
+detected a concurrent main-module update and stopped before testing/deployment.
+The baseline/candidate were refreshed. No live files or services were changed by
+these attempts; no live database was opened or migrated.
+
+Automatic approval review rejected the refreshed upload of private source/test
+archives to the existing VPS. It requires explicit source-transfer confirmation
+for `103.75.197.217`; this was requested from the user. Do not bypass that review.
+**Not deployed.** Final Linux tests and additive schema installation have not run.
+
+Prepared local release artifacts are outside Git in the dedicated
+`recommendation-loop-release` directory: reviewed Git/test archives, the reconciled
+22-file candidate, old/new hash manifest and baseline. Prepared helper scripts
+perform isolated Git/runtime tests and a guarded stop/backup/additive-migration/
+restart with rollback; they must not be run until source-transfer approval exists.
+Resume by refreshing runtime hashes, retesting both candidates on Linux, verifying
+the pushed code commit/tree, then performing the guarded release if authorized.
+Full preflight previously had a missing-packaging-checker limitation; refresh its
+actual baseline rather than claiming it passed or upgrading unrelated dependencies.
 
 ## Resume rule
 
