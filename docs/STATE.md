@@ -1,5 +1,15 @@
 # Current handoff
 
+## A1 deployed - 2026-10-20
+
+UI commit `02259c0` deployed as asset release `a00194180b159c2a` after explicit
+user authorization. Four frontend assets updated after prior-hash checks; rollback
+copies retained. All five public HTTPS UI assets returned 200 with matching hashes;
+unsigned delivery-status returned 401. Service states/PIDs, Python sources and
+private configuration unchanged; no restart. Initial upload disconnected before
+application; retry succeeded. Supersedes the pending status below. Physical
+Telegram gestures and real delivery remain unverified. No further development.
+
 ## A1 UI polish - 2026-10-20
 
 Completed whole-card swipe and tab animations with reduced-motion support,
