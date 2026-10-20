@@ -3,7 +3,9 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 class Element {
  children=[];dataset={};attributes={};hidden=false;isConnected=true;disabled=false;
+ classList={toggle(){},contains(){return false;}};
  append(...items){this.children.push(...items);}
+ insertBefore(item,before){this.children.splice(this.children.indexOf(before),0,item);}
  replaceChildren(...items){this.children=[...items];}
  setAttribute(key,value){this.attributes[key]=value;}
  querySelector(selector){return this.children.find(el=>selector==='.'+el.className)||null;}
@@ -19,7 +21,7 @@ vm.runInContext(`
  let responses=[{after:new Date().toISOString(),state:'waiting',request_id:null},{state:'done',request_id:'owned'}],calls=[];
  api=async(path,data)=>{calls.push({path,data});return responses.shift();};
  const card=makeCard({id:42,title:'Song',artist:'Artist',get_song_url:'https://t.me/FixtureBot?start=get_old_42'},'initial');
- window.host=card;card.songData.token='renewed';const button=card.children[1].children[0];
+ window.host=card;card.songData.token='renewed';const button=card.querySelector('.song-actions').children[0];
 `,context);
 await vm.runInContext('button.onclick()',context);
 assert.equal(vm.runInContext('window.opened',context),'https://t.me/FixtureBot?start=get_renewed_42');

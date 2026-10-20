@@ -509,7 +509,18 @@
     "a1_sent": "Sent",
     "a1_continue_draft": "Continue draft",
     "a1_exchange_clear": "Nothing waiting here. Your other exchanges are in the next tab.",
-    "recommendation_why": "Why this song?"
+    "recommendation_why": "Why this song?",
+    "home_count": "{n} of {total}",
+    "home_swipe": "Swipe the card or tap an arrow to change songs",
+    "owl_label": "Owl mascot, tap for a tip",
+    "owl_idle": "Tap me for a tip",
+    "owl_love": "Noted. More like this coming.",
+    "owl_like": "Good pick.",
+    "owl_neutral": "Fair enough.",
+    "owl_dislike": "Got it. Fewer of these.",
+    "owl_tip_0": "Swipe the whole card up or down to change songs",
+    "owl_tip_1": "Rate a few songs to sharpen your picks",
+    "owl_tip_2": "Add up to five favorites to your card, then preview and share"
   },
   "fa": {
     "for_you": "آهنگ‌هایی برای امتحان کردن",
@@ -1021,7 +1032,18 @@
     "a1_sent": "ارسالی",
     "a1_continue_draft": "ادامهٔ پیش‌نویس",
     "a1_exchange_clear": "اینجا چیزی منتظر نیست. تبادل‌های دیگر را در تب کناری ببین.",
-    "recommendation_why": "چرا این آهنگ؟"
+    "recommendation_why": "چرا این آهنگ؟",
+    "home_count": "{n} از {total}",
+    "home_swipe": "کارت را بالا و پایین بکش یا فلش را بزن",
+    "owl_label": "جغد راهنما؛ بزن تا یک نکته بگم",
+    "owl_idle": "بزن تا یه نکته بگم",
+    "owl_love": "یادم می‌مونه؛ بیشتر از اینا پیشنهاد می‌دم.",
+    "owl_like": "انتخاب خوبیه.",
+    "owl_neutral": "باشه، گرفتم.",
+    "owl_dislike": "گرفتم؛ کمتر از اینا پیشنهاد می‌دم.",
+    "owl_tip_0": "خود کارت رو بالا یا پایین بکش تا آهنگ عوض بشه",
+    "owl_tip_1": "به چندتا آهنگ امتیاز بده تا پیشنهادها به سلیقه‌ات نزدیک‌تر بشن",
+    "owl_tip_2": "تا پنج آهنگ محبوبت رو به کارتت اضافه کن؛ بعد پیش‌نمایش بگیر و بفرست"
   },
   "ar": {
     "for_you": "لك",
@@ -1533,7 +1555,18 @@
     "a1_sent": "Sent",
     "a1_continue_draft": "Continue draft",
     "a1_exchange_clear": "Nothing waiting here. Your other exchanges are in the next tab.",
-    "recommendation_why": "Why this song?"
+    "recommendation_why": "Why this song?",
+    "home_count": "{n} of {total}",
+    "home_swipe": "Swipe the card or tap an arrow to change songs",
+    "owl_label": "Owl mascot, tap for a tip",
+    "owl_idle": "Tap me for a tip",
+    "owl_love": "Noted. More like this coming.",
+    "owl_like": "Good pick.",
+    "owl_neutral": "Fair enough.",
+    "owl_dislike": "Got it. Fewer of these.",
+    "owl_tip_0": "Swipe the whole card up or down to change songs",
+    "owl_tip_1": "Rate a few songs to sharpen your picks",
+    "owl_tip_2": "Add up to five favorites to your card, then preview and share"
   },
   "tr": {
     "for_you": "Senin için",
@@ -2045,7 +2078,18 @@
     "a1_sent": "Sent",
     "a1_continue_draft": "Continue draft",
     "a1_exchange_clear": "Nothing waiting here. Your other exchanges are in the next tab.",
-    "recommendation_why": "Why this song?"
+    "recommendation_why": "Why this song?",
+    "home_count": "{n} of {total}",
+    "home_swipe": "Swipe the card or tap an arrow to change songs",
+    "owl_label": "Owl mascot, tap for a tip",
+    "owl_idle": "Tap me for a tip",
+    "owl_love": "Noted. More like this coming.",
+    "owl_like": "Good pick.",
+    "owl_neutral": "Fair enough.",
+    "owl_dislike": "Got it. Fewer of these.",
+    "owl_tip_0": "Swipe the whole card up or down to change songs",
+    "owl_tip_1": "Rate a few songs to sharpen your picks",
+    "owl_tip_2": "Add up to five favorites to your card, then preview and share"
   },
   "ru": {
     "for_you": "Для вас",
@@ -2557,7 +2601,18 @@
     "a1_sent": "Sent",
     "a1_continue_draft": "Continue draft",
     "a1_exchange_clear": "Nothing waiting here. Your other exchanges are in the next tab.",
-    "recommendation_why": "Why this song?"
+    "recommendation_why": "Why this song?",
+    "home_count": "{n} of {total}",
+    "home_swipe": "Swipe the card or tap an arrow to change songs",
+    "owl_label": "Owl mascot, tap for a tip",
+    "owl_idle": "Tap me for a tip",
+    "owl_love": "Noted. More like this coming.",
+    "owl_like": "Good pick.",
+    "owl_neutral": "Fair enough.",
+    "owl_dislike": "Got it. Fewer of these.",
+    "owl_tip_0": "Swipe the whole card up or down to change songs",
+    "owl_tip_1": "Rate a few songs to sharpen your picks",
+    "owl_tip_2": "Add up to five favorites to your card, then preview and share"
   },
   "es": {
     "for_you": "Para ti",
@@ -3069,7 +3124,18 @@
     "a1_sent": "Sent",
     "a1_continue_draft": "Continue draft",
     "a1_exchange_clear": "Nothing waiting here. Your other exchanges are in the next tab.",
-    "recommendation_why": "Why this song?"
+    "recommendation_why": "Why this song?",
+    "home_count": "{n} of {total}",
+    "home_swipe": "Swipe the card or tap an arrow to change songs",
+    "owl_label": "Owl mascot, tap for a tip",
+    "owl_idle": "Tap me for a tip",
+    "owl_love": "Noted. More like this coming.",
+    "owl_like": "Good pick.",
+    "owl_neutral": "Fair enough.",
+    "owl_dislike": "Got it. Fewer of these.",
+    "owl_tip_0": "Swipe the whole card up or down to change songs",
+    "owl_tip_1": "Rate a few songs to sharpen your picks",
+    "owl_tip_2": "Add up to five favorites to your card, then preview and share"
   },
   "fr": {
     "for_you": "Pour vous",
@@ -3581,7 +3647,18 @@
     "a1_sent": "Sent",
     "a1_continue_draft": "Continue draft",
     "a1_exchange_clear": "Nothing waiting here. Your other exchanges are in the next tab.",
-    "recommendation_why": "Why this song?"
+    "recommendation_why": "Why this song?",
+    "home_count": "{n} of {total}",
+    "home_swipe": "Swipe the card or tap an arrow to change songs",
+    "owl_label": "Owl mascot, tap for a tip",
+    "owl_idle": "Tap me for a tip",
+    "owl_love": "Noted. More like this coming.",
+    "owl_like": "Good pick.",
+    "owl_neutral": "Fair enough.",
+    "owl_dislike": "Got it. Fewer of these.",
+    "owl_tip_0": "Swipe the whole card up or down to change songs",
+    "owl_tip_1": "Rate a few songs to sharpen your picks",
+    "owl_tip_2": "Add up to five favorites to your card, then preview and share"
   },
   "de": {
     "for_you": "Für dich",
@@ -4093,6 +4170,17 @@
     "a1_sent": "Sent",
     "a1_continue_draft": "Continue draft",
     "a1_exchange_clear": "Nothing waiting here. Your other exchanges are in the next tab.",
-    "recommendation_why": "Why this song?"
+    "recommendation_why": "Why this song?",
+    "home_count": "{n} of {total}",
+    "home_swipe": "Swipe the card or tap an arrow to change songs",
+    "owl_label": "Owl mascot, tap for a tip",
+    "owl_idle": "Tap me for a tip",
+    "owl_love": "Noted. More like this coming.",
+    "owl_like": "Good pick.",
+    "owl_neutral": "Fair enough.",
+    "owl_dislike": "Got it. Fewer of these.",
+    "owl_tip_0": "Swipe the whole card up or down to change songs",
+    "owl_tip_1": "Rate a few songs to sharpen your picks",
+    "owl_tip_2": "Add up to five favorites to your card, then preview and share"
   }
 }
