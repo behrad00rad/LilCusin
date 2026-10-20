@@ -1,5 +1,22 @@
 # Current handoff
 
+## Terminal 3 Telegram UX deployed - 2026-10-20
+
+Search paging `1108497` deployed first: five existing results per page, More songs/
+Previous in EN/FA, stable choice indices and owner/message/revision/expiry checks;
+no extra provider calls. This browses the fetched result pool, not an unlimited
+artist discography. Then `edf6e51` deployed direct two-column card ratings and
+Get audio / دریافت فایل آهنگ labels. Existing evidence-based localized ranking
+reasons retained; no invented artist attribution or AI requests.
+Four pagination tests passed locally and on isolated production-source staging.
+Seventeen UX/chat cases covered locally; three old row-index expectations were
+corrected and rerun successfully, without repeating the whole module. Three
+focused runtime rating/navigation checks passed. Both releases used exclusive
+deployment locking, live-source guards, scoped backups and rollback; hashes,
+polling and unchanged API PID/configuration verified. Forbidden delivery modules
+untouched. No Telegram browser session was available; actual native 320/390px
+layout/overflow and physical taps remain unverified. No Mini App assets changed.
+
 ## A1 deployed - 2026-10-20
 
 UI commit `02259c0` deployed as asset release `a00194180b159c2a` after explicit
