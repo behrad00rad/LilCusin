@@ -1,5 +1,14 @@
 # Recognition and search evidence
 
+## 2026-10-20 - Recommendation loop deployed
+
+Release `4835ec7d93767fb4`, code `cbad204`, deployed after explicit approval.
+Both exact Git and production-preserving candidates passed 183 isolated Linux
+tests each. Consistent backup, 22 live hashes, four additive tables, active bot/API
+and polling verified; unrelated source/configuration and Nginx PID preserved.
+Existing dependency preflight gaps remain unchanged; no real Telegram receipt
+claimed. See [deployment checkpoint](recommendation-loop-2026-10-19.md).
+
 ## 2026-10-19 - Private recommendation loop
 
 185 distinct affected Windows fixture tests passed in the final sequential

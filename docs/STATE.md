@@ -20,9 +20,11 @@ Save/known/not-for-me/Next controls. Pause/reset/library management are availabl
 in /taste. 185 affected tests passed with monitored source hashes unchanged;
 all 16 chat cases passed again after final copy changes. See [resumable checkpoint and
 limits](recommendation-loop-2026-10-19.md). Code committed/pushed as `cbad204`;
-remote SHA verified. Exact staged snapshot: 183 Windows tests passed. Deployment
-is blocked by automatic-review refusal of private-source transfer to the existing
-VPS, pending explicit destination/payload approval. No production mutation occurred.
+remote SHA verified. Exact staged snapshot: 183 Windows tests passed. Deployed
+on 2026-10-20 as release `4835ec7d93767fb4` after explicit upload/deployment approval.
+Both exact Git and reconciled runtime snapshots passed 183 Linux tests each.
+Bot polling and Mini App API active; 22 source hashes and four additive tables
+verified. Existing dependency gaps remain; real Telegram receipt is unverified.
 Friends' taste remains a consent-scoped design, not an implemented recommender.
 
 ## Recommendation recovery - 2026-10-19

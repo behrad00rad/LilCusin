@@ -1,5 +1,14 @@
 # From unknown recordings to playable songs
 
+### Recommendation loop in production - 2026-10-20
+
+Deployed private request/save learning and persistent For You refill as release
+`4835ec7d93767fb4`, preserving concurrent delivery/UI work instead of overwriting
+the checkout. Both isolated 183-test Linux snapshots passed; source hashes,
+additive schema, bot polling and API readiness verified. Existing environment
+dependency gaps and actual Telegram recommendation receipt remain unverified;
+friends discovery and playlist generation are not included.
+
 ### From one-off suggestions to a private discovery loop - 2026-10-19
 
 The local bot now learns weakly from accepted requests without inventing listening
