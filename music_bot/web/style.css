@@ -66,3 +66,5 @@ body[data-view=search] .view-intro{font-size:13px;margin-bottom:16px}.search-box
 @media(prefers-reduced-motion:reduce){.main-nav button,.main-nav button .ui-icon{transition:none}#status[data-loading=true]:before{animation:none}}
 @media(min-width:700px){body.feed-ready .shell{padding-bottom:calc(110px + var(--safe-bottom))}.deck-controls{position:relative;left:auto;bottom:auto;transform:none;width:100%;margin-top:14px}.feed-card .cover{height:260px}}
 body.feed-tight .section-title{display:none}body.feed-tight header{margin-bottom:6px}body.feed-tight .shell{padding-top:calc(8px + var(--safe-top))}body.feed-tight .feed-card{padding:10px}body.feed-tight .feed-card .track{gap:8px}body.feed-tight .social-strip{min-height:36px;font-size:11px;padding:6px 10px}body.feed-tight .deck-controls{bottom:calc(82px + var(--safe-bottom));padding:6px 8px}body.feed-tight .feed-card .heard{margin-top:4px}
+
+.heard>.ratings{padding-top:12px}
