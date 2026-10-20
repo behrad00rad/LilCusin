@@ -30,7 +30,7 @@ COPY = {
     'rate_prompt': ('Send or forward the song you want to rate. No fingerprint recognition or audio download is needed. If its tags are missing, I’ll ask for the artist and title.\n\nTo identify unknown audio, reply to it with /recognize.', 'آهنگی که می‌خوای امتیاز بدی رو بفرست یا فوروارد کن. برای امتیاز دادن نیازی به تشخیص صوتی یا دانلود دوباره نیست. اگه مشخصاتش ناقص باشه، اسم آهنگ و خواننده رو می‌پرسم.\n\nبرای تشخیص صدای ناشناس، روی فایل /recognize رو ریپلای کن.'),
     'close': ('✕ Close', '✕ بستن'),
     'welcome': ('Forward a song to rate it, or type a song name to search. To identify unknown audio, reply to it with /recognize.\n\nTry: Radiohead - Creep\n\n/rate · /recommend · /setup · /help', 'آهنگ رو برای امتیاز دادن فوروارد کن، یا اسمش رو برای جست‌وجو بنویس. برای تشخیص صدای ناشناس، روی فایل /recognize رو ریپلای کن.\n\nمثلاً: Radiohead - Creep\n\n/rate · /recommend · /setup · /help'),
-    'get': ('Get song', 'دریافت آهنگ'),
+    'get': ('Get audio', 'دریافت فایل آهنگ'),
     'details': ('Details', 'جزئیات'),
     'similar': ('More like this', 'آهنگ‌های مشابه'),
     'versions': ('Other versions', 'نسخه‌های دیگر'),

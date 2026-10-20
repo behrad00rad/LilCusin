@@ -135,11 +135,8 @@ def card_keyboard(token, selected=None, submitted=False, expanded=False, rating_
             [button(token, 'more', copy('similar'), 0), button(token, 'menu', copy('close'))]])
     keyboard = [[button(token, 'get', copy('get'), 0)],
                 [button(token, 'more', copy('similar'), 0), button(token, 'versions', copy('versions'), 0)]]
-    if expanded or selected is not None:
-        keyboard.append([button(token, value, M.rating_label(value, selected), 0)
-                         for value in ('love', 'like', 'neutral', 'dislike')])
-    else:
-        keyboard.append([button(token, 'rate', copy('rate'), 0)])
+    for values in (('love', 'like'), ('neutral', 'dislike')):
+        keyboard.append([button(token, value, M.rating_label(value, selected), 0) for value in values])
     keyboard.append([button(token, 'foryou' if submitted else 'next', M.AFTER_FOR_YOU if submitted else M.CONTINUE),
                      button(token, 'menu', copy('close'))])
     keyboard.append([button(token, 'unsave' if saved else 'save', copy('unsave' if saved else 'save'), 0)])

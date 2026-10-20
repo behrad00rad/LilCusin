@@ -215,7 +215,7 @@ class ChatFlowTests(ServiceTestCase):
             await self.click(self.outgoing[-1], column=2)
             card = self.outgoing[-1]
             before = len(self.outgoing)
-            await self.click(card, row=3, column=1)
+            await self.click(card, row=4, column=1)
             delete_message.assert_awaited_once()
             self.assertEqual(len(self.outgoing), before)
 
@@ -281,8 +281,8 @@ class ChatFlowTests(ServiceTestCase):
         await self.click(dashboard, row=row)
         await self.click(self.outgoing[-1])
         card = self.outgoing[-1]
-        self.assertIn(':unsave:', card[2]['reply_markup'].inline_keyboard[4][0].callback_data)
-        await self.click(card, row=4)
+        self.assertTrue(any(':unsave:' in button.callback_data for row in card[2]['reply_markup'].inline_keyboard for button in row))
+        await self.click(card, row=5)
         self.ack.assert_called_with(copy('feedback_unsave'))
         self.assertFalse(await self.chat.saved_tracks(TELEGRAM_ID))
 
@@ -291,9 +291,9 @@ class ChatFlowTests(ServiceTestCase):
         await self.feed(message=self.message(text='/recommend'))
         await self.click(self.outgoing[-1], column=2)
         card = self.outgoing[-1]
-        await self.click(card, row=5, column=1)
+        await self.click(card, row=6, column=1)
         self.ack.assert_called_with(copy('feedback_known'))
-        await self.click(card, row=5, column=0)
+        await self.click(card, row=6, column=0)
         self.ack.assert_called_with(copy('feedback_notforme'))
         self.assertEqual(await self.count(Rating), 4)
 
@@ -322,7 +322,7 @@ class ChatFlowTests(ServiceTestCase):
                     for button in row:
                         self.assertLessEqual(len(button.callback_data.encode()), 64)
                         self.assertIsNotNone(parse_control(button.callback_data))
-                self.assertEqual(keyboard.inline_keyboard[5][0].text, copy('notforme'))
+                self.assertTrue(any(button.text == copy('notforme') for row in keyboard.inline_keyboard for button in row))
                 self.assertEqual(localized_reason('Based on songs you saved'), copy('reason_saved'))
                 self.assertTrue(copy('recommend_start'))
                 self.assertTrue(copy('recommend_empty'))
