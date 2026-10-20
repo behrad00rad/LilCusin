@@ -223,5 +223,6 @@ A fresh baseline found uncompressed public code/translations and non-reusable
 artwork responses on direct VPS hosting. Existing CDN sizes/WebP and HTTP gzip
 plus validators reduce the English static budget from 576 KB to 147 KB without
 a new image service or localization architecture. Scoped tests and bilingual
-phone geometry support the candidate; [measured evidence](performance-2026-10-20.md)
-keeps local latency samples separate from physical mobile experience. Deployment pending.
+phone geometry support the release; [measured evidence](performance-2026-10-20.md)
+keeps local latency samples separate from physical mobile experience. Pushed/deployed as `dafc654` / `dbd57299600da7b3`; public asset/hash/cache checks
+pass and the separate bot service remained unchanged.

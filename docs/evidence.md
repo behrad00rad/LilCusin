@@ -265,11 +265,13 @@ Telegram receipt/playback remains unverified; Mini App unchanged.
 
 Runtime f7f0739 pushed and deployed; 424 cumulative Linux staging cases and five Node checks passed. VPS hashes/services/moderator/auth gates verified; Cloudflare publication confirmed. Public retrieval and real Telegram journeys remain unverified. See [release evidence](deployment-2026-10-19.md).
 
-## 2026-10-20 - A2/A3 measured Mini App performance candidate
+## 2026-10-20 - A2/A3 measured Mini App performance release
 
 Integrated Terminal 1 A1 before measuring current public/runtime responses.
 14 local and 14 isolated runtime HTTP/API checks plus 13 Node scripts pass.
 English static body budget falls 74.5%; a controlled 300 ms response-delay
 fixture reached the first song heading at 1,065.5 -> 725.5 ms. EN/FA phone
 geometry/actions checked; screenshot/physical-device and signed-network timings
-remain unavailable. [Full measurements](performance-2026-10-20.md). Not deployed yet.
+remain unavailable. [Full measurements](performance-2026-10-20.md). Deployed as `dbd57299600da7b3` from pushed commit `dafc654`; exact public hashes,
+gzip/304/immutable headers and unchanged protected services verified. Live public
+EN/FA preview loaded WebP; signed Telegram remains unverified.

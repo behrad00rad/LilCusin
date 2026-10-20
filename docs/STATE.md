@@ -200,12 +200,14 @@ the deployed module. The identical candidate retrieved/validated actual audio.
 Telegram receipt/playback remains unverified; Mini App unchanged.
 [Deployment evidence](navan-medley-fix-2026-10-19.md).
 
-## A2/A3 performance candidate - 2026-10-20
+## A2/A3 performance deployed - 2026-10-20
 
 Terminal 1 A1 is integrated. Scoped artwork sizing/WebP, static gzip/ETag
 revalidation, locale preload and demand-loaded font are implemented. English
 static body budget 576,346 -> 146,999 bytes; Persian 258,151 bytes. Fourteen
 local and fourteen isolated runtime HTTP/API tests plus 13 Node checks pass.
 EN/FA 320/390px DOM/accessibility checks and preview song actions pass; screenshot
-capture timed out. Candidate `dbd57299600da7b3` is not deployed yet. Preserve
+capture timed out. Commit `dafc654` is pushed and artifact `dbd57299600da7b3` deployed. All seven
+public assets match hashes and revalidate with 304; sized WebP caches immutably.
+API restarted/healthy; bot, connector, Nginx and configuration unchanged. Preserve
 concurrent delivery fixes. See [measurements and limitations](performance-2026-10-20.md).

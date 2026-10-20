@@ -27,7 +27,8 @@ verification/blockers belong in [STATE](STATE.md), rationale in [decisions](deci
 
 ## A2/A3 scoped performance release - 2026-10-20
 
-Implementation and isolated checks complete; guarded publication/deployment remains.
+Implementation, isolated checks, guarded publication/deployment and public cache
+verification complete (`dafc654`, artifact `dbd57299600da7b3`).
 [Measurements](performance-2026-10-20.md): context-specific existing CDN artwork,
 bounded public caching/compression and startup resource overlap. Physical mobile
 network and signed Telegram first-open timing remain unverified. Stop at A2/A3.

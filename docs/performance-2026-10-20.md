@@ -26,7 +26,7 @@ artwork caching, but direct hosting had no disk/memory transformation cache.
 | English static total | 576,346 | 146,999 |
 | Persian static total | 576,346 | 258,151 |
 
-Candidate body budgets exclude artwork, SDK, API bodies, favicon, headers and TLS.
+Measured body budgets exclude artwork, SDK, API bodies, favicon, headers and TLS.
 English reduction: 74.5%; Persian: 55.2%. Uncompressed JS grows by 786 bytes to
 80,619; the saving comes from transfer encoding, not removing functionality.
 Run `python tools/measure_web.py` for source/gzip budgets; add `--origin` with the
@@ -44,11 +44,16 @@ For a fixed public Radiohead cover (hash
 | 600px PNG | 668,580 |
 | 600px WebP large high-density card | 83,752 |
 
+For that representative first cover plus static assets, body totals are 760,813
+bytes before, 172,441 after for English at 1x, and 283,593 for Persian at 1x.
+Higher-density English using the 600px variant totals 230,751 bytes. These are
+sums of the measured fixture bodies, excluding SDK/API/header/TLS overhead.
+
 These are one public cover, not catalogue-wide averages. Reproduce with HTTPS GET
 `https://lastfm.freetls.fastly.net/i/u/<size>/<hash>.<format>` using the sizes above.
 The upstream served the expected MIME types and long cache lifetimes.
 
-## Implemented candidate
+## Implemented release
 
 - Existing Last.fm variants provide 174px list/signature/inbox artwork and 300px
   prominent artwork at 1x or Save-Data, 600px at higher density (frames reach
@@ -76,7 +81,7 @@ The upstream served the expected MIME types and long cache lifetimes.
   both font assets and licenses. The TTF is not requested by this UI, but is kept
   because server-side portrait generation can use it. No localization split.
 
-## Verification so far
+## Verification
 
 13 Node checks pass: performance, artwork, Worker, bridge, A1, motion, gestures,
 navigation, recovery, channels, delivery, social, taste card. Both frontend syntax
@@ -103,12 +108,40 @@ not be described as visual screenshot approval. The sandboxed local proxy cannot
 reach upstream artwork reliably; placeholders/error fallback remain usable. Public
 artwork size probes succeeded separately from the VPS.
 
-## Release status
+## Verified release
 
-Candidate is uncommitted and undeployed. All 14 isolated runtime staging tests
-passed for frozen release `dbd57299600da7b3`; protected runtime hashes stayed stable.
-Two earlier SSH transfers failed before production application; no production mutation. Deployment must recheck all scoped
-base hashes and protected source/configuration, take rollback copies, restart only
-the Mini App API, verify service health/hash identity/public caching and retain
-unavailable real Telegram/mobile-network verification. Do not republish the old
-Cloudflare Worker as though it were the live route.
+Performance commit `dafc6546f0df3689937263e1953f9190e39dbf17` is pushed to
+`codex/safe-publish` and deployed as frozen artifact `dbd57299600da7b3`.
+Direct local GitHub connections timed out. A temporary localhost CONNECT route,
+restricted to GitHub HTTPS over the approved existing SSH connection, enabled a
+non-force push; remote commit equality was verified and the tunnel closed. No
+permanent Git/network configuration change.
+
+Deployment rechecked every target and protected Python/UI/configuration hash,
+used an exclusive release lock, and retained six-file rollback metadata/copies
+under the protected release receipt. No database/schema/configuration changes;
+no user data was copied into staging or touched for this asset/cache release.
+Only the Mini App API restarted. API active, all six deployed hashes match;
+bot/connector/Nginx states and PIDs and unrelated sources/configuration unchanged.
+The existing inactive connector remains inactive. No full-checkout synchronization.
+The old Cloudflare Worker was built/tested for compatibility and was not published.
+
+All seven public HTTPS assets returned 200 with exact decoded source hashes and
+304 for matching validators. Public text transfers match the table above exactly;
+PNG/JPEG/font binaries are not needlessly recompressed. Public artwork returned
+174px WebP 10,056 bytes, 300px 25,442 bytes and 600px 83,752 bytes, each with one-year
+immutable caching. Unsigned public preferences returned 401 with no-store.
+
+The deployed public browser preview loaded 300px WebP artwork while the second
+hidden deck image remained unloaded. English at actual 320px and Persian at 390px
+showed no horizontal overflow; Persian switching completed with controls enabled
+and the curtain hidden. This supplements local EN/FA checks at both widths.
+Browser screenshot capture timed out. No signed Telegram session, physical touch,
+real audio delivery or measured mobile-network performance is claimed.
+
+Remaining limits: initial data still requires authenticated preferences then
+recommendations; all locale data still transfers once per changed release;
+static revalidation incurs round trips; first-seen artwork still traverses the VPS
+and provider; original-format fallback can cost more. Artwork sizes are bounded
+variants, not a CDN-wide average. No unbounded disk cache was introduced. Stop at
+A2/A3; no new social behavior or forbidden delivery modules changed in this release.
