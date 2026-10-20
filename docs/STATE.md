@@ -1,5 +1,18 @@
 # Current handoff
 
+## Search More correction deployed - 2026-10-20
+
+`8b779c1` corrects the cached-pool-only limitation below. More stays available at
+the end of fetched results and requests a deeper batch for the same query, with
+YouTube fallback. Only unseen artist/title identities and recording IDs append;
+old indices remain stable. Five new songs per extension, bounded to 60 total;
+explicit exhaustion keeps the displayed page instead of cycling old songs.
+Seven focused tests passed locally and in isolated runtime staging. Live public
+Radiohead metadata probe returned 37 unique songs, 25 beyond the initial 12.
+Both deployed hashes/polling verified; API PID and configuration unchanged.
+Owner/message/expiry/revision and post-provider cancellation guards retained.
+Native Telegram taps and phone rendering remain unverified.
+
 ## Terminal 3 Telegram UX deployed - 2026-10-20
 
 Search paging `1108497` deployed first: five existing results per page, More songs/
