@@ -65,7 +65,7 @@ function setActionLabel(button,label,name){const chosen=name||button.dataset.ico
 function action(label,run,className='secondary',iconName){const b=node('button',undefined,className);b.type='button';setActionLabel(b,label,iconName);b.onclick=run;return b;}
 function externalIcon(){return icon('external-link');}
 function link(url,label,className='primary',hint='listen_hint'){const a=node('a',label,className);a.append(externalIcon());a.href=url;a.onclick=e=>{if(tg?.openTelegramLink){e.preventDefault();tg.openTelegramLink(url);}};if(className==='primary')a.title=t(hint);return a;}
-function status(text=''){$('status').textContent=text;}
+function status(text=''){const el=$('status');el.textContent=text;el.dataset.loading=String(!!text&&text===t('loading'));}
 let toastTimer;function notice(text){const el=$('toast');el.textContent=text;el.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.hidden=true,3500);}
 function safeArea(){const s=document.documentElement.style;for(const side of ['top','bottom'])s.setProperty(`--safe-${side}`,`${Math.max(tg?.safeAreaInset?.[side]||0,tg?.contentSafeAreaInset?.[side]||0)}px`);}
 function telegramCall(run){try{run();}catch{}}
@@ -80,7 +80,7 @@ async function initializeTelegram(){
  telegramCall(()=>tg?.BackButton?.onClick(()=>restorePage()));
 }
 async function api(path,data,timeout=35000){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeout);try{const response=await fetch(`/api/${path}`,{method:data===undefined?'GET':'POST',headers:{'Content-Type':'application/json','X-Telegram-Init-Data':tg.initData},body:data===undefined?undefined:JSON.stringify(data),signal:controller.signal});let result;try{result=await response.json();}catch{throw new Error(t('error'));}if(!response.ok&&typeof result.error==='string'&&/^(card|invite|social)_[a-z_]+$/.test(result.error))throw new Error(t(result.error));if(!response.ok)throw new Error(t(response.status===401?'open_telegram':response.status===400?'invalid':response.status===403?'stale':'error'));return result;}catch(error){if(error.name==='AbortError')throw new Error(t('error'));throw error;}finally{clearTimeout(timer);}}
-function labels(){document.documentElement.lang=locale;document.documentElement.dir=['fa','ar'].includes(locale)?'rtl':'ltr';$('language').value=locale;$('guide-language').value=locale;$('guide-language').setAttribute('aria-label',t('language'));for(const [id,key] of Object.entries({'hero-title':'hero_title','hero-note':'hero_note',discover:'find_song','taste-card-open':'ux_build_card',preview:'preview','query-label':'search_label','search-button':'search','search-hint':'search_hint','language-label':'language','guide-link':'guide'}))$(id).textContent=t(key);$('help').setAttribute('aria-label',t('guide'));document.querySelectorAll('[data-key]').forEach(el=>el.textContent=t(el.dataset.key));writePageTitle($('view-title'),view,similarSeed);renderBreadcrumbs();contextLabels();}
+function labels(){document.documentElement.lang=locale;document.documentElement.dir=['fa','ar'].includes(locale)?'rtl':'ltr';$('language').value=locale;$('guide-language').value=locale;$('guide-language').setAttribute('aria-label',t('language'));for(const [id,key] of Object.entries({'hero-title':'hero_title','hero-note':'hero_note',discover:'find_song','taste-card-open':'ux_build_card','query-label':'search_label','search-button':'search','search-hint':'search_hint','language-label':'language','guide-link':'guide'}))$(id).textContent=t(key);$('help').setAttribute('aria-label',t('guide'));document.querySelectorAll('[data-key]').forEach(el=>el.textContent=t(el.dataset.key));writePageTitle($('view-title'),view,similarSeed);renderBreadcrumbs();contextLabels();renderPreviewBanner();}
 function contextLabels(){
  const key={'for-you':'ux_home_intro',search:'ux_search_intro',card:'ux_card_intro',swaps:'ux_swaps_intro',connections:'ux_connections_intro',channels:'ux_channels_intro'}[view];
  $('view-intro').textContent=key?t(key):'';$('view-intro').hidden=!key;
@@ -139,15 +139,54 @@ function tracks(result){$('content').replaceChildren();if(!result.tracks.length)
  for(const song of result.tracks)$('content').append(makeCard(song,song.token||result.token));if(view==='for-you')installDeck();for(const card of $('content').querySelectorAll('[data-track-id]'))restoreDeliveryUI(card);
 }
 let deckIndex=0,deckLoading=false,profilePanel='preview';
+
+// Small native animations, cancelled on rapid navigation; no layout measurements depend on transforms.
+const runningMotion=new Set();let tabTransition=0,deckAnimating=false,previewBannerCollapsed=false;
+function motionAllowed(){return !matchMedia('(prefers-reduced-motion: reduce)').matches;}
+function cancelUIMotion(){for(const animation of runningMotion)animation.cancel();runningMotion.clear();}
+async function uiMotion(element,frames,duration=210){
+ if(!element?.animate||!motionAllowed())return true;
+ const animation=element.animate(frames,{duration,easing:'cubic-bezier(.22,.75,.2,1)',fill:'both'});runningMotion.add(animation);
+ try{await animation.finished;return true;}catch{return false;}finally{runningMotion.delete(animation);animation.cancel();if(!runningMotion.size)fitDeck();}
+}
+function renderPreviewBanner(){
+ const banner=$('preview');banner.hidden=!preview;if(!preview)return;
+ banner.classList.toggle('preview-compact',previewBannerCollapsed);
+ const toggle=action(t(previewBannerCollapsed?'a1_preview_expand':'a1_preview_dismiss'),()=>{previewBannerCollapsed=!previewBannerCollapsed;renderPreviewBanner();fitDeck();},'preview-toggle',previewBannerCollapsed?'eye':'x');
+ toggle.setAttribute('aria-expanded',String(!previewBannerCollapsed));banner.replaceChildren(node('span',t(previewBannerCollapsed?'a1_preview_short':'preview')),toggle);
+}
+async function moveDeck(direction,fromY=0){
+ if(view!=='for-you'||deckLoading||deckAnimating)return;
+ const outgoing=deckItems()[deckIndex],version=generation;if(!outgoing)return;
+ if(deckIndex+direction<0){await uiMotion(outgoing,[{transform:`translateY(${fromY}px)`},{transform:'none'}],180);return;}
+ deckAnimating=true;outgoing.classList.add('card-transitioning');
+ try{
+  const completed=await uiMotion(outgoing,[{transform:`translateY(${fromY}px)`,opacity:1},{transform:`translateY(${-direction*Math.max(64,Math.abs(fromY)+24)}px)`,opacity:0}],150);
+  if(!completed)return;
+  if(version!==generation)return;outgoing.style.opacity='0';
+  await loadDeck(direction);if(version!==generation)return;
+  const incoming=deckItems()[deckIndex];outgoing.style.removeProperty('opacity');
+  await uiMotion(incoming,[{transform:`translateY(${direction*42}px)`,opacity:0},{transform:'none',opacity:1}],220);
+ }finally{outgoing.style.removeProperty('opacity');outgoing.classList.remove('card-transitioning');deckAnimating=false;}
+}
+async function switchView(next,restored,options={}){
+ const transition=++tabTransition,previous=view;cancelUIMotion();clearSwipe();
+ const region=document.querySelector('#content'),oldIndex=primaryViews.indexOf(previous==='connections'?'swaps':previous),nextIndex=primaryViews.indexOf(next==='connections'?'swaps':next);
+ const change=previous!==next,axis=oldIndex>=0&&nextIndex>=0&&oldIndex!==nextIndex;
+ const direction=(nextIndex>oldIndex?1:-1)*(document.documentElement.dir==='rtl'?-1:1),fromX=options.motionFromX||0;
+ if(change)await uiMotion(region,[{opacity:1,transform:`translateX(${fromX}px)`},{opacity:0,transform:axis?`translateX(${-direction*Math.max(36,Math.abs(fromX)+24)}px)`:'translateY(-6px)'}],120);
+ if(transition!==tabTransition)return;
+ await loadView(next,restored,options);if(transition!==tabTransition)return;
+ if(change)await uiMotion(region,[{opacity:0,transform:axis?`translateX(${direction*28}px)`:'translateY(6px)'},{opacity:1,transform:'none'}],220);
+}
+
 const deckItems=()=>[...$('content').children].filter(el=>el.matches('.card:not(.social-strip)'));
 function installDeck(){
- if(view!=='for-you')return;document.body.classList.add('feed-ready');
+ if(view!=='for-you')return;document.body.classList.add('feed-ready');telegramCall(()=>tg?.disableVerticalSwipes?.());
  const focused=document.activeElement?.closest('#deck-controls')?document.activeElement.dataset.deck:null;const items=deckItems();deckIndex=Math.max(0,Math.min(deckIndex,items.length-1));
  for(const [i,card] of items.entries()){
   card.hidden=i!==deckIndex;card.classList.add('feed-card');
-  const art=card.querySelector('.cover');if(art&&!art.dataset.swipe){art.dataset.swipe='true';art.tabIndex=0;art.setAttribute('aria-label',t('flow_swipe'));let start;
-   art.onpointerdown=e=>{if(e.isPrimary===false||e.button>0)return;start={x:e.clientX,y:e.clientY};art.setPointerCapture?.(e.pointerId);};
-   art.onpointercancel=()=>start=null;art.onpointerup=e=>{if(!start)return;const dy=e.clientY-start.y,dx=e.clientX-start.x;start=null;if(Math.abs(dy)>50&&Math.abs(dy)>Math.abs(dx)*1.3)moveDeck(dy<0?1:-1);};
+  const art=card.querySelector('.cover');if(art){art.setAttribute('aria-label',t('flow_swipe'));}if(art&&!art.dataset.swipe){art.dataset.swipe='true';art.tabIndex=0;
    art.onkeydown=e=>{if(['ArrowDown','ArrowUp'].includes(e.key)){e.preventDefault();moveDeck(e.key==='ArrowDown'?1:-1);}};
   }
  }
@@ -158,14 +197,62 @@ function installDeck(){
  controls.append(node('p',t('flow_swipe'),'hint deck-hint'));fitDeck();if(focused){const target=controls.querySelector('[data-deck="'+focused+'"]');if(target&&!target.disabled)target.focus({preventScroll:true});}
 }
 function fitDeck(){
+ if(runningMotion.size||swipeGesture?.moving)return;
  if(view!=='for-you'||!document.body.classList.contains('feed-ready'))return;
  const card=document.querySelector('.feed-card:not([hidden])'),controls=$('deck-controls'),art=card?.querySelector('.cover');if(!art||!controls)return;
- const nonArt=card.getBoundingClientRect().height-art.getBoundingClientRect().height;
- art.style.height=Math.max(80,Math.min(230,Math.floor(controls.getBoundingClientRect().top-card.getBoundingClientRect().top-nonArt-12)))+'px';
  const heard=card.querySelector('.heard');if(heard)heard.ontoggle=fitDeck;
+ document.body.classList.remove('feed-tight');
+ if(window.innerWidth>=700){art.style.height='260px';return;}
+ let nonArt=card.offsetHeight-art.offsetHeight,available=controls.getBoundingClientRect().top-card.getBoundingClientRect().top-nonArt-12;
+ if(available<100){document.body.classList.add('feed-tight');nonArt=card.offsetHeight-art.offsetHeight;available=controls.getBoundingClientRect().top-card.getBoundingClientRect().top-nonArt-12;}
+ art.style.height=Math.max(document.body.classList.contains('feed-tight')?64:80,Math.min(230,Math.floor(available)))+'px';
 }
 window.addEventListener('resize',fitDeck);
-async function moveDeck(direction){
+window.visualViewport?.addEventListener('resize',fitDeck);
+document.fonts?.ready.then(fitDeck);
+document.fonts?.addEventListener('loadingdone',fitDeck);
+
+// Vertical browsing owns the whole discovery card; horizontal browsing owns tabs.
+// Other screens retain native vertical scrolling and inputs retain editing gestures.
+let swipeGesture=null,suppressSwipeClickUntil=0;
+const primaryViews=['for-you','search','swaps','card'];
+function swipeTabIndex(){return primaryViews.indexOf(view==='connections'?'swaps':view);}
+function clearSwipe(){const gesture=swipeGesture;swipeGesture=null;if(gesture?.moving){gesture.moving.style.removeProperty('transform');gesture.moving.style.removeProperty('opacity');gesture.moving.classList.remove('is-swiping');}return gesture;}
+function startSwipe(event){
+ if(event.isPrimary===false){clearSwipe();return;}if(event.button>0||swipeTabIndex()<0||deckAnimating)return;
+ suppressSwipeClickUntil=0;
+ const target=event.target;if(!target?.closest||target.closest('input,textarea,select,[contenteditable],dialog,.app-menu,[data-no-swipe]'))return;
+ if(!target.closest('main,.main-nav')&&target!==document.body&&target!==document.documentElement&&!target.matches?.('.shell'))return;
+ clearSwipe();swipeGesture={id:event.pointerId,x:event.clientX,y:event.clientY,version:generation,card:view==='for-you'?target.closest('.feed-card'):null,axis:null,moving:null};
+}
+function swipeAxis(dx,dy){return Math.abs(dx)>Math.abs(dy)*1.3?'x':Math.abs(dy)>Math.abs(dx)*1.3?'y':null;}
+function dragSwipe(event){
+ const gesture=swipeGesture;if(!gesture||gesture.id!==event.pointerId)return;
+ const dx=event.clientX-gesture.x,dy=event.clientY-gesture.y;
+ if(!gesture.axis&&Math.max(Math.abs(dx),Math.abs(dy))>12)gesture.axis=swipeAxis(dx,dy);
+ if(!gesture.axis||gesture.axis==='y'&&!gesture.card)return;
+ if(event.cancelable)event.preventDefault();
+ gesture.moving=gesture.axis==='y'?gesture.card:document.querySelector('#content');
+ const distance=Math.max(-120,Math.min(120,gesture.axis==='y'?dy:dx));
+ gesture.offset=distance;gesture.moving.classList.add('is-swiping');gesture.moving.style.transform='translate'+(gesture.axis==='y'?'Y':'X')+'('+distance+'px)';gesture.moving.style.opacity=String(1-Math.min(Math.abs(distance)/600,.2));
+}
+function finishSwipe(event){
+ if(!swipeGesture||swipeGesture.id!==event.pointerId)return;const offset=swipeGesture.offset||0,gesture=clearSwipe();
+ if(gesture.version!==generation)return;const dx=event.clientX-gesture.x,dy=event.clientY-gesture.y,axis=gesture.axis||swipeAxis(dx,dy);
+ if(gesture.moving)suppressSwipeClickUntil=Date.now()+450;
+ if(axis==='y'&&gesture.card&&Math.abs(dy)>=60){suppressSwipeClickUntil=Date.now()+450;moveDeck(dy<0?1:-1,offset);return;}
+ if(axis==='x'&&Math.abs(dx)>=60){const direction=(dx<0?1:-1)*(document.documentElement.dir==='rtl'?-1:1),index=swipeTabIndex()+direction;if(index>=0&&index<primaryViews.length){suppressSwipeClickUntil=Date.now()+450;switchView(primaryViews[index],undefined,{focusSearch:false,motionFromX:offset});return;}}
+ if(gesture.moving)uiMotion(gesture.moving,[{transform:'translate'+(axis==='y'?'Y':'X')+'('+offset+'px)',opacity:.9},{transform:'none',opacity:1}],180);
+}
+document.addEventListener('pointerdown',startSwipe);
+document.addEventListener('pointermove',dragSwipe,{passive:false});
+document.addEventListener('pointerup',finishSwipe);
+document.addEventListener('pointercancel',clearSwipe);
+document.addEventListener('click',event=>{if(Date.now()<suppressSwipeClickUntil&&(event.detail>0||event.pointerType)){event.preventDefault();event.stopImmediatePropagation();}},true);
+document.addEventListener('dragstart',event=>{if(event.target.closest?.('.feed-card'))event.preventDefault();});
+window.addEventListener('blur',clearSwipe);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)clearSwipe();});
+async function loadDeck(direction){
  if(view!=='for-you'||deckLoading)return;const items=deckItems(),target=deckIndex+direction;
  if(target<0)return;if(target<items.length){deckIndex=target;installDeck();return;}
  const version=generation;deckLoading=true;installDeck();
@@ -282,14 +369,15 @@ function snapshot(){const result=['for-you','search','similar','channel'].includ
 async function restorePage(index=pageTrail.length-1){if(index<0)return;const page=pageTrail[index];pageTrail.splice(index);$('query').value=page.query;await switchView(page.view,page.result,{keepTrail:true,seed:page.seed,scroll:page.scroll});}
 
 async function openSimilar(card,button){const song=card.songData,version=generation;button.disabled=true;status(t('loading'));try{const next=preview?{tracks:demo.filter(s=>s.id!==song.id)}:await api('similar',{token:song.token,track_id:song.id});if(version!==generation||!card.isConnected)return;pageTrail.push(snapshot());if(pageTrail.length>12)pageTrail.splice(1,1);await switchView('similar',next,{keepTrail:true,seed:{id:song.id,title:song.title,artist:song.artist}});}catch(error){if(version===generation)status(error.message);}finally{button.disabled=false;}}
-async function switchView(next,restored,options={}){
- document.querySelector('.app-menu').open=false;document.body.classList.remove('feed-ready');$('deck-controls')?.remove();if(!options.keepTrail)pageTrail.length=0;similarSeed=options.seed||null;view=next;document.body.dataset.view=view;if(next==='for-you'&&!restored)deckIndex=0;document.querySelector('.hero').hidden=view!=='for-you';const version=++generation;lastResult=null;
+async function loadView(next,restored,options={}){
+ clearSwipe();telegramCall(()=>tg?.enableVerticalSwipes?.());
+ document.querySelector('.app-menu').open=false;document.body.classList.remove('feed-ready','feed-tight');$('deck-controls')?.remove();if(!options.keepTrail)pageTrail.length=0;similarSeed=options.seed||null;view=next;document.body.dataset.view=view;if(next==='for-you'&&!restored)deckIndex=0;document.querySelector('.hero').hidden=view!=='for-you';const version=++generation;lastResult=null;
  window.scrollTo({top:0,behavior:'instant'});document.querySelectorAll('.main-nav button').forEach(b=>{const parent=['similar','channel','channel-review'].includes(view)?pageTrail[0]?.view:view;const active=b.dataset.view===({connections:'swaps',taste:'card',channels:'for-you',setup:'for-you'}[parent]||parent);b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});$('search-form').hidden=!['search','similar'].includes(view);$('channel-tools').hidden=view!=='channel';$('channel-pagination').replaceChildren();labels();$('content').replaceChildren();delete $('content').dataset.deliveryTrack;status();
  if(restored){lastResult=restored;render(restored);window.scrollTo({top:options.scroll||0,behavior:'instant'});return;}
  if(view==='setup'){lastResult={setup:true};renderSetup();return;}
  if(view==='card'){status(t('loading'));try{const result=preview?previewTasteCard:await api('taste-card');if(version===generation){lastResult=result;status();renderTasteCard(result);}}catch(error){if(version===generation){status(error.message);$('content').append(action(t('retry'),()=>switchView('card')));}}return;}
  if(['connections','swaps'].includes(view)){status(t('loading'));try{const result=preview?(view==='connections'?{invitations:[]}:socialDemo):await api(view==='connections'?'comparison-invitations':'social');if(version!==generation)return;lastResult=result;status();render(result);}catch(error){if(version===generation){status(error.message);$('content').append(action(t('retry'),()=>switchView(view)));}}return;}
- if(view==='search'){if(!lists.has(view))empty(t('ux_search_empty'),t('ux_search_example'));if(lists.has(view)){lastResult=lists.get(view);tracks(lastResult);}$('query').focus({preventScroll:true});return;}
+ if(view==='search'){if(!lists.has(view))empty(t('ux_search_empty'),t('ux_search_example'));if(lists.has(view)){lastResult=lists.get(view);tracks(lastResult);}if(options.focusSearch!==false)$('query').focus({preventScroll:true});return;}
  status(t('loading'));try{const result=preview?(view==='taste'?{songs:24,counts:{love:12},channels:2,artists:['Radiohead','Beach House','The xx'],tags:['Alternative','Dream pop','Indie']}:view==='channels'?demoChannels:{tracks:demo.slice(0,3)}):await api(view==='taste'?'profile':view==='channels'?'channels':'recommendations',view==='for-you'?{}:undefined);if(version!==generation)return;lastResult=result;status();if(view==='for-you')remember(result);render(result);}catch(error){if(version===generation){status(error.message);empty(t('error'),'');$('content').append(action(t('retry'),()=>switchView(view)));}}
 }
 function setArtwork(cover,url){const img=node('img');let fallback=false;img.src='/cover?url='+encodeURIComponent(url);img.alt='';img.loading='lazy';img.decoding='async';img.onerror=()=>{if(!fallback){fallback=true;img.src=url;return;}cover.replaceChildren(document.createTextNode('♪'));cover.dataset.artFailed='true';};cover.replaceChildren(img);}
@@ -345,6 +433,7 @@ function renderSetup(){
 async function finishSetup(skip=false){const version=generation,buttons=[...$('content').querySelectorAll('button')];buttons.forEach(b=>b.disabled=true);status(t('loading'));try{const data=skip?{}:{style:setupDraft.style||null,mood:setupDraft.mood||null,artist:setupDraft.artist||null};if(!preview)await api('taste-setup/update',data);else storageWrite('lilcusin-preview-setup','done');if(version!==generation)return;setupDone=true;lists.clear();try{sessionStorage.removeItem(storageKey);}catch{}await switchView('for-you');notice(t('setup_saved'));}catch(error){if(version===generation)status(error.message);}finally{buttons.forEach(b=>b.disabled=false);}}
 
 async function boot(){
+ document.querySelectorAll('.main-nav button').forEach(button=>button.disabled=true);
  resetLanguageTransition();status('Opening Lil Cusin… / در حال باز شدن…');
  try{
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),8000);let response;
@@ -366,19 +455,22 @@ async function boot(){
  }catch{
   status(catalogue.en?t('startup_error'):'Could not connect. Try again. / وصل نشد. دوباره تلاش کن.');
   $('content').replaceChildren(action(catalogue.en?t('retry'):'Retry / تلاش دوباره',()=>location.reload(),'primary'));
- }finally{resetLanguageTransition();}
+ }finally{resetLanguageTransition();document.querySelectorAll('.main-nav button').forEach(button=>button.disabled=false);}
 }
-const previewTasteCard={taste_id:'LC-PREVIEW',nickname:'',bio:'',songs:[],current:null,revision:0,shared:false,share_token:null};
+const previewTasteCard={taste_id:'',nickname:'',bio:'',songs:[],current:null,revision:0,shared:false,share_token:null};
 let cardDraft=null,cardBusy=false;
 function cardDirty(card){return cardDraft&&cardDraft.revision===card.revision&&(cardDraft.nickname!==card.nickname||cardDraft.bio!==card.bio);}
 function cardProjection(card){
  const box=node('article',undefined,'card taste-card-preview');box.setAttribute('aria-label',t('card_preview'));
- box.append(node('p',card.taste_id,'card-taste-id'),node('h3',card.nickname||t('flow_unnamed')));
+ const brand=node('div',undefined,'card-brand'),owl=node('img');owl.src='/bot-logo.jpg';owl.alt='';owl.width=24;owl.height=24;brand.append(owl,node('span','LilCusin'));box.append(brand);
+ if(card.taste_id)box.append(node('p',card.taste_id,'card-taste-id'));box.append(node('h3',card.nickname||t('flow_unnamed')));
  if(card.bio)box.append(node('p',card.bio,'card-bio'));
  box.append(node('p',t('card_songs',{n:card.songs.length}),'hint'));
+ const covers=node('div',undefined,'signature-covers');covers.setAttribute('role','list');covers.setAttribute('aria-label',t('card_songs',{n:card.songs.length}));
+ for(let i=0;i<5;i++){const song=card.songs[i],slot=node('div',undefined,'signature-slot'+(song?'':' signature-empty'));slot.setAttribute('role','listitem');slot.setAttribute('aria-label',song?song.title+' — '+song.artist:t('a1_empty_slot',{n:i+1}));if(song){const cover=node('div','♪','cover');if(song.artwork)setArtwork(cover,song.artwork);slot.append(cover);}else slot.append(node('span',String(i+1).padStart(2,'0'),'signature-number'),icon('plus'));covers.append(slot);}box.append(covers);
  const songs=node('ol',undefined,'card-song-list');for(const song of card.songs){const item=node('li'),title=node('bdi',song.title),artist=node('bdi',song.artist);title.dir=artist.dir='auto';item.append(title,node('span',' · '),artist);songs.append(item);}box.append(songs);
  if(!card.songs.length)box.append(node('p',t('card_empty'),'hint'));
- if(card.current){const current=node('div',undefined,'card-current');current.append(node('p',t('card_current'),'hint'),node('bdi',card.current.artist+' — '+card.current.title));box.append(current);}
+ if(card.current){const current=node('div',undefined,'card-current');const cover=node('div','♪','cover'),copy=node('div');if(card.current.artwork)setArtwork(cover,card.current.artwork);copy.append(node('p',t('card_current'),'hint'),node('bdi',card.current.artist+' — '+card.current.title));current.append(cover,copy);box.append(current);}
  return box;
 }
 async function cardMutation(path,data){
@@ -422,7 +514,7 @@ function renderTasteCard(card){
  const sharing=node('section',undefined,'card taste-card-sharing');sharing.append(node('h3',t('ux_share_title')),node('p',t('ux_share_intro'),'hint'));const privacy=disclosure(t('ux_visibility_details'),node('p',t('card_visibility'),'hint'));sharing.append(privacy);
  if(preview)sharing.append(node('p',t('card_preview_only'),'notice'));
  if(card.shared&&card.share_url){const share=link('https://t.me/share/url?url='+encodeURIComponent(card.share_url),t('card_share'));share.onclick=event=>{event.preventDefault();if(cardDirty(card)){notice(t('card_draft_hint'));return;}if(tg?.openTelegramLink)tg.openTelegramLink(share.href);else window.open(share.href,'_blank','noopener');};sharing.append(share);const url=node('input');url.value=card.share_url;url.readOnly=true;url.dir='ltr';url.setAttribute('aria-label',t('card_link_hint'));sharing.append(url);}
- if(card.shared){sharing.append(action(t('card_hide'),()=>{if(cardDirty(card)){notice(t('card_draft_hint'));return;}cardMutation('taste-card/share',{action:'hide',revision:card.revision});}),action(t('card_rotate'),()=>confirmCard(card,'rotate')));}else{const publish=action(t('card_publish'),()=>confirmCard(card,'publish'),'primary');publish.disabled=preview;sharing.append(publish);}
+ if(card.shared){sharing.append(action(t('card_hide'),()=>{if(cardDirty(card)){notice(t('card_draft_hint'));return;}cardMutation('taste-card/share',{action:'hide',revision:card.revision});}),action(t('card_rotate'),()=>confirmCard(card,'rotate')));}else{const publish=action(t('card_publish'),()=>confirmCard(card,'publish'),'primary');publish.disabled=preview||!card.nickname?.trim()||!card.songs.length;sharing.append(publish);if(!card.nickname?.trim()||!card.songs.length)sharing.append(node('p',t('a1_publish_requirements'),'hint'));}
  const advanced=disclosure(t('ux_card_options'),action(t('card_private_summary'),()=>switchView('taste'),'text-button'),action(t('card_delete'),()=>confirmCard(card,'delete'),'text-button'));content.append(sharing,advanced);installProfilePanels({previewBox,edit,songs,sharing,advanced,previewActions,imageBox});socialProfileStats();
 }
 

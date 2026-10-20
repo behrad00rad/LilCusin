@@ -1,5 +1,19 @@
 # Current handoff
 
+## A1 UI polish - 2026-10-20
+
+Completed whole-card swipe and tab animations with reduced-motion support,
+compact Home/Search layouts, five-slot Taste Card placeholders and clearer
+exchange filters/actions. Existing palette, consent, delivery and backend APIs
+are preserved. Eight scoped Node checks, two translation tests, JS syntax and
+Worker generation passed; the final four affected Node checks passed again.
+EN/FA browser layouts checked at 320px/390px and desktop, including long titles,
+missing artwork and safe-area geometry. Physical Telegram touch and real delivery
+remain unverified; screenshot capture was unreliable. A1 deployment is pending:
+the existing three-asset release procedure needs four-asset reconciliation.
+Production remains on swipe asset release `28bb9f95e81cc9ab`. Development stopped
+at the user's request; unrelated changes preserved.
+
 ## UI release - 2026-10-19
 
 User-approved UI commit `cdcc4d2` is pushed to `codex/safe-publish` and deployed

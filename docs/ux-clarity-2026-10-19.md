@@ -142,3 +142,92 @@ External HTTPS checks returned 200 with byte-for-byte source hashes for index,
 app.js, social.js, style.css and locales.json. Unsigned delivery-status returned
 401. Real signed Telegram opening, audio receipt and physical touch gestures
 remain unverified; these operational checks do not establish those journeys.
+
+## Dual chat/Mini App access restoration
+
+User requested both a Mini App button and chat-only use. A separate chat startup
+change forced MenuButtonCommands and displaced the existing launcher. Restored
+the live default Open LilCusin web_app button; default/English/Persian private-chat
+command read-back still includes search, recommend and help. Existing chat reply
+keyboards and direct song submission remain available. `/help` exposes those chat
+buttons; `/` offers registered commands without requiring the Mini App.
+
+Startup now registers commands without forcing the launcher to commands. When
+an embedded Mini App URL is configured it may set that launcher; when unset it
+preserves the separately managed launcher. Only this narrow startup patch was
+applied to the existing VPS file; unrelated edits preserved, backup retained and
+polling PID unchanged. No restart, messages to users, commit or push in this fix.
+
+Two TranslationTests passed; local AsyncMock command-registration checks confirmed
+localized commands do not modify the launcher, and English/Persian chat keyboards
+remain chat controls. Startup syntax and scoped whitespace checked. An initial
+outer-directory unittest discovery failed to import the app; corrected repo-root
+invocation passed. Telegram acknowledged JSON menu writes without reflected changes;
+query-parameter transport produced the verified web_app read-back. No explanation
+for that transport discrepancy is established. User-device rendering and actual
+chat/song-delivery journeys remain unverified after this operational fix.
+
+## Whole-card and tab gestures - 2026-10-20
+
+User reported cover-only gestures and artwork drifting after a swipe/tab change.
+This local follow-up moves the entire recommendation card during vertical drags;
+up/down advances/returns a song without rating. Horizontal drags navigate the four
+primary tabs in their visual LTR/RTL order, including blank content space. Inputs,
+editors and dialogs keep their gestures; other pages retain native vertical scroll.
+Threshold/axis checks, pointer cancellation, multitouch cancellation, stale-view
+checks and release-click suppression prevent accidental navigation/actions. New
+intentional taps and keyboard controls remain usable. Swiping into Search does not
+automatically focus its input or open the mobile keyboard.
+
+Cover images are absolutely anchored inside a bounded frame instead of affecting
+centered grid sizing. Discovery sizing no longer animates height or translates
+the card during measurement; font/viewport changes refit the frame. Whole-card
+drag transforms are cleared on release, cancellation and navigation. Palette,
+artwork identity, recommendation APIs and rating/delivery behavior remain intact.
+
+On supported Telegram clients the discovery deck disables host vertical minimize
+swipes and other pages restore them, following Telegram's documented
+[gesture methods](https://core.telegram.org/bots/webapps). This integration remains
+unverified inside a real Telegram client.
+
+Six Node checks passed (new gesture regression plus five existing UI/Worker checks),
+two TranslationTests passed, JS syntax/Worker regeneration/scoped whitespace passed.
+Browser pointer drags started on song text advanced/returned songs; horizontal
+drags navigated Home/Search and returned, including Persian's mirrored direction.
+At actual 390x843 and 320x740 phone viewports no horizontal overflow was observed.
+A labeled disposable artwork fixture used the existing owl asset as a known loaded
+image, not fabricated song artwork: measured image/frame top and bottom differences
+were zero after swiping and returning to Home, natural width 320. Desktop at
+2304px was also checked. Browser mouse/pointer drag is not physical-touch evidence.
+Screenshot capture timed out despite alternate documented capture attempts; no
+new screenshot is claimed. The normal local preview is on port 8780; the labeled
+artwork test fixture is on 8784. No backend suite, production change, commit, push
+or deployment was performed for this follow-up. Unrelated dirty work preserved.
+
+### Gesture deployment - 2026-10-20
+
+User subsequently authorized deployment. Release `28bb9f95e81cc9ab` installed only
+app.js, style.css and locales.json, with prior deployed hashes checked before
+writing and rollback copies retained. The two gesture/delivery Node checks and
+scoped whitespace check passed again before release. Loopback served hashes matched;
+external HTTPS returned 200 and exact source hashes for all five interface assets
+(including unchanged index/social.js). Unsigned delivery-status returned 401.
+Bot, Mini App API, Nginx and inactive connector states/PIDs remained unchanged;
+all Python sources and private configuration hashes remained unchanged. No restart,
+database operation, Cloudflare publication, Git commit or push was performed.
+Physical Telegram swipes and client rendering still require real-device validation.
+
+
+## A1 UI polish - 2026-10-20
+
+Completed whole-card swipe and tab animations with reduced-motion support,
+compact Home/Search layouts, five-slot Taste Card placeholders and clearer
+exchange filters/actions. Existing palette, consent, delivery and backend APIs
+are preserved. Eight scoped Node checks, two translation tests, JS syntax and
+Worker generation passed; the final four affected Node checks passed again.
+EN/FA browser layouts checked at 320px/390px and desktop, including long titles,
+missing artwork and safe-area geometry. Physical Telegram touch and real delivery
+remain unverified; screenshot capture was unreliable. A1 deployment is pending:
+the existing three-asset release procedure needs four-asset reconciliation.
+Production remains on swipe asset release `28bb9f95e81cc9ab`. Development stopped
+at the user's request; unrelated changes preserved.
