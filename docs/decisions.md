@@ -255,3 +255,12 @@ Telegram receipt/playback remains unverified; Mini App unchanged.
 ## 2026-10-19 — Verified release
 
 Deploy the frozen, tested snapshot using explicit Git blobs and runtime hashes, preserving concurrent recording-search edits. Keep private configuration and persistent data; use a consistent backup and rollback guard. Longer cold-start readiness succeeded after a safe rollback. See [release evidence](deployment-2026-10-19.md).
+
+## 2026-10-20 - Reuse artwork variants and compress public Mini App assets
+
+Measured direct-host JS/CSS/catalogue transfers were uncompressed/no-store; a
+300px PNG cover was 184,467 bytes versus 10,056 bytes for 174px WebP. Reuse
+Last.fm sizes and browser caching, with gzip/validators for public static assets.
+Keep all locale data, fonts and existing fallback behavior; defer hidden-cover
+lookups. This avoids image-service cost, disk growth and localization splitting.
+API data stays no-store; stable static URLs revalidate. [Evidence and limits](performance-2026-10-20.md).

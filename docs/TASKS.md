@@ -24,3 +24,10 @@ When starting a task: select one row, state scope and measurable acceptance,
 read its linked contract plus affected source/tests, and stop at that scope.
 Update priority or acceptance here only when it changes materially; current
 verification/blockers belong in [STATE](STATE.md), rationale in [decisions](decisions.md).
+
+## A2/A3 scoped performance release - 2026-10-20
+
+Implementation and isolated checks complete; guarded publication/deployment remains.
+[Measurements](performance-2026-10-20.md): context-specific existing CDN artwork,
+bounded public caching/compression and startup resource overlap. Physical mobile
+network and signed Telegram first-open timing remain unverified. Stop at A2/A3.

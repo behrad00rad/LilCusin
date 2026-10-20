@@ -216,3 +216,12 @@ Telegram receipt/playback remains unverified; Mini App unchanged.
 ## 2026-10-19 — Verified release
 
 The music-identity release now joins consented taste cards, explainable comparisons and reciprocal song exchange across chat and Mini App. It is committed and deployed, with measured staging and runtime evidence; public connectivity and real two-account delivery remain explicit validation gaps. See [release evidence](deployment-2026-10-19.md).
+
+## 2026-10-20 - Lower Mini App transfer costs
+
+A fresh baseline found uncompressed public code/translations and non-reusable
+artwork responses on direct VPS hosting. Existing CDN sizes/WebP and HTTP gzip
+plus validators reduce the English static budget from 576 KB to 147 KB without
+a new image service or localization architecture. Scoped tests and bilingual
+phone geometry support the candidate; [measured evidence](performance-2026-10-20.md)
+keeps local latency samples separate from physical mobile experience. Deployment pending.
