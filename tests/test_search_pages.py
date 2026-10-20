@@ -36,7 +36,7 @@ class SearchPagesTests(ServiceTestCase):
 
     async def test_wrong_owner_message_revision_and_offset_rejected(self):
         for user, message, revision, offset in [(456, 77, 1, 5), (123, 78, 1, 5),
-                (123, 77, 2, 5), (123, 77, 1, 15), (123, 77, 1, -5), (123, 77, 1, 1)]:
+                (123, 77, 2, 5), (123, 77, 1, 15), (123, 77, 1, -5), (123, 77, 1, 61)]:
             with self.subTest(user=user, message=message, revision=revision, offset=offset):
                 with self.assertRaises(FlowError):
                     await page_result(self.workflow, user, message, self.submission_id, revision, offset)
@@ -55,8 +55,45 @@ class SearchPagesTests(ServiceTestCase):
             try:
                 first = candidate_keyboard(result, chat=True)
                 self.assertEqual(first.inline_keyboard[5][0].text, label)
-                last = candidate_keyboard(result, chat=True, offset=10)
+                last = candidate_keyboard(result, chat=True, offset=10, can_expand=False)
                 self.assertEqual(len([row for row in last.inline_keyboard if row[0].callback_data.startswith('c:')]), 2)
                 self.assertFalse(any(button.text == label for row in last.inline_keyboard for button in row))
             finally:
                 language.reset(context)
+
+    async def test_fetches_unseen_songs_and_keeps_existing_indices(self):
+        import asyncio
+        from types import SimpleNamespace
+        payload = [{'videoId': 'abcdefghij' + str(index), 'resultType': 'song',
+                    'title': 'Fresh ' + str(index), 'artists': [{'name': 'Artist'}],
+                    'duration_seconds': 120} for index in range(7)]
+        payload.insert(0, {**payload[0], 'title': 'Song 0'})
+        self.workflow.recording_search = SimpleNamespace(timeout=4, slots=asyncio.Semaphore(1),
+            max_duration=900, process=AsyncMock(return_value=payload))
+        result = await page_result(self.workflow, 123, 77, self.submission_id, 1, 12)
+        self.assertEqual(len(result.candidates), 17)
+        self.assertEqual(result.candidates[:12], self.rows)
+        self.assertEqual(len({row.title for row in result.candidates}), 17)
+        self.workflow.recording_search.process.assert_awaited_once()
+        selected = await self.workflow.select(self.submission_id, 123, 1, 16)
+        self.assertTrue(selected.title.startswith('Fresh'))
+
+    async def test_exhaustion_does_not_cycle_or_mutate_results(self):
+        import asyncio
+        from types import SimpleNamespace
+        self.workflow.recording_search = SimpleNamespace(timeout=4, slots=asyncio.Semaphore(1),
+            max_duration=900, process=AsyncMock(side_effect=[[], {'entries': []}]))
+        result = await page_result(self.workflow, 123, 77, self.submission_id, 1, 12)
+        self.assertEqual(result.kind, 'exhausted')
+        self.assertEqual(result.candidates, self.rows)
+
+    async def test_cancellation_during_provider_work_cannot_append(self):
+        import asyncio
+        from types import SimpleNamespace
+        async def cancel(*arguments):
+            await self.workflow.cancel(123)
+            return []
+        self.workflow.recording_search = SimpleNamespace(timeout=4, slots=asyncio.Semaphore(1),
+            max_duration=900, process=AsyncMock(side_effect=cancel))
+        with self.assertRaises(FlowError):
+            await page_result(self.workflow, 123, 77, self.submission_id, 1, 12)

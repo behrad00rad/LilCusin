@@ -11,7 +11,7 @@ from .bot_copy import text as copy
 def parse_callback(data):
     if not isinstance(data, str) or len(data.encode()) > 64:
         return None
-    match = re.fullmatch(r"c:([1-9][0-9]{0,17}):([0-9]{1,8}):([0-9]|1[0-9])", data)
+    match = re.fullmatch(r"c:([1-9][0-9]{0,17}):([0-9]{1,8}):([0-9]{1,2})", data)
     if match:
         return "choose", *(int(value) for value in match.groups())
     match = re.fullmatch(r"n:([1-9][0-9]{0,17}):([0-9]{1,8})", data)
@@ -31,7 +31,7 @@ def rating_keyboard(result):
     ]])
 
 
-def candidate_keyboard(result, *, chat=False, offset=0):
+def candidate_keyboard(result, *, chat=False, offset=0, can_expand=True):
     rows = [[InlineKeyboardButton(
         text=messages.candidate_label(candidate.artist, candidate.title) + (
             f' · YouTube {candidate.youtube_views:,}' if candidate.youtube_views is not None else ''),
@@ -42,9 +42,9 @@ def candidate_keyboard(result, *, chat=False, offset=0):
     if offset:
         navigation.append(InlineKeyboardButton(text='قبلی' if language.get() == 'fa' else 'Previous',
             callback_data=f'p:{result.submission_id}:{result.revision}:{max(0, offset - 5)}'))
-    if offset + 5 < len(result.candidates):
+    if offset + 5 < len(result.candidates) or (chat and can_expand and len(result.candidates) < 60):
         navigation.append(InlineKeyboardButton(text='بیشتر' if language.get() == 'fa' else 'More songs',
-            callback_data=f'p:{result.submission_id}:{result.revision}:{offset + 5}'))
+            callback_data=f'p:{result.submission_id}:{result.revision}:{min(offset + 5, len(result.candidates))}'))
     if navigation:
         rows.append(navigation)
     rows.append([InlineKeyboardButton(text=messages.NONE, callback_data=f"n:{result.submission_id}:{result.revision}")])
