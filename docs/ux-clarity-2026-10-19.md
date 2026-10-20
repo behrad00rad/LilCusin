@@ -303,3 +303,16 @@ Native conversational Persian; owner review is still requested.
 | `owl_tip_0` | خود کارت رو بالا یا پایین بکش تا آهنگ عوض بشه |
 | `owl_tip_1` | به چندتا آهنگ امتیاز بده تا پیشنهادها به سلیقه‌ات نزدیک‌تر بشن |
 | `owl_tip_2` | تا پنج آهنگ محبوبت رو به کارتت اضافه کن؛ بعد پیش‌نمایش بگیر و بفرست |
+
+
+## Home card and owl deployed - 2026-10-20
+
+User-authorized release `eda1f132f83ce635` deployed the tested Home card and inline
+owl from `f46500d`, preserving the existing production locale preload. Four assets
+updated after prior-hash checks, with rollback copies retained. All five public
+HTTPS UI assets returned 200 and exact source hashes; unsigned delivery-status
+returned 401. Live Persian browser preview shows owl, count, radio ratings and
+card actions. Service states/PIDs, Python sources, private configuration and
+social.js unchanged; no restart. Home/owl regression and syntax passed again.
+This supersedes local-only status below. Physical Telegram swipes and actual
+audio receipt remain unverified. No Git push performed in this deployment.
