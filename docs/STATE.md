@@ -1,5 +1,27 @@
 # Current handoff
 
+## Home card and inline owl - local, 2026-10-20
+
+Implementation `f46500d` replaces prior Home/header polish with a square cover,
+over-cover count and up/down arrows, visible radio-group ratings, reason chip,
+one primary Get song action and quieter secondary controls. Whole-card vertical
+swipes and horizontal tab navigation retain their existing handlers. Inline SVG
+owl has CSS blink/bob, bounded RAF pupil tracking, action-only reactions and
+localized tips; language selection moved into More. Quick Guide already has a
+language selector. Header previously showed the brand logo/name, not a user photo.
+Server dominant-color/cache work deferred by user; fixed #1f2024 fallback. Existing
+provider artwork variants use 400px WebP (300px low-data); no backend changes.
+Four scoped Node scripts passed: home/owl, gestures, motion and delivery; syntax,
+Worker generation and whitespace passed. EN/FA checked at actual 360/390px width,
+810px height: no horizontal overflow, >=44px rating targets, secondary actions
+clear navigation. All eight before/after screenshots saved; capture needed retries.
+Cover 360px: ~273x160 -> 283x283; 390px: ~289x148 -> 299x299 (baseline height
+varies with copy). Core UI gzip estimate 112173 -> 115661 bytes, +3488 bytes;
+JS/CSS raw delta +6123 bytes. Excludes unchanged assets and image/network cost.
+Native Telegram touch, audio receipt, live network transfer and reduced-motion
+device rendering not verified. No push or deployment. See the detailed evidence
+and Persian copy review in ux-clarity-2026-10-19.md.
+
 ## Search More correction deployed - 2026-10-20
 
 `8b779c1` corrects the cached-pool-only limitation below. More stays available at
