@@ -226,3 +226,11 @@ a new image service or localization architecture. Scoped tests and bilingual
 phone geometry support the release; [measured evidence](performance-2026-10-20.md)
 keeps local latency samples separate from physical mobile experience. Pushed/deployed as `dafc654` / `dbd57299600da7b3`; public asset/hash/cache checks
 pass and the separate bot service remained unchanged.
+
+## 2026-10-21 - Make waiting bounded and understandable
+
+Runtime inspection separated source-search failures from server overload.
+Recovery now distinguishes outages from no-match, communicates ongoing source
+checks in EN/FA and ends stalled cover attempts with a lightweight placeholder.
+[83-case staging and guarded deployment evidence](search-cover-recovery-2026-10-21.md)
+retains the gap between passing checks and actual signed Telegram/mobile use.

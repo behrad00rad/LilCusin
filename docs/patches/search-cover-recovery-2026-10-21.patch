@@ -1,0 +1,174 @@
+--- a/music_bot/recording_resolver.py
++++ b/music_bot/recording_resolver.py
+@@ -145,6 +145,7 @@
+                    title=getattr(original, 'display_title', None) or original.title,
+                    duration=original.duration)
+         aliases, successful, accepted = [], False, []
++        incomplete = False
+ 
+         async def check():
+             if not await alive():
+@@ -155,7 +156,7 @@
+                          title=row.title, duration=row.duration, album=row.album) for row in rows]
+ 
+         try:
+-            async with asyncio.timeout(16):
++            async with asyncio.timeout(40):
+                 await check()
+                 rows, failed = await self.discovery.search(track.artist + ' ' + track.title, music_only=True)
+                 successful = not failed
+@@ -184,7 +185,7 @@
+                 # One broad upload search; inspect relevant results BEFORE strict artist rejection.
+                 await check()
+                 try:
+-                    async with asyncio.timeout(3):
++                    async with asyncio.timeout(10):
+                         data = await fetcher.process(fetcher.base() + ['--flat-playlist', '--dump-single-json',
+                             '--skip-download', '--', 'ytsearch12:' + track.artist + ' ' + track.title], directory, alive, output=True)
+                     payload = json.loads(data)
+@@ -203,22 +204,22 @@
+                         await check()
+                         attempts += 1
+                         try:
+-                            async with asyncio.timeout(3):
++                            async with asyncio.timeout(6):
+                                 detail = json.loads(await fetcher.process(fetcher.base() + ['--skip-download',
+                                     '--dump-single-json', '--', 'https://www.youtube.com/watch?v=' + raw['id']],
+                                     directory, alive, output=True))
+                             if isinstance(detail, dict) and detail.get('id') == raw['id']:
+                                 details.append(detail)
+                         except (FetchError, ValueError, TimeoutError):
+-                            pass
++                            incomplete = True
+                         if attempts >= 2:
+                             break
+                     accepted = self.rank(track, details, aliases, fetcher.settings.max_duration)
+                 except (FetchError, ValueError, TypeError, TimeoutError):
+-                    pass
++                    incomplete = True
+         except TimeoutError:
+-            pass
++            incomplete = True
+         await check()
+-        if not successful:
++        if not accepted and (not successful or incomplete):
+             raise FetchError('Source search unavailable.')
+         return accepted
+--- a/music_bot/get_song.py
++++ b/music_bot/get_song.py
+@@ -219,7 +219,7 @@
+                 track = await session.get(Track, track_id)
+             heading = copy('song', artist=track.display_artist or track.artist, title=track.display_title or track.title)
+             if keyboard is None:
+-                if key in {'queued', 'searching', 'fetching', 'sending'}:
++                if key in {'queued', 'searching', 'searching_slow', 'searching_sources', 'fetching', 'sending'}:
+                     keyboard = cancel_keyboard(request_id)
+                 elif key in {'failed', 'uncertain'}:
+                     token, keyboard = await self.retry_keyboard(user_id, track_id)
+@@ -619,6 +619,16 @@
+                 for k, v in fields.items():
+                     setattr(job, k, v)
+ 
++    async def search_with_progress(self, track, directory, job_id):
++        from .search_progress import search_with_updates
++        async def update(key):
++            if not await self.alive(job_id):
++                return
++            for req, _ in await self.requests(job_id):
++                await self.progress(req.id, key)
++        return await search_with_updates(
++            lambda: self.fetcher.search(track, directory, lambda: self.alive(job_id)), update)
++
+     async def execute(self, job_id):
+         async with self.db.sessions() as s:
+             job = await s.get(FetchJob, job_id)
+@@ -646,13 +656,13 @@
+                     rows = job.candidates
+                     if not rows:
+                         try:
+-                            rows = await self.fetcher.search(search_track, directory, lambda: self.alive(job_id))
++                            rows = await self.search_with_progress(search_track, directory, job_id)
+                         except FetchError:
+                             if not await self.alive(job_id):
+                                 return
+                             logger.warning('Audio source search failed; retrying once.')
+                             await asyncio.sleep(.5)
+-                            rows = await self.fetcher.search(search_track, directory, lambda: self.alive(job_id))
++                            rows = await self.search_with_progress(search_track, directory, job_id)
+                     async with self.db.sessions() as s:
+                         selections = (await s.scalars(select(AudioSelection).where(AudioSelection.user_id.in_(
+                             select(AudioRequest.user_id).where(AudioRequest.job_id == job_id,
+--- a/music_bot/bot_copy.py
++++ b/music_bot/bot_copy.py
+@@ -2,6 +2,8 @@
+ from .i18n import language
+ 
+ COPY = {
++    'searching_slow': ('This is taking longer than usual. I am still checking recording sources. You can cancel below.', 'جست‌وجو بیشتر از معمول طول کشیده؛ هنوز دارم منابع آهنگ را بررسی می‌کنم. اگر خواستی، از پایین لغوش کن.'),
++    'searching_sources': ('Still checking available recordings. I will update this message when the search finishes.', 'هنوز دارم نسخه‌های موجود آهنگ را بررسی می‌کنم. وقتی جست‌وجو تمام شود، همین پیام را به‌روز می‌کنم.'),
+     'privacy_lock': ('🔓 Privacy lock', '🔓 قفل حریم خصوصی'),
+     'privacy_locked': ('🔒 Guilty pleasure', '🔒 علاقهٔ پنهانی'),
+     'save': ('Save', 'ذخیره'),
+--- a/music_bot/cover_proxy.py
++++ b/music_bot/cover_proxy.py
+@@ -31,7 +31,7 @@
+         if not valid_cover_url(raw):
+             raise web.HTTPBadRequest()
+         # No incoming headers, cookies or Telegram authentication are forwarded.
+-        async with session_factory(timeout=aiohttp.ClientTimeout(total=8),
++        async with session_factory(timeout=aiohttp.ClientTimeout(total=5),
+                                    trust_env=False) as session:
+             try:
+                 async with session.get(raw, allow_redirects=False,
+@@ -49,7 +49,7 @@
+                             raise web.HTTPRequestEntityTooLarge(max_size=LIMIT, actual_size=len(data))
+                     return web.Response(body=bytes(data), content_type=mime,
+                                         headers={'X-Content-Type-Options': 'nosniff',
+-                                                 'Cache-Control': ('public, max-age=31536000, immutable' if re.fullmatch(r'/i/u/(?:174s|300x300|600x600)/[a-f0-9]{32}\.(?:png|jpg|jpeg|webp)', urlsplit(raw).path) else 'public, max-age=86400'),
++                                                 'Cache-Control': ('public, max-age=31536000, immutable' if re.fullmatch(r'/i/u/(?:174s|300x300|400x400|600x600)/[a-f0-9]{32}\.(?:png|jpg|jpeg|webp)', urlsplit(raw).path) else 'public, max-age=86400'),
+                                                  'Referrer-Policy': 'no-referrer'})
+             except (aiohttp.ClientError, TimeoutError):
+                 raise web.HTTPBadGateway() from None
+--- a/music_bot/web/app.js
++++ b/music_bot/web/app.js
+@@ -497,7 +497,17 @@
+   return url.href;
+  }catch{return raw;}
+ }
+-function setArtwork(cover,url,large=false){const img=node('img'),variant=artworkURL(url,large);let fallback=false;img.alt='';img.loading='lazy';img.decoding='async';img.width=img.height=large?400:174;img.onerror=()=>{if(!fallback){fallback=true;img.src=url;return;}cover.replaceChildren(document.createTextNode('\u266a'));cover.dataset.artFailed='true';};img.src='/cover?url='+encodeURIComponent(variant);cover.replaceChildren(document.createTextNode('\u266a'),img);}
++function setArtwork(cover,url,large=false){
++ const img=node('img'),variant=artworkURL(url,large);let fallback=false,timer,observer,finished=false;
++ const stop=()=>{clearTimeout(timer);observer?.disconnect();};
++ const fail=()=>{if(finished)return;finished=true;stop();img.onload=img.onerror=null;img.removeAttribute('src');if(cover.contains(img)){cover.replaceChildren(document.createTextNode('\u266a'));cover.dataset.artFailed='true';}};
++ const start=()=>{if(!finished&&timer===undefined)timer=setTimeout(fail,10000);};
++ img.alt='';img.loading='lazy';img.decoding='async';img.width=img.height=large?400:174;img.style.opacity='0';
++ img.onload=()=>{finished=true;stop();img.style.opacity='1';};
++ img.onerror=()=>{if(!fallback&&variant!==url){fallback=true;img.src='/cover?url='+encodeURIComponent(url);return;}fail();};
++ img.src='/cover?url='+encodeURIComponent(variant);cover.replaceChildren(document.createTextNode('\u266a'),img);
++ if(typeof IntersectionObserver==='function'){observer=new IntersectionObserver(entries=>{if(entries.some(entry=>entry.isIntersecting)){start();observer.disconnect();}});observer.observe(img);}else{img.loading='eager';start();}
++}
+ let artTimer;
+ function scheduleArtwork(){if(preview)return;clearTimeout(artTimer);const version=generation;artTimer=setTimeout(()=>pollArtwork(version,0),1200);}
+ async function pollArtwork(version,attempt){
+--- /dev/null
++++ b/music_bot/search_progress.py
+@@ -0,0 +1,19 @@
++"""Bounded, cancellable status updates while a source lookup is running."""
++import asyncio
++
++
++async def search_with_updates(operation, update, *, delays=(6, 10)):
++    async def notify():
++        for delay, key in zip(delays, ('searching_slow', 'searching_sources')):
++            await asyncio.sleep(delay)
++            try:
++                await update(key)
++            except Exception:
++                pass  # Presentation must never fail a source lookup.
++
++    notifier = asyncio.create_task(notify())
++    try:
++        return await operation()
++    finally:
++        notifier.cancel()
++        await asyncio.gather(notifier, return_exceptions=True)

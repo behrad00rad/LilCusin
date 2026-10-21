@@ -264,3 +264,11 @@ Last.fm sizes and browser caching, with gzip/validators for public static assets
 Keep all locale data, fonts and existing fallback behavior; defer hidden-cover
 lookups. This avoids image-service cost, disk growth and localization splitting.
 API data stays no-store; stable static URLs revalidate. [Evidence and limits](performance-2026-10-20.md).
+
+## 2026-10-21 - Distinguish source outages and bound artwork waiting
+
+A timed-out fallback must not become a clean no-match. Retain original-recording
+identity gates; give bounded source/detail searches a usable budget and update
+the existing cancellable status at 6/16s in EN/FA. Cover retries remain on the
+allowlisted proxy and expire after 10s of visibility, leaving a placeholder.
+Hidden lazy images must not expire before selection. [Evidence](search-cover-recovery-2026-10-21.md).

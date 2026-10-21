@@ -1,5 +1,15 @@
 # Current handoff
 
+## Search/artwork recovery deployed - 2026-10-21
+
+Artifact `ab739eac183fff74` fixes swallowed source timeouts and unbounded cover
+fallback. Get song now updates its existing EN/FA status after roughly 6/16s with
+Cancel retained. 83 isolated runtime Python cases and local Node cover lifecycle
+checks pass. Bot polling/API health, all six runtime hashes and public gzip/cache
+checks verified; first readiness-check rollback is documented. Current dirty
+delivery work is preserved via a runtime-based patch. Signed Telegram/physical
+mobile verification remains open. [Evidence](search-cover-recovery-2026-10-21.md).
+
 ## Search More correction deployed - 2026-10-20
 
 `8b779c1` corrects the cached-pool-only limitation below. More stays available at

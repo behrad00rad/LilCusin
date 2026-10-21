@@ -32,3 +32,9 @@ verification complete (`dafc654`, artifact `dbd57299600da7b3`).
 [Measurements](performance-2026-10-20.md): context-specific existing CDN artwork,
 bounded public caching/compression and startup resource overlap. Physical mobile
 network and signed Telegram first-open timing remain unverified. Stop at A2/A3.
+
+## Search/artwork incident recovery - 2026-10-21
+
+Timeout classification, cancellable slow-search status and bounded visible-image
+fallback are deployed with scoped checks. [Evidence and replayable patch](search-cover-recovery-2026-10-21.md).
+Remaining: confirm the user-reported songs and signed Telegram/mobile experience.

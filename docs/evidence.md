@@ -275,3 +275,12 @@ geometry/actions checked; screenshot/physical-device and signed-network timings
 remain unavailable. [Full measurements](performance-2026-10-20.md). Deployed as `dbd57299600da7b3` from pushed commit `dafc654`; exact public hashes,
 gzip/304/immutable headers and unchanged protected services verified. Live public
 EN/FA preview loaded WebP; signed Telegram remains unverified.
+
+## 2026-10-21 - Search/artwork recovery
+
+Five live search failures, an offline timeout-to-empty reproduction and a slow
+cover sample motivated scoped fixes. Artifact `ab739eac183fff74` deployed after
+83 isolated Python checks and the local Node lifecycle regression. Public app
+hash/gzip/304, immutable cover headers, bot polling/API health and protected
+source/configuration verified. No signed Telegram receipt or physical-network
+claim. [Full evidence and rollback detail](search-cover-recovery-2026-10-21.md).
