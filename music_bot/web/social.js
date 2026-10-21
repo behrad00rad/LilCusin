@@ -69,3 +69,5 @@ async function socialSettings(){const version=generation;try{const result=previe
 function socialLoveButton(swap,run){const button=action(t(swap.loved?'social_loved':'social_love'),run);button.setAttribute('aria-pressed',String(swap.loved));return button;}
 
 function socialEmpty(title,description,label,run){const box=node('section',undefined,'empty');box.append(node('h3',t(title)),node('p',t(description)),action(t(label),run,'primary'));return box;}
+
+function coverFriendPrompt(card,friend){const send=action(t(friend?'friends_send_to':'friends_choose_recipient',friend?{name:friend.other.nickname}:{}),event=>friend?draftMusicSuggestion(friend,card.songData,event.currentTarget):chooseMusicFriend(card.songData),'icon-button friend-prompt cover-send','send');send.setAttribute('aria-label',t(friend?'friends_send_to':'friends_choose_recipient',friend?{name:friend.other.nickname}:{}));send.title=send.getAttribute?.('aria-label')||t('social_send');return send;}

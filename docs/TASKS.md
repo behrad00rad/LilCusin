@@ -28,3 +28,5 @@ When starting a task: select one row, state scope and measurable acceptance,
 read its linked contract plus affected source/tests, and stop at that scope.
 Update priority or acceptance here only when it changes materially; current
 verification/blockers belong in [STATE](STATE.md), rationale in [decisions](decisions.md).
+
+Home card step 1: local/tested, undeployed. Steps 2/3 pending. See STATE for scoped commit limitations, verification and Persian copy.

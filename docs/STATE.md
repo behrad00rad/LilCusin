@@ -306,3 +306,13 @@ source hash verified, restart succeeded; all 20 isolated regressions passed agai
 the deployed module. The identical candidate retrieved/validated actual audio.
 Telegram receipt/playback remains unverified; Mini App unchanged.
 [Deployment evidence](navan-medley-fix-2026-10-19.md).
+
+## Home card stability - step 1 - 2026-10-21
+
+Implemented locally; not deployed. Get song uses fixed-size in-button Requesting/Try again/Sent states, with an off-layout aria-live region and no delivery-triggered deck fitting. Cover arrows are grouped as three 44px counter zones; the first previous control stays disabled. Artwork has a minimum 4:3 shape, metadata clamps at two lines, the redundant bottom hint is removed and a one-time owl tip replaces it. EN/FA owl lines shortened. Friend send becomes a 44px cover action alongside the existing privacy lock in the current working-tree integration. Whole-card vertical swipes/tab gestures and rating/delivery APIs preserved.
+
+Focused Node delivery check passed against both the current working tree and an isolated commit candidate, including pending/confirmed/error button states, no delivery resize callback, cover dimensions and bilingual caption lengths. Existing Exchanges Node check, JS syntax and whitespace passed. Browser surfaces unavailable; actual EN 390px/FA phone layout and real Telegram receipt/haptics not verified. No old screenshots regenerated. Step 2 (Love-only friend visibility and lock animation) and step 3 (friend threads) remain untouched. The currently deployed lock differs: it uses a separate per-song privacy record and opt-in Like/Love sharing, rather than a rating visibility enum.
+
+Commit scope: independent Home core/CSS/copy/test changes and the cover-send helper; the one-line integration with the pre-existing uncommitted friendship implementation remains uncommitted to avoid absorbing that older work. Do not deploy from the isolated commit alone as a replacement for the current dirty runtime.
+
+Persian copy for review: درخواست «در حال درخواست…»؛ retry «دوباره امتحان کن»؛ sent «به تلگرامت فرستاده شد»؛ owl idle «بزن تا یه نکته بگم»؛ Home/tip «امتیاز بده، بهترش کنم»؛ Search «آهنگ بعدیت رو پیدا کن»؛ Exchanges «برای دوستت آهنگ بفرست»؛ card «پنج آهنگ، کارتِ تو»؛ Love «بازم از اینا میارم»؛ Dislike «از اینا کمتر میارم»؛ loading «دارم آهنگ بعدی رو میارم»؛ swipe «کارت رو بالا یا پایین بکش»؛ card tip «پنج آهنگ بچین و بفرست».
