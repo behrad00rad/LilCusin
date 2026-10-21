@@ -1,5 +1,18 @@
 # Current handoff
 
+## Viewport overflow correction - local, 2026-10-21
+
+User phone screenshot confirms Get song/secondary controls are hidden by navigation.
+The cover now remains square but shrinks to space left after controls, hint,
+Telegram safe areas and viewport height; overlay arrows follow its size. Telegram
+viewport/safe-area changes refit it; active swipes/animations are excluded from
+measurement. No API, palette or gesture changes. Five scoped Node checks passed
+(viewport, gestures, motion, home/owl, delivery), plus JS syntax, Worker generation
+and whitespace. New regression covers short/tall hosts, long content, safe areas,
+repeat-fit stability and drag guards. Rendered/iPhone verification is pending:
+browser access was approval-blocked in the interrupted turn and no browser is
+currently connected. No new screenshots, push or deployment for this correction.
+
 ## Home card and owl deployed - 2026-10-20
 
 User-authorized release `eda1f132f83ce635` deployed the tested Home card and inline

@@ -316,3 +316,17 @@ card actions. Service states/PIDs, Python sources, private configuration and
 social.js unchanged; no restart. Home/owl regression and syntax passed again.
 This supersedes local-only status below. Physical Telegram swipes and actual
 audio receipt remain unverified. No Git push performed in this deployment.
+
+
+## Viewport overflow correction - local, 2026-10-21
+
+User phone screenshot confirms Get song/secondary controls are hidden by navigation.
+The cover now remains square but shrinks to space left after controls, hint,
+Telegram safe areas and viewport height; overlay arrows follow its size. Telegram
+viewport/safe-area changes refit it; active swipes/animations are excluded from
+measurement. No API, palette or gesture changes. Five scoped Node checks passed
+(viewport, gestures, motion, home/owl, delivery), plus JS syntax, Worker generation
+and whitespace. New regression covers short/tall hosts, long content, safe areas,
+repeat-fit stability and drag guards. Rendered/iPhone verification is pending:
+browser access was approval-blocked in the interrupted turn and no browser is
+currently connected. No new screenshots, push or deployment for this correction.

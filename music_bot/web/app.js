@@ -69,7 +69,7 @@ function externalIcon(){return icon('external-link');}
 function link(url,label,className='primary',hint='listen_hint'){const a=node('a',label,className);a.append(externalIcon());a.href=url;a.onclick=e=>{if(tg?.openTelegramLink){e.preventDefault();tg.openTelegramLink(url);}};if(className==='primary')a.title=t(hint);return a;}
 function status(text=''){const el=$('status');el.textContent=text;el.dataset.loading=String(!!text&&text===t('loading'));}
 let toastTimer;function notice(text){const el=$('toast');el.textContent=text;el.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.hidden=true,3500);}
-function safeArea(){const s=document.documentElement.style;for(const side of ['top','bottom'])s.setProperty(`--safe-${side}`,`${Math.max(tg?.safeAreaInset?.[side]||0,tg?.contentSafeAreaInset?.[side]||0)}px`);}
+function safeArea(){const s=document.documentElement.style;for(const side of ['top','bottom'])s.setProperty(`--safe-${side}`,`${Math.max(tg?.safeAreaInset?.[side]||0,tg?.contentSafeAreaInset?.[side]||0)}px`);fitDeck();}
 function telegramCall(run){try{run();}catch{}}
 async function initializeTelegram(){
  const expected=/tgWebAppData=/.test(location.hash)||/tgWebAppData=/.test(location.search);
@@ -79,6 +79,7 @@ async function initializeTelegram(){
  storageKey='lilcusin-list-'+(tg?.initDataUnsafe?.user?.id||'preview');
  telegramCall(()=>tg?.ready());telegramCall(()=>tg?.expand());safeArea();
  telegramCall(()=>tg?.onEvent('safeAreaChanged',safeArea));telegramCall(()=>tg?.onEvent('contentSafeAreaChanged',safeArea));
+ telegramCall(()=>tg?.onEvent('viewportChanged',fitDeck));
  telegramCall(()=>tg?.BackButton?.onClick(()=>restorePage()));
 }
 async function api(path,data,timeout=35000){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeout);try{const response=await fetch(`/api/${path}`,{method:data===undefined?'GET':'POST',headers:{'Content-Type':'application/json','X-Telegram-Init-Data':tg.initData},body:data===undefined?undefined:JSON.stringify(data),signal:controller.signal});let result;try{result=await response.json();}catch{throw new Error(t('error'));}if(!response.ok&&typeof result.error==='string'&&/^(card|invite|social)_[a-z_]+$/.test(result.error))throw new Error(t(result.error));if(!response.ok)throw new Error(t(response.status===401?'open_telegram':response.status===400?'invalid':response.status===403?'stale':'error'));return result;}catch(error){if(error.name==='AbortError')throw new Error(t('error'));throw error;}finally{clearTimeout(timer);}}
@@ -202,10 +203,15 @@ function installDeck(){
  scheduleArtwork();
  let hint=$('deck-controls');if(!hint){hint=node('p',undefined,'deck-hint');hint.id='deck-controls';$('content').after(hint);}hint.textContent=t('home_swipe');fitDeck();
 }
+function deckCoverSize(width,available){return Math.max(44,Math.min(width,Math.floor(available)));}
 function fitDeck(){
- if(view!=='for-you')return;
- document.body.classList.remove('feed-tight');
- for(const card of deckItems())card.querySelector('.cover')?.style.removeProperty('height');
+ if(view!=='for-you'||!document.body.classList.contains('feed-ready')||runningMotion.size||swipeGesture?.moving)return;
+ const card=document.querySelector('.feed-card:not([hidden])'),art=card?.querySelector('.cover'),track=card?.querySelector('.track'),nav=document.querySelector('.main-nav');if(!art||!track||!nav)return;
+ // Reserve real controls, hint and Telegram chrome before sizing the square art.
+ const edge=Math.min(nav.getBoundingClientRect().top,window.visualViewport?.height||innerHeight,Number(tg?.viewportStableHeight)||Infinity);
+ const nonArt=card.offsetHeight-art.offsetHeight,hint=$('deck-controls');
+ const size=deckCoverSize(track.clientWidth,edge-card.getBoundingClientRect().top-nonArt-(hint?.offsetHeight||0)-24)+'px';
+ if(card.style.getPropertyValue('--cover-size')!==size)card.style.setProperty('--cover-size',size);
 }
 window.addEventListener('resize',fitDeck);
 window.visualViewport?.addEventListener('resize',fitDeck);
