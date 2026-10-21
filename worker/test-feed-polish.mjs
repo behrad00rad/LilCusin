@@ -13,7 +13,7 @@ class El{
 const source=readFileSync(new URL('../music_bot/web/app.js',import.meta.url),'utf8'),social=readFileSync(new URL('../music_bot/web/social.js',import.meta.url),'utf8');
 const node=(...args)=>new El(...args),content=node('div'),calls=[],notices=[];
 let owner={revision:7,songs:[]},fail=false,received;
-const ctx=vm.createContext({node,icon:()=>node('svg'),catalogue:{en:{}},t:(key,args={})=>key+(args.name?' '+args.name:''),preview:false,view:'for-you',generation:1,deckIndex:0,
+const ctx=vm.createContext({node,icon:()=>node('svg'),catalogue:{en:{}},t:(key,args={})=>key+(args.name?' '+args.name:''),preview:false,view:'for-you',generation:1,deckIndex:0,ratedFeedIds:new Set(),
  setArtwork(){},scheduleArtwork(){},setActionLabel:(b,label)=>b.textContent=label,cardDirty:()=>false,notice:x=>notices.push(x),
  action:(label,run,classes='secondary')=>Object.assign(node('button',label,classes),{onclick:run}),
  api:async(path,data)=>{calls.push({path,data});if(path==='taste-card')return owner;if(fail)throw Error('full');return {};},
@@ -35,4 +35,5 @@ for(const card of content.children.slice(1)){assert.equal(card.songData,undefine
 await vm.runInContext('socialStrip()',ctx);assert.equal(content.children.length,4,'refresh does not duplicate swaps');
 let opened;ctx.renderSocialSwap=swap=>opened=swap;received={swaps:[]};await vm.runInContext("openFeedSwap('revoked')",ctx);assert.equal(opened,undefined,'missing/revoked swaps are not opened from cached data');
 received={swaps:[swaps[0]]};await vm.runInContext("openFeedSwap('swap-0')",ctx);assert.equal(opened,swaps[0]);
+ctx.view='for-you';content.replaceChildren(recommendation);ctx.ratedFeedIds.add(2);ctx.api=async()=>({swaps:[{...swaps[0],rated:true},{...swaps[1],loved:true},swaps[2],swaps[3]]});await vm.runInContext('socialStrip()',ctx);assert.equal(content.children.length,2);assert.equal(content.children[1].dataset.swapToken,'swap-3','rated, loved and just-rated songs stay off Home');
 console.log('Saved success/failure/already-owned/removal states, bounded incoming swap feed, grant separation, deduplication and fresh access checks passed.');

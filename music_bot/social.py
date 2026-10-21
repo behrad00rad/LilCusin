@@ -221,6 +221,7 @@ class Social:
         return dict(token=row.token, invitation=row.invitation, role='sender' if actor == row.sender_id else 'recipient',
             state=row.state, song=song_json(track, owner=True),
             partner=card.nickname if card else '', note=row.note, saved=row.saved, loved=row.loved,
+            rated=await session.scalar(select(Rating.id).where(Rating.user_id == actor, Rating.track_id == row.track_id)) is not None,
             reply_to=row.reply_to, sent_at=row.sent_at.isoformat() if row.sent_at else None,
             expires_at=row.expires_at.isoformat())
 

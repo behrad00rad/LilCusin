@@ -142,9 +142,11 @@ def create_app(token, chat, workflow, *, bot_username=None):
     async def recommendations(request):
         data = await body(request)
         replace = data.get('replace', False)
+        batch = data.get('batch', False)
         exclude = data.get('exclude', [])
         current = data.get('current', [])
-        if (type(replace) is not bool or not isinstance(exclude, list) or len(exclude) > 20
+        if (type(batch) is not bool or (batch and not replace)
+                or type(replace) is not bool or not isinstance(exclude, list) or len(exclude) > 20
                 or any(type(value) is not int or value <= 0 for value in exclude)
                 or not isinstance(current, list) or len(current) > 20 or (current and not replace)
                 or any(not isinstance(item, dict) or type(item.get('id')) is not int
@@ -167,7 +169,7 @@ def create_app(token, chat, workflow, *, bot_username=None):
         async with capacity:
             result = await chat.recommendations.recommend_for_user(request['user']['id'], limit=20 if replace else 5)
         rows = [track_json(row, row.reason) for row in result.recommendations if row.track_id not in exclude]
-        return await bundle(request['user']['id'], rows[:1] if replace else rows, result.status, visible, expected_token)
+        return await bundle(request['user']['id'], rows[:5 if batch else 1] if replace else rows, result.status, visible, expected_token)
 
     async def search(request):
         data = await body(request)

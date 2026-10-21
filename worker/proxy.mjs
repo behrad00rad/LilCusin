@@ -1,6 +1,6 @@
 // The binding is pinned to the bot's loopback HTTP service, never a caller URL.
 export const routes = new Map([
-  ['/api/delivery-status','POST'],
+  ['/api/delivery-status','POST'], ['/api/delivery-request','POST'],
   ['/api/social/unsave','POST'],
   ['/api/social','GET'], ['/api/social/compare','POST'], ['/api/social/choices','POST'], ['/api/social/draft','POST'], ['/api/social/action','POST'], ['/api/social/settings','GET'], ['/api/social/settings/update','POST'], ['/api/social/relationship','POST'], ['/api/social/get-song','POST'],
   ['/api/taste-card/image','POST'], ['/api/comparison-invitations','GET'], ['/api/comparison-invitations/create','POST'], ['/api/comparison-invitations/decide','POST'], ['/api/taste-card','GET'], ['/api/taste-card/update','POST'], ['/api/taste-card/share','POST'], ['/api/taste-card/view','POST'],

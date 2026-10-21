@@ -12,6 +12,29 @@ from .test_miniapp import TOKEN, signed
 
 
 class DeliveryStatusTests(ServiceTestCase):
+    async def test_direct_request_is_owned_idempotent_and_does_not_start_a_worker(self):
+        from music_bot.get_song import FetchSettings
+        headers={'X-Telegram-Init-Data':signed(123)}
+        payload={'track_id':self.track_id,'token':self.token}
+        with patch('music_bot.get_song.FetchSettings.environment',return_value=FetchSettings(enabled=True)), patch('music_bot.get_song.GetSong.start',new_callable=AsyncMock) as start:
+            first=await self.client.post('/api/delivery-request',json=payload,headers=headers)
+            self.assertEqual(first.status,200);one=await first.json();self.assertEqual(one['state'],'pending')
+            second=await (await self.client.post('/api/delivery-request',json=payload,headers=headers)).json()
+            self.assertEqual(one['request_id'],second['request_id']);start.assert_not_awaited()
+        async with self.database.sessions() as session:self.assertEqual(await session.scalar(select(func.count(AudioRequest.id))),1)
+
+    async def test_direct_request_rejects_unsigned_foreign_and_revoked_sources(self):
+        payload={'track_id':self.track_id,'token':self.token}
+        self.assertEqual((await self.client.post('/api/delivery-request',json=payload)).status,401)
+        self.assertEqual((await self.client.post('/api/delivery-request',json=payload,headers={'X-Telegram-Init-Data':signed(456)})).status,403)
+        with patch('music_bot.social.Social.read',new_callable=AsyncMock) as read:
+            read.return_value={'state':'cancelled','song':{'id':self.track_id}}
+            response=await self.client.post('/api/delivery-request',json={'track_id':self.track_id,'swap_token':'fictional'},headers={'X-Telegram-Init-Data':signed(123)})
+            self.assertEqual(response.status,403)
+        async with self.database.write() as session:(await session.get(ChatControl,self.token)).expires_at=utc_now()-timedelta(seconds=1)
+        self.assertEqual((await self.client.post('/api/delivery-request',json=payload,headers={'X-Telegram-Init-Data':signed(123)})).status,403)
+        async with self.database.sessions() as session:self.assertEqual(await session.scalar(select(func.count(AudioRequest.id))),0)
+
     async def asyncSetUp(self):
         await super().asyncSetUp()
         self.chat = ChatService(self.database, AsyncMock())

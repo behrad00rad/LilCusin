@@ -16,6 +16,17 @@ from music_bot.miniapp import create_app
 
 
 class SocialLoopTests(ServiceTestCase):
+    async def test_feed_rated_flag_is_only_the_current_actors_rating(self):
+        swap=await self.send()
+        self.assertFalse((await self.social.read(456,swap['token']))['rated'])
+        async with self.database.write() as session:
+            sender=await session.scalar(select(User.id).where(User.telegram_user_id==123))
+            recipient=await session.scalar(select(User.id).where(User.telegram_user_id==456))
+            session.add(Rating(user_id=sender,track_id=swap['song']['id'],value='love'))
+        self.assertFalse((await self.social.read(456,swap['token']))['rated'],'never expose the partner rating')
+        async with self.database.write() as session:session.add(Rating(user_id=recipient,track_id=swap['song']['id'],value='dislike'))
+        self.assertTrue((await self.social.read(456,swap['token']))['rated'])
+
     async def asyncSetUp(self):
         await super().asyncSetUp()
         self.chat=ChatService(self.database,AsyncMock())

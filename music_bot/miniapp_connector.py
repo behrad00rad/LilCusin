@@ -8,7 +8,7 @@ import re
 import aiohttp
 
 WORKER = 'https://lilcusin-ui.ghazanfaribehrad.workers.dev'
-ROUTES = {'/api/social/unsave':'POST', '/api/social':'GET', '/api/social/compare':'POST', '/api/social/choices':'POST', '/api/social/draft':'POST', '/api/social/action':'POST', '/api/social/settings':'GET', '/api/social/settings/update':'POST', '/api/social/relationship':'POST', '/api/social/get-song':'POST', '/api/artwork':'POST', '/api/channels/songs':'POST', '/api/channels/review':'POST', '/api/preferences':'GET', '/api/preferences/update':'POST', '/api/profile':'GET', '/api/recommendations':'POST', '/api/search':'POST', '/api/rate':'POST',
+ROUTES = {'/api/delivery-request':'POST', '/api/delivery-status':'POST', '/api/social/unsave':'POST', '/api/social':'GET', '/api/social/compare':'POST', '/api/social/choices':'POST', '/api/social/draft':'POST', '/api/social/action':'POST', '/api/social/settings':'GET', '/api/social/settings/update':'POST', '/api/social/relationship':'POST', '/api/social/get-song':'POST', '/api/artwork':'POST', '/api/channels/songs':'POST', '/api/channels/review':'POST', '/api/preferences':'GET', '/api/preferences/update':'POST', '/api/profile':'GET', '/api/recommendations':'POST', '/api/search':'POST', '/api/rate':'POST',
           '/api/taste-card/image':'POST', '/api/comparison-invitations':'GET', '/api/comparison-invitations/create':'POST', '/api/comparison-invitations/decide':'POST', '/api/taste-card':'GET', '/api/taste-card/update':'POST', '/api/taste-card/share':'POST', '/api/taste-card/view':'POST',
           '/api/similar':'POST', '/api/channels':'GET', '/api/channels/connect':'POST',
           '/api/channels/disconnect':'POST', '/api/taste-setup':'GET', '/api/taste-setup/update':'POST'}
