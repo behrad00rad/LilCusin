@@ -330,3 +330,13 @@ and whitespace. New regression covers short/tall hosts, long content, safe areas
 repeat-fit stability and drag guards. Rendered/iPhone verification is pending:
 browser access was approval-blocked in the interrupted turn and no browser is
 currently connected. No new screenshots, push or deployment for this correction.
+
+
+## Viewport fix deployed - 2026-10-21
+
+Explicitly authorized asset release `a90f126e622dc9f5` deployed commit `5c50070`'s
+app.js/style.css after prior-hash checks; rollback copies retained. Viewport
+regression passed again. All five public UI assets returned 200 with matching
+hashes; unsigned delivery-status returned 401. Service states/PIDs, Python sources
+and private configuration unchanged; no restart. This supersedes the pending
+status below. Browser rendering and physical iPhone verification remain pending.
