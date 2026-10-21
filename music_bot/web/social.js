@@ -8,7 +8,21 @@ function socialArtwork(song,large=false){const row=node('div',undefined,'exchang
 function socialTime(swap){if(!swap.sent_at)return null;const date=new Date(swap.sent_at);if(!Number.isFinite(date.getTime()))return null;const time=node('time',new Intl.DateTimeFormat(document.documentElement.lang,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}).format(date),'hint');time.dateTime=date.toISOString();return time;}
 function socialSwapStatus(swap){return t(swap.state==='draft'?'social_draft':swap.role==='recipient'?(swap.saved?'social_saved':swap.loved?'social_loved':'social_waiting'):swap.saved?'social_saved_feedback':swap.loved?'social_loved_feedback':'social_sent');}
 function socialSection(title,songs){const section=node('section',undefined,'card social-section');section.append(node('h3',title));if(!songs.length)section.append(node('p',t('social_none'),'hint'));for(const song of songs)section.append(socialSong(song));return section;}
-async function socialStrip(){const version=generation;try{const result=await socialData();if(version!==generation||view!=='for-you')return;const pending=result.swaps.filter(s=>s.role==='recipient'&&s.state==='sent'&&!s.saved&&!s.loved);if(pending.length){const strip=action(t('social_pending',{n:pending.length}),()=>switchView('swaps'),'primary social-strip');$('content').prepend(strip);fitDeck();}}catch{/* Recommendations remain usable while the inbox is unavailable. */}}
+function makeFeedSwap(swap){
+ const card=node('article',undefined,'card feed-swap'),row=node('div',undefined,'track'),cover=node('div','♪','cover'),info=node('div');
+ if(swap.song.artwork)setArtwork(cover,swap.song.artwork,true);
+ info.append(node('p',t('feed_swap_from',{name:swap.partner||t('card_fallback_name')}),'feed-swap-from'),node('h3',swap.song.title),node('p',swap.song.artist));row.append(cover,info);card.append(row);
+ if(swap.note)card.append(node('blockquote',swap.note,'social-note feed-swap-note'));
+ const actions=node('div',undefined,'song-actions');actions.append(action(t('social_open'),()=>openFeedSwap(swap.token),'primary','arrow-left-right'));card.append(actions);card.dataset.swapToken=swap.token;return card;
+}
+async function openFeedSwap(token){await switchView('swaps');if(view!=='swaps')return;const fresh=lastResult?.swaps?.find(swap=>swap.token===token);if(fresh)renderSocialSwap(fresh);}
+async function socialStrip(){const version=generation;try{
+ const result=await socialData();if(version!==generation||view!=='for-you')return;
+ const incoming=result.swaps.filter(s=>s.role==='recipient'&&s.state==='sent').slice(0,3);if(!incoming.length)return;
+ const active=deckItems()[deckIndex];let anchor=deckItems()[0];if(!anchor)$('content').replaceChildren();
+ for(const swap of incoming){if([...$('content').children].some(el=>el.dataset.swapToken===swap.token))continue;const card=makeFeedSwap(swap);if(anchor)anchor.after(card);else $('content').append(card);anchor=card;}
+ if(active)deckIndex=Math.max(0,deckItems().indexOf(active));installDeck();
+ }catch{/* Recommendations remain usable while the inbox is unavailable. */}}
 let profileStatsRequest=0;
 async function socialProfileStats(){const request=++profileStatsRequest,version=generation;try{const result=await socialData();if(request!==profileStatsRequest||version!==generation||view!=='card')return;const box=node('section',undefined,'card');const heading=node('h3',t('social_saves')+' · '+result.saved_count);box.append(heading);for(const song of result.saves){const row=node('div',undefined,'social-save');row.append(socialSong(song),action(t('social_unsave'),async()=>{if(preview){notice(t('card_preview_only'));return;}try{await api('social/unsave',{track_id:song.id});if(!row.isConnected)return;row.remove();heading.textContent=t('social_saves')+' · '+(--result.saved_count);notice(t('social_unsave'));}catch(error){socialError(error);}}));box.append(row);}if(!result.saves.length)box.append(node('p',t('social_no_saves'),'hint'));const host=$('profile-saved')||$('content');host.prepend(box);host.append(action(t('social_controls'),socialSettings,'secondary'));}catch(error){socialError(error);}}
 function renderSocialInvitations(invitations){

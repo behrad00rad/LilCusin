@@ -520,7 +520,9 @@
     "owl_dislike": "Got it. Fewer of these.",
     "owl_tip_0": "Swipe the whole card up or down to change songs",
     "owl_tip_1": "Rate a few songs to sharpen your picks",
-    "owl_tip_2": "Add up to five favorites to your card, then preview and share"
+    "owl_tip_2": "Add up to five favorites to your card, then preview and share",
+    "card_saved_button": "Saved",
+    "feed_swap_from": "A song from {name}"
   },
   "fa": {
     "for_you": "آهنگ‌هایی برای امتحان کردن",
@@ -1043,7 +1045,9 @@
     "owl_dislike": "گرفتم؛ کمتر از اینا پیشنهاد می‌دم.",
     "owl_tip_0": "خود کارت رو بالا یا پایین بکش تا آهنگ عوض بشه",
     "owl_tip_1": "به چندتا آهنگ امتیاز بده تا پیشنهادها به سلیقه‌ات نزدیک‌تر بشن",
-    "owl_tip_2": "تا پنج آهنگ محبوبت رو به کارتت اضافه کن؛ بعد پیش‌نمایش بگیر و بفرست"
+    "owl_tip_2": "تا پنج آهنگ محبوبت رو به کارتت اضافه کن؛ بعد پیش‌نمایش بگیر و بفرست",
+    "card_saved_button": "ذخیره شد",
+    "feed_swap_from": "پیشنهادِ {name}"
   },
   "ar": {
     "for_you": "لك",
@@ -1566,7 +1570,9 @@
     "owl_dislike": "Got it. Fewer of these.",
     "owl_tip_0": "Swipe the whole card up or down to change songs",
     "owl_tip_1": "Rate a few songs to sharpen your picks",
-    "owl_tip_2": "Add up to five favorites to your card, then preview and share"
+    "owl_tip_2": "Add up to five favorites to your card, then preview and share",
+    "card_saved_button": "Saved",
+    "feed_swap_from": "A song from {name}"
   },
   "tr": {
     "for_you": "Senin için",
@@ -2089,7 +2095,9 @@
     "owl_dislike": "Got it. Fewer of these.",
     "owl_tip_0": "Swipe the whole card up or down to change songs",
     "owl_tip_1": "Rate a few songs to sharpen your picks",
-    "owl_tip_2": "Add up to five favorites to your card, then preview and share"
+    "owl_tip_2": "Add up to five favorites to your card, then preview and share",
+    "card_saved_button": "Saved",
+    "feed_swap_from": "A song from {name}"
   },
   "ru": {
     "for_you": "Для вас",
@@ -2612,7 +2620,9 @@
     "owl_dislike": "Got it. Fewer of these.",
     "owl_tip_0": "Swipe the whole card up or down to change songs",
     "owl_tip_1": "Rate a few songs to sharpen your picks",
-    "owl_tip_2": "Add up to five favorites to your card, then preview and share"
+    "owl_tip_2": "Add up to five favorites to your card, then preview and share",
+    "card_saved_button": "Saved",
+    "feed_swap_from": "A song from {name}"
   },
   "es": {
     "for_you": "Para ti",
@@ -3135,7 +3145,9 @@
     "owl_dislike": "Got it. Fewer of these.",
     "owl_tip_0": "Swipe the whole card up or down to change songs",
     "owl_tip_1": "Rate a few songs to sharpen your picks",
-    "owl_tip_2": "Add up to five favorites to your card, then preview and share"
+    "owl_tip_2": "Add up to five favorites to your card, then preview and share",
+    "card_saved_button": "Saved",
+    "feed_swap_from": "A song from {name}"
   },
   "fr": {
     "for_you": "Pour vous",
@@ -3658,7 +3670,9 @@
     "owl_dislike": "Got it. Fewer of these.",
     "owl_tip_0": "Swipe the whole card up or down to change songs",
     "owl_tip_1": "Rate a few songs to sharpen your picks",
-    "owl_tip_2": "Add up to five favorites to your card, then preview and share"
+    "owl_tip_2": "Add up to five favorites to your card, then preview and share",
+    "card_saved_button": "Saved",
+    "feed_swap_from": "A song from {name}"
   },
   "de": {
     "for_you": "Für dich",
@@ -4181,6 +4195,8 @@
     "owl_dislike": "Got it. Fewer of these.",
     "owl_tip_0": "Swipe the whole card up or down to change songs",
     "owl_tip_1": "Rate a few songs to sharpen your picks",
-    "owl_tip_2": "Add up to five favorites to your card, then preview and share"
+    "owl_tip_2": "Add up to five favorites to your card, then preview and share",
+    "card_saved_button": "Saved",
+    "feed_swap_from": "A song from {name}"
   }
 }

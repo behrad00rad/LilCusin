@@ -1,5 +1,19 @@
 # Current handoff
 
+## Saved feedback, Home swaps and artwork overlay - local, 2026-10-21
+
+Add to my card now changes to Saved/checkmark after acknowledgement or an existing
+stored selection, with a brief reduced-motion-aware icon animation. Failure keeps
+the original action; profile updates invalidate the session cache. Home includes
+up to three received sent-state swaps after the first recommendation, with sender,
+song and note. Swap cards stay out of recommendation grants/rating/history caches;
+opening reloads the authorized inbox and uses only a still-available fresh swap.
+Artwork fills the top edge with a dark lower fade behind title/artist. Existing
+viewport fitting remains; palette, whole-card/tab gestures and APIs unchanged.
+Five scoped Node checks passed (feed polish, delivery, viewport, gestures, social),
+plus syntax, Worker generation and whitespace. Browser inventory is empty; visual
+review/screenshots and phone verification pending. No deployment or push.
+
 ## Viewport fix deployed - 2026-10-21
 
 Explicitly authorized asset release `a90f126e622dc9f5` deployed commit `5c50070`'s
