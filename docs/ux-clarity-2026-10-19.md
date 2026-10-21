@@ -357,3 +357,14 @@ plus syntax, Worker generation and whitespace. Browser inventory is empty; visua
 review/screenshots and phone verification pending. No deployment or push.
 
 Persian copy: `card_saved_button` = ????? ??; `feed_swap_from` = ???????? {name}.
+
+
+## Feed polish deployed - 2026-10-21
+
+Explicit user authorization deployed `b25293c` as release `96b50529b5e1cdcd`:
+Saved/check animation, received swap cards and edge-to-edge artwork/title overlay.
+Four UI assets updated after baseline checks, rollback backups retained. Focused
+feed regression passed again. All five public UI hashes match; unsigned delivery
+returns 401. Service states/PIDs, Python sources, private configuration and index
+unchanged; no restart. This supersedes local-only status below. Browser/phone
+visual verification remains pending; no new screenshots or Git push in this release.

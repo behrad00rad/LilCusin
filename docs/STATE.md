@@ -1,5 +1,15 @@
 # Current handoff
 
+## Feed polish deployed - 2026-10-21
+
+Explicit user authorization deployed `b25293c` as release `96b50529b5e1cdcd`:
+Saved/check animation, received swap cards and edge-to-edge artwork/title overlay.
+Four UI assets updated after baseline checks, rollback backups retained. Focused
+feed regression passed again. All five public UI hashes match; unsigned delivery
+returns 401. Service states/PIDs, Python sources, private configuration and index
+unchanged; no restart. This supersedes local-only status below. Browser/phone
+visual verification remains pending; no new screenshots or Git push in this release.
+
 ## Saved feedback, Home swaps and artwork overlay - local, 2026-10-21
 
 Add to my card now changes to Saved/checkmark after acknowledgement or an existing
