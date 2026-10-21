@@ -46,3 +46,5 @@ for(const width of [330,360,390])for(const available of [80,240,500]){assert.ok(
 assert.ok(source.includes('pill.append(previous,count,next)'));assert.ok(!source.includes('navigation.append(count,previous,next)'));assert.ok(!source.includes("hint.textContent=t('home_swipe')"));assert.ok(css.includes('grid-template-columns:44px minmax(48px,auto) 44px'));assert.ok(css.includes('-webkit-line-clamp:2'));
 const locales=JSON.parse(readFileSync(new URL('../music_bot/web/locales.json',import.meta.url),'utf8'));for(const language of ['en','fa'])for(const [key,value]of Object.entries(locales[language]))if(key.startsWith('owl_')&&key!=='owl_label')assert.ok(Array.from(value).length<=28,`${language} ${key} too long`);
 console.log('Button-only delivery states, no delivery resize call, 4:3 minimum artwork, counter controls and compact bilingual owl copy passed.');
+
+for(const key of ['owl_home','owl_tip_1','owl_tip_2','owl_loading'])assert.ok(/[\u0600-\u06ff]/u.test(locales.fa[key]),key+' must contain native Persian');
