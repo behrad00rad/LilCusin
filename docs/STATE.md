@@ -1,5 +1,32 @@
 # Current handoff
 
+## Direct delivery and unseen feed refresh - local, 2026-10-21
+
+Implementation `61150aa`: explicit signed POST /api/delivery-request validates
+actor/source/grant or current swap consent, then enqueues through GetSong.request.
+No second worker, polling process or chat-opening /start fallback. Existing queue
+limits, recording choices, learning and delivery receipts remain. Status POST is
+still read-only. Active requests deduplicate; frontend never claims Sent until a
+receipt confirms an audio message. Worker/connector route allowlists updated.
+Home filters swaps by the current actor's stored rating/Love and immediately
+removes matching swaps after rating a recommendation. No partner rating exposed.
+Pulling down at the first card keeps buffered unseen cards; only exhaustion makes
+one batch request. Opt-in batch response returns up to five picks with normal
+owned grants; legacy replacement still returns one. Seen picks are tracked in
+this Mini App session, with bounded history/DOM and no implicit rating. Delays
+show a skeleton, block underlying controls and keep the owl loading message until
+the request finishes. Failure retains a usable card; navigation guards stale work.
+Thirteen scoped Python API tests and ten Node scripts passed, plus syntax, Worker
+build and whitespace. Initial sandbox temp/SQLite test errors were environmental;
+rerun with workspace disposable databases/loopback permissions passed. Browser
+inventory appeared but browser connections were unavailable; no new screenshots,
+real Telegram delivery or physical swipe verification. No push/deployment.
+RELEASE GATE: reconcile runtime Python changes and run scoped Linux checks; deploy
+backend endpoint/batch/projection before matching UI, restart only the Mini App API
+as documented, preserve the existing bot/audio worker, DB/config and rollback.
+A static-assets-only release is insufficient. Unrelated dirty Mini App cover-proxy
+registration and other backend work remain outside this commit.
+
 ## Feed polish deployed - 2026-10-21
 
 Explicit user authorization deployed `b25293c` as release `96b50529b5e1cdcd`:

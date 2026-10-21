@@ -6,6 +6,7 @@ Unchecked means outstanding, not authorized for automatic implementation.
 
 | Priority | Action | Acceptance / evidence |
 | --- | --- | --- |
+| Local tested | Direct Mini App audio, rated-swap removal, unseen refresh and skeleton/owl loading, 2026-10-21 | `61150aa`; 13 API cases and 10 Node scripts passed. Coordinated backend-first deployment/API restart required; browser and live Telegram validation pending. |
 | Deployed | Saved feedback, received swaps in Home and artwork overlay, 2026-10-21 | Five focused checks passed; release `96b50529b5e1cdcd` public hashes/auth verified. Browser/phone visual review pending. Uses existing consented inbox and separates swap cards from recommendation grants. |
 | Deployed | Correct Home overflow in Telegram, 2026-10-21 | Responsive square-cover sizing reserves real controls/navigation; viewport/safe-area changes refit. Five scoped checks passed. Release `a90f126e622dc9f5` deployed: public hashes/auth verified, no restart. Browser/iPhone visual check pending. |
 | Deployed | Home card and inline owl, 2026-10-20 | `f46500d`: whole-card swipes retained, up/down arrows, square covers, honest ratings and lightweight mascot. Four scoped checks and EN/FA 360/390px layouts passed; eight screenshots in `docs/screenshots/`. Release `eda1f132f83ce635`: public hashes, auth and live Persian browser verified; no restart. Dominant-color server work deferred; real Telegram phone verification pending. Supersedes earlier Home/header polish. |
