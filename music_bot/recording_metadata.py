@@ -1,4 +1,4 @@
-﻿"""Presentation/tag metadata; never rewrites recording identity or source selection."""
+"""Presentation/tag metadata; never rewrites recording identity or source selection."""
 import asyncio
 from dataclasses import dataclass
 import re
@@ -249,3 +249,31 @@ async def resolve_metadata(track, providers=None):
     except Exception:
         pass  # Failed lookup never turns a channel name into a song artist.
     return fallback
+
+
+def canonical_snapshot(candidate, *, searched_artist=None):
+    """Freeze display metadata for this selected source; never mutate catalogue keys."""
+    saved = candidate.recording_metadata
+    metadata = result_metadata(candidate) if saved.get('version') == 1 else clean_recording(
+        candidate.artist, candidate.title, candidate.source, searched_artist=searched_artist)
+    return {'version':1, 'artist':metadata.artist, 'title':metadata.title,
+        'duration':candidate.duration, 'source_id':candidate.external_ids.get('youtube'),
+        'source':candidate.source, 'album':candidate.album, 'artwork_url':candidate.artwork_url}
+
+
+def snapshot_metadata(snapshot, video=None):
+    if (not isinstance(snapshot, dict) or snapshot.get('version') != 1
+            or not isinstance(snapshot.get('title'), str) or not snapshot['title'].strip()
+            or (video is not None and snapshot.get('source_id') != video)):
+        return None
+    artist = snapshot.get('artist') or ''
+    if not isinstance(artist, str) or label_credit(artist):
+        artist = ''
+    return RecordingMetadata(snapshot['title'], artist, snapshot.get('album'))
+
+
+def telegram_fields(metadata):
+    fields = {'title':metadata.title}
+    if metadata.artist and not label_credit(metadata.artist):
+        fields['performer'] = metadata.artist
+    return fields

@@ -87,10 +87,11 @@ async def confirmed_result(session, submission):
 
 
 class Workflow:
-    def __init__(self, database, providers, lyrics=None):
+    def __init__(self, database, providers, lyrics=None, *, recording_search=None):
         self.database = database
         self.providers = providers
         self.lyrics = lyrics
+        self.recording_search = recording_search
         self.warm_tasks = set()
         from .search_pipeline import SearchPipeline
         self.searches = SearchPipeline(self._catalogue_search, self._discovery_search)
@@ -476,6 +477,9 @@ class Workflow:
                 return Result("limit", submission_id)
             artist = flow.corrected_artist if flow.corrected_artist is not None else submission.parsed_artist
             title = flow.corrected_title or submission.parsed_title
+            recording_query = (' '.join(filter(None, (artist, title)))
+                               if flow.corrected_artist is not None or flow.corrected_title
+                               else submission.raw_text or ' '.join(filter(None, (artist, title))))
             flow.attempts += 1
             flow.revision += 1
             revision = flow.revision
@@ -487,18 +491,26 @@ class Workflow:
         search_key = None
         context = CHAT_FAST.set(fast)
         try:
-            local = await self.local_matches(title, artist) if fast else []
+            recording_mode = self.recording_search is not None and fast and submission.submission_type == 'text'
+            local = await self.local_matches(title, artist) if fast and not recording_mode else []
             discovery = title_only and self.title_discovery_enabled() and len(title.split()) <= 8
             if local and not discovery and (title_only or strong_match(artist, title, local)):
                 candidates, failed = local, False
                 if submission.submission_type != 'telegram_audio':
                     self.warm_search(title, artist)
             else:
-                async with asyncio.timeout(7 if fast else None):
-                    if title_only and fast:
+                async with asyncio.timeout(12 if recording_mode else 7 if fast else None):
+                    recordings = []
+                    if recording_mode:
+                        recordings, _ = await self.recording_search.search(recording_query)
+                    if title_only and fast and not recordings:
                         search_key = self.searches.key(title, True, True)
-                    candidates, failed = await self.search_chat_title(title, progressive=True) if title_only and fast else (
-                        await self.search_title(title) if title_only else await self.search(artist, title))
+                    if recordings:
+                        candidates, failed = recordings, False
+                    elif title_only and fast:
+                        candidates, failed = await self.search_chat_title(title, progressive=True)
+                    else:
+                        candidates, failed = await self.search_title(title) if title_only else await self.search(artist, title)
                     if not candidates and artist and submission.submission_type == 'telegram_audio':
                         candidates, rescue_failed = await self.search_audio_title(artist, title)
                         recovered_audio_tags = bool(candidates)
@@ -514,7 +526,7 @@ class Workflow:
             if flow.state != "searching":
                 raise FlowError("stale")
             flow.candidates = [encode_track(candidate) for candidate in candidates]
-            accepted, reason, metrics = ((False, 'title_search_requires_choice', (0, 0, 0, 0)) if title_only or recovered_audio_tags
+            accepted, reason, metrics = ((False, 'title_search_requires_choice', (0, 0, 0, 0)) if title_only or recovered_audio_tags or any(c.source in {'youtube_music', 'youtube_recording'} for c in candidates)
                                          else match_decision(artist, title, candidates))
             logger.info("Identification decision: accepted=%s reason=%s artist=%.3f title=%.3f combined=%.3f margin=%.3f",
                         accepted, reason, *metrics)
@@ -550,10 +562,27 @@ class Workflow:
             if flow.state not in {"candidates", "confirmed"} or not 0 <= index < len(flow.candidates):
                 raise FlowError("stale")
             try:
-                track = await canonical_track(session, decode_track(flow.candidates[index]))
+                candidate = decode_track(flow.candidates[index])
+                track = await canonical_track(session, candidate)
             except IdentityConflict:
                 raise FlowError("failure") from None
             submission.track_id = track.id
+            # Persist only this owner's explicit recording choice, never a global default.
+            if candidate.source in {'youtube_music', 'youtube_recording'}:
+                from .fetch_models import AudioSelection
+                from .youtube_fetch import VIDEO
+                video = candidate.external_ids.get('youtube', '')
+                if not isinstance(video, str) or not VIDEO.fullmatch(video):
+                    raise FlowError('stale')
+                previous = await session.scalar(select(AudioSelection).where(
+                    AudioSelection.user_id == submission.user_id, AudioSelection.track_id == track.id))
+                rejected = [v for v in previous.rejected_ids if v != video] if previous else []
+                from .recording_metadata import canonical_snapshot
+                snapshot = canonical_snapshot(candidate)
+                await session.execute(insert(AudioSelection).values(user_id=submission.user_id,
+                    track_id=track.id, video_id=video, rejected_ids=[], canonical_metadata=snapshot, updated_at=utc_now())
+                    .on_conflict_do_update(index_elements=['user_id', 'track_id'],
+                        set_={'video_id': video, 'rejected_ids': rejected, 'canonical_metadata': snapshot, 'updated_at': utc_now()}))
             submission.identification_status = "confirmed"
             flow.state = "confirmed"
             await session.flush()

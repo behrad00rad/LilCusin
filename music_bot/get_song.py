@@ -74,6 +74,7 @@ class GetSong:
         self.jobs = {}
         self.recognizer = None
         self.art_attempted = set()
+        self.metadata_cache = {}
         self.delivery_locks = weakref.WeakValueDictionary()
         self.root = Path(tempfile.gettempdir()) / ('lilcusin-fetch-' + hashlib.sha256(str(database.engine.url).encode()).hexdigest()[:16])
 
@@ -302,7 +303,8 @@ class GetSong:
             elif job.state not in ACTIVE:
                 job.state, job.candidates, job.video_id = 'queued', [], preferred
                 job.metadata_json = metadata or (job.metadata_json if preferred else {})
-            req = AudioRequest(id=uuid4().hex, user_id=user.id, job_id=job.id)
+            snapshot = dict(selection.canonical_metadata or {}) if selection and preferred and not other_versions else {}
+            req = AudioRequest(id=uuid4().hex, user_id=user.id, job_id=job.id, canonical_metadata=snapshot)
             s.add(req)
             await s.flush()
             if not other_versions:
@@ -422,6 +424,16 @@ class GetSong:
             if selection is None:
                 selection = AudioSelection(user_id=req.user_id, track_id=target_track_id, rejected_ids=[])
                 s.add(selection)
+            from .recording_metadata import canonical_snapshot
+            from .providers.common import TrackCandidate
+            row = job.candidates[index]
+            target = await s.get(Track, target_track_id)
+            searched_artist = target.display_artist or target.artist if target.metadata_source != 'youtube_recording' else None
+            snapshot = canonical_snapshot(TrackCandidate(row.get('recording_title') or row['title'],
+                row.get('artist') or '', 'youtube_recording', duration=row.get('duration'),
+                external_ids={'youtube':video}), searched_artist=searched_artist)
+            selection.canonical_metadata = snapshot
+            req.canonical_metadata = snapshot
             selection.video_id, selection.updated_at = video, utc_now()
             key = f'{target_track_id}:{video}'
             selected = await s.scalar(select(FetchJob).where(FetchJob.key == key))
@@ -722,6 +734,29 @@ class GetSong:
             await self.progress(request_id, state, locked=locked)
         return True
 
+    async def delivery_metadata(self, track, *, snapshot=None, video=None):
+        from .recording_metadata import resolve_metadata, snapshot_metadata
+        canonical = snapshot_metadata(snapshot, video)
+        if canonical is not None:
+            return canonical
+        key = (track.id, track.display_artist or track.artist, track.display_title or track.title,
+               track.metadata_source, track.duration)
+        cached = self.metadata_cache.get(key)
+        if cached and monotonic() - cached[0] < 300:
+            return cached[1]
+        providers = getattr(self.artwork_loader, 'providers', None)
+        metadata = await resolve_metadata(track, providers)
+        if len(self.metadata_cache) >= 128:
+            self.metadata_cache.pop(next(iter(self.metadata_cache)))
+        self.metadata_cache[key] = (monotonic(), metadata)
+        return metadata
+
+
+    @staticmethod
+    def metadata_key(metadata):
+        return hashlib.sha256(repr((metadata.title, metadata.artist, metadata.album)).encode()).hexdigest()
+
+
     async def send(self, req, user_id, job, track, audio, thumbnail=None, cover_key=None):
         started = monotonic()
         async with self.delivery_locks.setdefault(user_id, asyncio.Lock()):
@@ -739,9 +774,11 @@ class GetSong:
                 await self.progress(req.id, 'sending', locked=True)
             try:
                 extra = {'thumbnail': FSInputFile(thumbnail)} if thumbnail else {}
-                sent = await self.bot.send_audio(user_id, audio=audio, title=track.display_title or track.title,
-                    performer=track.display_artist or track.artist, request_timeout=self.settings.timeout,
-                    **extra)
+                from .recording_metadata import telegram_fields
+                metadata = await self.delivery_metadata(track, snapshot=req.canonical_metadata, video=job.video_id)
+                fields = telegram_fields(metadata)
+                sent = await self.bot.send_audio(user_id, audio=audio, request_timeout=self.settings.timeout,
+                    **fields, **extra)
             except TelegramBadRequest:
                 await self.request_state(req.id, 'pending', locked=True)
                 raise
@@ -756,7 +793,7 @@ class GetSong:
                     await s.execute(delete(AudioDelivery).where(AudioDelivery.user_id == req.user_id,
                         AudioDelivery.track_id == track.id, AudioDelivery.video_id == job.video_id))
                     s.add(AudioDelivery(user_id=req.user_id, track_id=track.id, video_id=job.video_id,
-                        file_id=sent.audio.file_id, message_id=sent.message_id, artwork_key=cover_key))
+                        file_id=sent.audio.file_id, message_id=sent.message_id, artwork_key=cover_key, send_args=fields))
             await self.progress(req.id, 'delivered', locked=True)
             logger.info('Audio delivered: cached=%s in %.0f ms.', isinstance(audio, str), (monotonic() - started) * 1000)
 
