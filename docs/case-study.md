@@ -217,6 +217,24 @@ Telegram receipt/playback remains unverified; Mini App unchanged.
 
 The music-identity release now joins consented taste cards, explainable comparisons and reciprocal song exchange across chat and Mini App. It is committed and deployed, with measured staging and runtime evidence; public connectivity and real two-account delivery remain explicit validation gaps. See [release evidence](deployment-2026-10-19.md).
 
+## 2026-10-20 - Recovering the requested Persian recording
+
+A correct Vigen recommendation led to an unrelated source because title matching
+could compensate for a missing artist match. Requiring artist evidence and using
+verified Vigen/Viguen aliases recovered the full-length Topic recording. Local
+regressions and live metadata support the fix. The user-approved one-file release
+has matching deployed source and an active bot process; SSH timeouts prevented
+post-restart polling verification, and playback remains unverified.
+[Evidence](vigen-get-song-fix-2026-10-20.md).
+
+The subsequent Dele Divaneh instrumental report exposed the deeper distinction
+between finding related uploads and establishing a recording's source. A stricter
+local policy now requires catalogue attribution for normal retrieval and enforces
+it across caches; alternatives require a separate deliberate action. Both songs
+have live metadata matches, with 78 affected cases passing across runs. Deployment
+and playback remain pending, and catalogue attribution is not acoustic proof.
+[Follow-up evidence](strict-original-get-song-2026-10-20.md).
+
 ## 2026-10-20 - Lower Mini App transfer costs
 
 A fresh baseline found uncompressed public code/translations and non-reusable

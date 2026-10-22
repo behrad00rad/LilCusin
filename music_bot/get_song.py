@@ -21,7 +21,7 @@ from aiogram.types import FSInputFile, InlineKeyboardButton, InlineKeyboardMarku
 from sqlalchemy import delete, func, select
 from .fetch_models import FetchJob, AudioRequest, AudioDelivery, AudioSource, AudioSelection
 from .models import Track, User, utc_now
-from .youtube_fetch import FetchError, YouTubeFetcher, confident, VIDEO
+from .youtube_fetch import FetchError, YouTubeFetcher, confident, VIDEO, approved_source, SOURCE_POLICIES
 from .workflow import FlowError
 from .lilbro_fetch import LilBroFetcher, configured_fetcher
 from .audio_artwork import artwork_key, prepare as prepare_artwork
@@ -207,7 +207,7 @@ class GetSong:
                 pass
             return
         # Late worker updates must not resurrect cancelled/failed requests.
-        if req.state in {'cancelled', 'failed', 'uncertain', 'done'} and key not in {'cancelled', 'failed', 'uncertain', 'delivered'}:
+        if req.state in {'cancelled', 'failed', 'uncertain', 'done'} and key not in {'cancelled', 'failed', 'uncertain', 'delivered', 'original_unverified'}:
             return
         context = None
         token = None
@@ -220,7 +220,7 @@ class GetSong:
             if keyboard is None:
                 if key in {'queued', 'searching', 'fetching', 'sending'}:
                     keyboard = cancel_keyboard(request_id)
-                elif key in {'failed', 'uncertain'}:
+                elif key in {'failed', 'uncertain', 'original_unverified'}:
                     token, keyboard = await self.retry_keyboard(user_id, track_id)
             if token:
                 await ChatService(self.db, None).bind_control(token, req.status_message_id)
@@ -283,6 +283,11 @@ class GetSong:
                 source = await s.scalar(select(AudioSource).where(AudioSource.track_id == track_id,
                                                                   AudioSource.video_id == preferred))
                 metadata = source.fetch_metadata if source else {}
+                if isinstance(self.fetcher, YouTubeFetcher) and not approved_source(metadata):
+                    # Legacy manual choices did not establish recording provenance.
+                    selection.video_id = preferred = None
+                    key = f'{track_id}:search:{user.id}'
+                    metadata = {'force_choice': True}
             elif selection:
                 metadata = {'force_choice': True}
             if other_versions:
@@ -398,6 +403,11 @@ class GetSong:
             job = await s.get(FetchJob, req.job_id)
             if not 0 <= index < len(job.candidates):
                 raise FlowError('stale')
+            chosen = dict(job.candidates[index])
+            if job.metadata_json.get('other_versions'):
+                chosen['source_policy'] = 'explicit-alternative-v1'
+            elif isinstance(self.fetcher, YouTubeFetcher) and not approved_source(chosen):
+                raise FlowError('stale')
             video = job.candidates[index]['id']
             if not isinstance(video, str) or not VIDEO.fullmatch(video):
                 raise FlowError('stale')
@@ -427,12 +437,12 @@ class GetSong:
             selected = await s.scalar(select(FetchJob).where(FetchJob.key == key))
             if selected is None:
                 selected = FetchJob(id=uuid4().hex, key=key, track_id=target_track_id, video_id=video,
-                                    candidates=[], metadata_json=job.candidates[index])
+                                    candidates=[], metadata_json=chosen)
                 s.add(selected)
                 await s.flush()
             elif selected.state not in ACTIVE:
                 selected.state = 'queued'
-                selected.metadata_json = job.candidates[index]
+                selected.metadata_json = chosen
             req.job_id, req.state = selected.id, 'pending'
 
     async def other_versions(self, user_id, request_id, message_id):
@@ -584,6 +594,10 @@ class GetSong:
         await self.state(job_id, 'running')
         phase = 'search'
         try:
+            if (isinstance(self.fetcher, YouTubeFetcher) and job.video_id
+                    and not approved_source(job.metadata_json, alternatives=True)):
+                job.video_id, job.candidates = None, []
+                await self.state(job_id, 'running', video_id=None, candidates=[])
             if not job.metadata_json.get('force_choice') or job.video_id:
                 await self.deliver_cached(job, track)
             if not await self.alive(job_id):
@@ -602,6 +616,8 @@ class GetSong:
                         search_track = SimpleNamespace(artist=track.display_artist or track.artist,
                             title=base_title(track.display_title or track.title), duration=None, allow_versions=True)
                     rows = job.candidates
+                    if isinstance(self.fetcher, YouTubeFetcher) and not job.metadata_json.get('other_versions'):
+                        rows = [row for row in rows if approved_source(row)]
                     if not rows:
                         try:
                             rows = await self.fetcher.search(search_track, directory, lambda: self.alive(job_id))
@@ -611,6 +627,8 @@ class GetSong:
                             logger.warning('Audio source search failed; retrying once.')
                             await asyncio.sleep(.5)
                             rows = await self.fetcher.search(search_track, directory, lambda: self.alive(job_id))
+                    if isinstance(self.fetcher, YouTubeFetcher) and not job.metadata_json.get('other_versions'):
+                        rows = [row for row in rows if approved_source(row)]
                     async with self.db.sessions() as s:
                         selections = (await s.scalars(select(AudioSelection).where(AudioSelection.user_id.in_(
                             select(AudioRequest.user_id).where(AudioRequest.job_id == job_id,
@@ -621,7 +639,7 @@ class GetSong:
                     if not rows:
                         if job.metadata_json.get('force_choice'):
                             await self.state(job_id, 'failed')
-                            await self.fail(job_id, alternatives=True)
+                            await self.fail(job_id, alternatives=bool(job.metadata_json.get('other_versions')), phase='search')
                             return
                         raise FetchError('No suitable source found.')
                     if job.metadata_json.get('force_choice') or not confident(rows):
@@ -764,6 +782,13 @@ class GetSong:
         for req, user_id in await self.requests(job.id):
             async with self.db.sessions() as s:
                 query = select(AudioDelivery).where(AudioDelivery.user_id == req.user_id, AudioDelivery.track_id == track.id)
+                if isinstance(self.fetcher, YouTubeFetcher):
+                    policies = (SOURCE_POLICIES if job.video_id and
+                        job.metadata_json.get('source_policy') == 'explicit-alternative-v1'
+                        else {'catalogue-original-v1'})
+                    query = query.join(AudioSource, (AudioSource.track_id == AudioDelivery.track_id)
+                        & (AudioSource.video_id == AudioDelivery.video_id)).where(
+                            AudioSource.fetch_metadata['source_policy'].as_string().in_(policies))
                 selection = await s.scalar(select(AudioSelection).where(AudioSelection.user_id == req.user_id,
                                                                       AudioSelection.track_id == track.id))
                 if selection:
@@ -807,12 +832,14 @@ class GetSong:
                     continue
                 async with self.db.sessions() as session:
                     current = await session.get(AudioRequest, req.id)
+                if current and current.status_message_id and phase == 'search':
+                    await self.progress(req.id, 'original_unverified', locked=True)
                 if current is None or current.status_message_id:
                     continue
                 try:
                     await self.bot.send_message(user_id,
                         ('No other matching recordings were found. Try Get song again later.' if alternatives else
-                         'Could not find an available recording. The song was identified, but source search failed. Try again later.' if phase == 'search' else
+                         'Could not verify an original recording. Use Find other versions to choose an alternative.' if phase == 'search' else
                          'Could not fetch this recording. Try Get song again later.') +
                         (' You can still listen using the link below.' if keyboard else ''),
                         reply_markup=keyboard)

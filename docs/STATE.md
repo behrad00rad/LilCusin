@@ -24,6 +24,31 @@ checks verified; first readiness-check rollback is documented. Current dirty
 delivery work is preserved via a runtime-based patch. Signed Telegram/physical
 mobile verification remains open. [Evidence](search-cover-recovery-2026-10-21.md).
 
+## Stricter Get song source policy ready locally - 2026-10-20
+
+The Vigen alias fix below did not prevent an unlabelled instrumental/personal
+upload being offered as an uncertain original. Normal Get song now requires
+catalogue-attributed Topic/verified-artist sources; other uploads require explicit
+Find other versions. Cache, preference and stale-choice guards enforce the same
+rule. All 78 affected cases passed across runs, and the candidate found catalogue
+releases for Dele Divaneh and Sogand using live VPS metadata. Three-file patch
+passed production git apply --check; not applied. Uncommitted, not deployed;
+audio fingerprint, vocals and playback are not verified. This supersedes the
+earlier local-only cache workaround after deployment. See
+[source policy, patch and evidence](strict-original-get-song-2026-10-20.md).
+
+## Vigen Get song fix deployed - 2026-10-20
+
+Artist evidence is now required; verified recording aliases recover Vigen/Viguen,
+and broader discovery precedes duration relaxation. All 24 focused tests passed.
+The candidate found the 288-second Sogand Topic recording using live VPS metadata.
+User-approved one-file deployment completed with matching SHA-256 and the expected
+bot process active/running; configuration and adjacent protected sources unchanged.
+Later SSH timeouts prevented post-restart polling/live-lookup verification.
+Uncommitted; existing saved wrong choices require Wrong recording. No audio or
+Telegram receipt/playback verification.
+See [cause, verification and limits](vigen-get-song-fix-2026-10-20.md).
+
 ## Search More correction deployed - 2026-10-20
 
 `8b779c1` corrects the cached-pool-only limitation below. More stays available at

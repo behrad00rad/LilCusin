@@ -256,6 +256,26 @@ Telegram receipt/playback remains unverified; Mini App unchanged.
 
 Deploy the frozen, tested snapshot using explicit Git blobs and runtime hashes, preserving concurrent recording-search edits. Keep private configuration and persistent data; use a consistent backup and rollback guard. Longer cold-start readiness succeeded after a safe rollback. See [release evidence](deployment-2026-10-19.md).
 
+## 2026-10-20 - Get song artist evidence and verified aliases
+
+Require artist evidence even for exact song titles. Recover alternate spellings
+from an unambiguous, exactly credited MusicBrainz recording instead of fuzzy
+artist guesses; broaden search before relaxing duration. This excludes the
+observed Sam H substitute while finding Vigen/Viguen. The tradeoff is a bounded
+external lookup on initially unsuccessful strict searches. User-approved one-file
+deployment verified source hash and active service; post-restart polling check
+was blocked by SSH timeouts. [Evidence and limits](vigen-get-song-fix-2026-10-20.md).
+
+### 2026-10-20 - Superseding uncertain original choices
+
+The instrumental report showed that artist text and explicit candidate selection
+still did not establish the requested recording. Normal Get song will require
+catalogue source attribution across fresh search and cache reuse; unverified
+uploads require the separate alternatives action. Lower coverage and occasional
+abstention are accepted over presenting unrelated uploads as the normal song.
+Implemented/tested locally; not deployed. Attribution remains metadata evidence,
+not waveform/vocal verification. [Contract and evidence](strict-original-get-song-2026-10-20.md).
+
 ## 2026-10-20 - Reuse artwork variants and compress public Mini App assets
 
 Measured direct-host JS/CSS/catalogue transfers were uncompressed/no-store; a

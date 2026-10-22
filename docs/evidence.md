@@ -265,6 +265,24 @@ Telegram receipt/playback remains unverified; Mini App unchanged.
 
 Runtime f7f0739 pushed and deployed; 424 cumulative Linux staging cases and five Node checks passed. VPS hashes/services/moderator/auth gates verified; Cloudflare publication confirmed. Public retrieval and real Telegram journeys remain unverified. See [release evidence](deployment-2026-10-19.md).
 
+## 2026-10-20 - Vigen/Sogand Get song correction, deployed
+
+Read-only deployed-job metadata confirmed the wrong 175-second Sam H candidate.
+The corrected matcher passed 24 focused tests and found the 288-second Viguen
+Topic recording in a live VPS metadata-only run in memory. The user-approved
+one-file release has a verified deployed hash and active bot process; later SSH
+timeouts blocked post-restart polling/live-lookup checks. Uncommitted; no audio
+or Telegram verification. [Details](vigen-get-song-fix-2026-10-20.md).
+
+### 2026-10-20 - Dele Divaneh follow-up, local
+
+Stored source metadata confirmed the unlabelled Sam Shirazi upload was offered
+for Vigen's Dele Divaneh; instrumental content is user-reported. The stricter
+candidate passed 78 distinct affected cases across runs and returned only
+catalogue-attributed Topic releases for both reported songs in live metadata
+checks. A three-file patch passes production apply checking but is not deployed.
+No download/playback verification. [Evidence and limits](strict-original-get-song-2026-10-20.md).
+
 ## 2026-10-20 - A2/A3 measured Mini App performance release
 
 Integrated Terminal 1 A1 before measuring current public/runtime responses.
