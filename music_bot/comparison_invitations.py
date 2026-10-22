@@ -1,7 +1,7 @@
 """Recipient-bound, selected-song consent. No private ratings or match scores."""
 import re
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import CheckConstraint, ForeignKey, JSON, String, func, select, update, delete
 from sqlalchemy.orm import Mapped, mapped_column
@@ -34,19 +34,25 @@ def selected_snapshot(card):
     return {key: card[key] for key in ['taste_id', 'nickname', 'songs']}
 
 
+def is_friendship(invitation):
+    return bool(invitation.sender_snapshot.get('friendship') and invitation.recipient_snapshot.get('friendship'))
+
+
 def public_snapshot(snapshot):
-    return {**snapshot, 'songs': [{k: v for k, v in song.items() if k in {'artist', 'title'}}
+    return {**{key: snapshot[key] for key in ['taste_id','nickname','songs']}, 'songs': [{k: v for k, v in song.items() if k in {'artist', 'title'}}
                                 for song in snapshot['songs']]}
 
 
 async def invitation_state(session, invitation):
     if invitation.state in {'declined', 'revoked'}:
         return invitation.state
-    if invitation.expires_at <= utc_now():
-        return 'expired'
     from .social import blocked
     if await blocked(session, invitation.sender_id, invitation.recipient_id):
         return 'revoked'
+    if invitation.state == 'consented' and is_friendship(invitation):
+        return 'consented'
+    if invitation.expires_at <= utc_now():
+        return 'expired'
     sender = await session.get(TasteCard, invitation.sender_id)
     recipient = await session.get(TasteCard, invitation.recipient_id)
     if (sender is None or recipient is None or sender.revision != invitation.sender_revision
@@ -62,10 +68,14 @@ async def presentation(session, invitation, user_id):
         raise CardError('invite_unavailable')
     state = await invitation_state(session, invitation)
     value = dict(token=invitation.token, role='sender' if user_id == invitation.sender_id else 'recipient',
-                 state=state, expires_at=invitation.expires_at.isoformat())
+                 state=state, friendship=is_friendship(invitation),
+                 expires_at=None if state=='consented' and is_friendship(invitation) else invitation.expires_at.isoformat())
     if state in {'pending', 'consented'}:
-        value.update(sender=public_snapshot(invitation.sender_snapshot),
-                     recipient=public_snapshot(invitation.recipient_snapshot),
+        from .taste_sharing import visible_snapshot
+        sender=await visible_snapshot(session,invitation.sender_id,invitation.sender_snapshot)
+        recipient=await visible_snapshot(session,invitation.recipient_id,invitation.recipient_snapshot)
+        value.update(sender=public_snapshot(sender),
+                     recipient=public_snapshot(recipient),
                      sender_consented=True, recipient_consented=state == 'consented')
     return value
 
@@ -78,10 +88,12 @@ class ComparisonInvitations:
         async with self.database.write() as session:
             user_id = await session.scalar(select(User.id).where(User.telegram_user_id == telegram_id))
             participants = ((ComparisonInvitation.sender_id == user_id) | (ComparisonInvitation.recipient_id == user_id))
-            await session.execute(update(ComparisonInvitation).where(participants,
-                ComparisonInvitation.expires_at <= utc_now()).values(sender_snapshot={}, recipient_snapshot={}))
-            await session.execute(delete(ComparisonInvitation).where(participants,
-                ComparisonInvitation.expires_at < utc_now() - timedelta(days=7)))
+            rows=list(await session.scalars(select(ComparisonInvitation).where(participants,
+                ComparisonInvitation.expires_at <= utc_now())))
+            for row in rows:
+                if row.state=='consented' and is_friendship(row):continue
+                row.sender_snapshot=row.recipient_snapshot={}
+                if row.expires_at < utc_now()-timedelta(days=7):await session.delete(row)
 
     async def create(self, telegram_id, card_token, sender_revision, recipient_revision):
         if (not isinstance(card_token, str) or not re.fullmatch(r'[A-Za-z0-9_-]{32}', card_token)
@@ -111,7 +123,7 @@ class ComparisonInvitations:
                 ComparisonInvitation.state.in_(['pending', 'consented']), ComparisonInvitation.expires_at > utc_now())
                 .order_by(ComparisonInvitation.created_at.desc()).limit(10))).all()
             for row in existing:
-                if await invitation_state(session, row) in {'pending', 'consented'}:
+                if is_friendship(row) and await invitation_state(session, row) in {'pending', 'consented'}:
                     return await presentation(session, row, sender.user_id)
             count = await session.scalar(select(func.count()).select_from(ComparisonInvitation).where(
                 ComparisonInvitation.sender_id == sender.user_id,
@@ -120,7 +132,7 @@ class ComparisonInvitations:
                 raise CardError('invite_limit')
             row = ComparisonInvitation(token=secrets.token_urlsafe(24), sender_id=sender.user_id,
                 recipient_id=recipient.user_id, sender_revision=sender.revision, recipient_revision=recipient.revision,
-                card_token=card_token, sender_snapshot=selected_snapshot(own), recipient_snapshot=selected_snapshot(other),
+                card_token=card_token, sender_snapshot={**selected_snapshot(own),'friendship':True}, recipient_snapshot={**selected_snapshot(other),'friendship':True},
                 state='pending', expires_at=min(utc_now() + INVITATION_TTL, recipient.share_expires_at))
             session.add(row)
             await session.flush()
@@ -149,16 +161,23 @@ class ComparisonInvitations:
             return await presentation(session, row, user_id)
 
     async def decide(self, telegram_id, token, action):
-        if not isinstance(action, str) or action not in {'accept', 'decline', 'revoke'} or not isinstance(token, str):
+        if not isinstance(action, str) or action not in {'accept', 'decline', 'revoke', 'unfriend'} or not isinstance(token, str):
             raise CardError('invite_invalid')
         async with self.database.write() as session:
             user_id = await session.scalar(select(User.id).where(User.telegram_user_id == telegram_id))
             row = await session.get(ComparisonInvitation, token)
             if row is None or user_id not in {row.sender_id, row.recipient_id}:
                 raise CardError('invite_unavailable')
-            if action != 'revoke' and user_id != row.recipient_id:
+            if action not in {'revoke','unfriend'} and user_id != row.recipient_id:
                 raise CardError('invite_unavailable')
-            if action == 'revoke':
+            if action in {'revoke','unfriend'} and row.state=='consented' and is_friendship(row):
+                from .social import stop_interactions
+                await stop_interactions(session, user_id, row.recipient_id if row.sender_id==user_id else row.sender_id)
+            elif action == 'unfriend':
+                if row.state=='revoked' and row.accepted_at is not None:
+                    return await presentation(session,row,user_id)
+                raise CardError('invite_unavailable')
+            elif action == 'revoke':
                 row.state = 'revoked'
                 # Revoked consent no longer retains the selected-song snapshots.
                 row.sender_snapshot = row.recipient_snapshot = {}
@@ -174,6 +193,11 @@ class ComparisonInvitations:
                 row.state = target
                 if action == 'accept':
                     row.accepted_at = utc_now()
+                    if is_friendship(row):
+                        # Storage sentinel, not a user-facing friendship deadline.
+                        row.expires_at = datetime(9999, 1, 1, tzinfo=timezone.utc)
+                        from .social_activity import accepted
+                        await accepted(session,row)
                 else:
                     row.sender_snapshot = row.recipient_snapshot = {}
             await session.flush()
@@ -185,5 +209,6 @@ class ComparisonInvitations:
             user_id = await session.scalar(select(User.id).where(User.telegram_user_id == telegram_id))
             rows = (await session.scalars(select(ComparisonInvitation).where(
                 (ComparisonInvitation.sender_id == user_id) | (ComparisonInvitation.recipient_id == user_id))
-                .order_by(ComparisonInvitation.created_at.desc()).limit(20))).all()
+                .order_by(ComparisonInvitation.state.in_(['pending','consented']).desc(),
+                          ComparisonInvitation.created_at.desc()).limit(100))).all()
             return [await presentation(session, row, user_id) for row in rows]

@@ -169,6 +169,9 @@ class Social:
             row = await consent(session, token, actor)
             first = row.sender_snapshot if actor == row.sender_id else row.recipient_snapshot
             second = row.recipient_snapshot if actor == row.sender_id else row.sender_snapshot
+            from .taste_sharing import visible_snapshot
+            first=await visible_snapshot(session,actor,first)
+            second=await visible_snapshot(session,row.recipient_id if actor==row.sender_id else row.sender_id,second)
             return dict(token=token, you=public_snapshot(first), other=public_snapshot(second), **comparison(first, second))
 
     async def choices(self, telegram_id, invitation, reply_to=None):
@@ -182,7 +185,7 @@ class Social:
             snapshot = row.sender_snapshot if actor == row.sender_id else row.recipient_snapshot
             return [dict(id=song['id'], artist=song['artist'], title=song['title']) for song in snapshot['songs']]
 
-    async def draft(self, telegram_id, invitation, track_id, reply_to=None):
+    async def draft(self, telegram_id, invitation, track_id, reply_to=None, source_token=None):
         if type(track_id) is not int or (reply_to is not None and not token_valid(reply_to)):
             raise CardError('social_invalid')
         async with self.database.write() as session:
@@ -190,7 +193,14 @@ class Social:
             row = await consent(session, invitation, actor)
             snapshot = row.sender_snapshot if actor == row.sender_id else row.recipient_snapshot
             if track_id not in {song['id'] for song in snapshot['songs']}:
-                raise CardError('social_unavailable')
+                from .comparison_invitations import is_friendship
+                from .models import ChatControl
+                if not is_friendship(row) or not token_valid(source_token):raise CardError('social_unavailable')
+                grant=await session.get(ChatControl,source_token)
+                if (grant is None or grant.user_id!=actor or grant.expires_at<=utc_now()
+                        or grant.payload.get('kind') not in {'miniapp','tastecard'}
+                        or track_id not in grant.payload.get('tracks',[])):
+                    raise CardError('social_unavailable')
             if reply_to:
                 original = await self._swap(session, actor, reply_to)
                 if original.recipient_id != actor or original.invitation != invitation:
@@ -202,7 +212,7 @@ class Social:
             count = await session.scalar(select(func.count()).select_from(SongSwap).where(SongSwap.sender_id == actor, SongSwap.created_at > utc_now()-timedelta(days=1)))
             if count >= 10: raise CardError('social_limit')
             swap = SongSwap(token=secrets.token_urlsafe(24), invitation=invitation, sender_id=actor, recipient_id=recipient,
-                track_id=track_id, reply_to=reply_to, state='draft', note='', loved=False, saved=False, expires_at=row.expires_at)
+                track_id=track_id, reply_to=reply_to, state='draft', note='', loved=False, saved=False, expires_at=min(row.expires_at,utc_now()+timedelta(days=30)))
             session.add(swap);await session.flush()
             return await self._projection(session, actor, swap)
 
@@ -217,10 +227,10 @@ class Social:
 
     async def _projection(self, session, actor, row):
         track = await session.get(Track, row.track_id)
-        card = await session.get(TasteCard, row.recipient_id if actor == row.sender_id else row.sender_id)
+        invite = await session.get(ComparisonInvitation,row.invitation)
         return dict(token=row.token, invitation=row.invitation, role='sender' if actor == row.sender_id else 'recipient',
             state=row.state, song=song_json(track, owner=True),
-            partner=card.nickname if card else '', note=row.note, saved=row.saved, loved=row.loved,
+            partner=(invite.recipient_snapshot if actor==invite.sender_id else invite.sender_snapshot).get('nickname',''), note=row.note, saved=row.saved, loved=row.loved,
             rated=await session.scalar(select(Rating.id).where(Rating.user_id == actor, Rating.track_id == row.track_id)) is not None,
             reply_to=row.reply_to, sent_at=row.sent_at.isoformat() if row.sent_at else None,
             expires_at=row.expires_at.isoformat())
@@ -372,6 +382,8 @@ class Social:
         try:
             async with asyncio.timeout(8):
                 await self._flush_notices(bot)
+                from .social_activity import flush
+                await flush(self.database,bot)
         except TimeoutError:
             pass  # Already claimed attempts remain non-retryable; the inbox still works.
 
@@ -393,7 +405,8 @@ class Social:
                     await self._swap(session,row.user_id,row.swap_token)
                 except CardError:
                     row.state='cancelled';continue
-                count=await session.scalar(select(func.count()).select_from(SocialNotice).where(SocialNotice.user_id==row.user_id,SocialNotice.attempted_at>utc_now()-timedelta(days=1)))
+                from .social_activity import attempts
+                count=await attempts(session,row.user_id)
                 if count>=3: row.state='capped';continue
                 row.state='attempted';row.attempted_at=utc_now()
                 user=await session.get(User,row.user_id)
