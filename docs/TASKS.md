@@ -30,3 +30,6 @@ Update priority or acceptance here only when it changes materially; current
 verification/blockers belong in [STATE](STATE.md), rationale in [decisions](decisions.md).
 
 Home card step 1: local/tested, undeployed. Steps 2/3 pending. See STATE for scoped commit limitations, verification and Persian copy.
+
+
+Exchanges cleanup (2026-10-22): steps 1-3 implemented locally (layout/icon controls, friend menus/report/thread wording, secret/happy owl). Evidence in STATE; not deployed. Step 4 durable skipped-card persistence/cooldowns/resume remains pending; stopped at usage-limit boundary.

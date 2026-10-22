@@ -645,7 +645,6 @@
     "privacy_now_private": "Now private",
     "privacy_undo": "Undo",
     "privacy_now_shared": "Visible to friends again.",
-    "owl_evil": "Shh. Just between us.",
     "owl_shared": "Visible to friends again.",
     "owl_unlocked": "Lock off. No Love shared.",
     "thread_open_hint": "Open your song thread",
@@ -662,7 +661,9 @@
     "report_choose_reason": "Choose a reason",
     "report_note_label": "Anything else? (optional)",
     "report_note_limit": "Up to 240 characters. Only the moderation team sees your report.",
-    "report_submit": "Send report"
+    "report_submit": "Send report",
+    "owl_secret": "Shh. Just between us.",
+    "owl_happy": "Visible to friends again."
   },
   "fa": {
     "taste_sharing_title": "آهنگ‌های محبوبم برای دوستام",
@@ -1310,7 +1311,6 @@
     "privacy_now_private": "حالا خصوصیه",
     "privacy_undo": "برگردون",
     "privacy_now_shared": "دوستات دوباره می‌تونن ببیننش.",
-    "owl_evil": "هیس! بین خودمون بمونه.",
     "owl_shared": "دوستات دوباره می‌بیننش.",
     "owl_unlocked": "قفل بازه؛ چیزی شریک نشد.",
     "thread_open_hint": "گفت‌وگوی آهنگی‌تون رو باز کن",
@@ -1327,7 +1327,9 @@
     "report_choose_reason": "یک دلیل انتخاب کن",
     "report_note_label": "توضیح دیگه‌ای داری؟ (اختیاری)",
     "report_note_limit": "تا ۲۴۰ نویسه؛ فقط تیم رسیدگی گزارشت را می‌بیند.",
-    "report_submit": "فرستادن گزارش"
+    "report_submit": "فرستادن گزارش",
+    "owl_secret": "هیس! بین خودمون بمونه.",
+    "owl_happy": "دوستات دوباره می‌بیننش."
   },
   "ar": {
     "for_you": "لك",
@@ -1964,7 +1966,6 @@
     "privacy_now_private": "Now private",
     "privacy_undo": "Undo",
     "privacy_now_shared": "Visible to friends again.",
-    "owl_evil": "Shh. Just between us.",
     "owl_shared": "Visible to friends again.",
     "owl_unlocked": "Lock off. Sharing stays off.",
     "taste_sharing_title": "Share my Loves with friends",
@@ -1985,7 +1986,9 @@
     "report_choose_reason": "Choose a reason",
     "report_note_label": "Anything else? (optional)",
     "report_note_limit": "Up to 240 characters. Only the moderation team sees your report.",
-    "report_submit": "Send report"
+    "report_submit": "Send report",
+    "owl_secret": "Shh. Just between us.",
+    "owl_happy": "Visible to friends again."
   },
   "tr": {
     "for_you": "Senin için",
@@ -2622,7 +2625,6 @@
     "privacy_now_private": "Now private",
     "privacy_undo": "Undo",
     "privacy_now_shared": "Visible to friends again.",
-    "owl_evil": "Shh. Just between us.",
     "owl_shared": "Visible to friends again.",
     "owl_unlocked": "Lock off. Sharing stays off.",
     "taste_sharing_title": "Share my Loves with friends",
@@ -2643,7 +2645,9 @@
     "report_choose_reason": "Choose a reason",
     "report_note_label": "Anything else? (optional)",
     "report_note_limit": "Up to 240 characters. Only the moderation team sees your report.",
-    "report_submit": "Send report"
+    "report_submit": "Send report",
+    "owl_secret": "Shh. Just between us.",
+    "owl_happy": "Visible to friends again."
   },
   "ru": {
     "for_you": "Для вас",
@@ -3280,7 +3284,6 @@
     "privacy_now_private": "Now private",
     "privacy_undo": "Undo",
     "privacy_now_shared": "Visible to friends again.",
-    "owl_evil": "Shh. Just between us.",
     "owl_shared": "Visible to friends again.",
     "owl_unlocked": "Lock off. Sharing stays off.",
     "taste_sharing_title": "Share my Loves with friends",
@@ -3301,7 +3304,9 @@
     "report_choose_reason": "Choose a reason",
     "report_note_label": "Anything else? (optional)",
     "report_note_limit": "Up to 240 characters. Only the moderation team sees your report.",
-    "report_submit": "Send report"
+    "report_submit": "Send report",
+    "owl_secret": "Shh. Just between us.",
+    "owl_happy": "Visible to friends again."
   },
   "es": {
     "for_you": "Para ti",
@@ -3938,7 +3943,6 @@
     "privacy_now_private": "Now private",
     "privacy_undo": "Undo",
     "privacy_now_shared": "Visible to friends again.",
-    "owl_evil": "Shh. Just between us.",
     "owl_shared": "Visible to friends again.",
     "owl_unlocked": "Lock off. Sharing stays off.",
     "taste_sharing_title": "Share my Loves with friends",
@@ -3959,7 +3963,9 @@
     "report_choose_reason": "Choose a reason",
     "report_note_label": "Anything else? (optional)",
     "report_note_limit": "Up to 240 characters. Only the moderation team sees your report.",
-    "report_submit": "Send report"
+    "report_submit": "Send report",
+    "owl_secret": "Shh. Just between us.",
+    "owl_happy": "Visible to friends again."
   },
   "fr": {
     "for_you": "Pour vous",
@@ -4596,7 +4602,6 @@
     "privacy_now_private": "Now private",
     "privacy_undo": "Undo",
     "privacy_now_shared": "Visible to friends again.",
-    "owl_evil": "Shh. Just between us.",
     "owl_shared": "Visible to friends again.",
     "owl_unlocked": "Lock off. Sharing stays off.",
     "taste_sharing_title": "Share my Loves with friends",
@@ -4617,7 +4622,9 @@
     "report_choose_reason": "Choose a reason",
     "report_note_label": "Anything else? (optional)",
     "report_note_limit": "Up to 240 characters. Only the moderation team sees your report.",
-    "report_submit": "Send report"
+    "report_submit": "Send report",
+    "owl_secret": "Shh. Just between us.",
+    "owl_happy": "Visible to friends again."
   },
   "de": {
     "for_you": "Für dich",
@@ -5254,7 +5261,6 @@
     "privacy_now_private": "Now private",
     "privacy_undo": "Undo",
     "privacy_now_shared": "Visible to friends again.",
-    "owl_evil": "Shh. Just between us.",
     "owl_shared": "Visible to friends again.",
     "owl_unlocked": "Lock off. Sharing stays off.",
     "taste_sharing_title": "Share my Loves with friends",
@@ -5275,6 +5281,8 @@
     "report_choose_reason": "Choose a reason",
     "report_note_label": "Anything else? (optional)",
     "report_note_limit": "Up to 240 characters. Only the moderation team sees your report.",
-    "report_submit": "Send report"
+    "report_submit": "Send report",
+    "owl_secret": "Shh. Just between us.",
+    "owl_happy": "Visible to friends again."
   }
 }

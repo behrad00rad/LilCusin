@@ -342,3 +342,12 @@ Local, not deployed. Thread cards reset cumulative inline margins and constrain 
 Local, not deployed. Friend options title is the approved nickname with last-known swap below; Connected removed. Compare tastes wording retained with selected-song scope unchanged. Unfriend and Block remain separate confirmed danger actions. Report now opens a reason selector plus optional 240-character note and requires Send report; signed API validates bounded notes and stores them in the existing moderator-only report evidence field, with no migration. Thread title is the friend's name, back is an icon-only arrow, and timeline entries use You sent/name sent with outgoing cover/metadata on the inline end and incoming on the start; repeated avatars removed. Eye Open song and separate time lines retained. Two scoped Python report/Unfriend cases and three Node UI/layout scripts passed. EN390 isolated fixture sheet/thread inspected, no horizontal overflow; real Telegram moderation/haptics not tested.
 
 Persian review: social_compare = مقایسهٔ سلیقه‌ها; thread_you_sent = تو فرستادی; thread_they_sent = {name} فرستاد; report_reason_label = دلیل گزارش; report_choose_reason = یک دلیل انتخاب کن; report_note_label = توضیح دیگه‌ای داری؟ (اختیاری); report_note_limit = تا ۲۴۰ نویسه؛ فقط تیم رسیدگی گزارشت را می‌بیند.; report_submit = فرستادن گزارش
+
+
+## Exchanges fixes, step 3 - 2026-10-22
+
+Local, not deployed. Replaced evil owl with original-color secret wink, wing and purple lock badge; unlock uses happy enlarged eyes and bob. Both return to idle after 1.5 seconds. Preserved privacy confirmation, lock animation, haptics and reduced-motion behavior. Unlock says visible only when the API confirms friends visibility; otherwise it says no Love was shared. Scoped private-love state/timer checks, JS syntax, delivery/layout checks and Worker generation passed. Isolated EN390 owl states and FA360 thread were visually checked earlier; no further browser work or tests after the usage-limit stop. Real-phone haptics remain unverified.
+
+Persian review: owl_secret = هیس! بین خودمون بمونه.; owl_happy = دوستات دوباره می‌بیننش.
+
+Stopped after steps 1-3 at the user's usage limit. Step 4 durable seen/skipped/hidden tracking, cooldowns, exclusions and resume are NOT implemented. Existing in-memory tracking does not solve repeat cards after reopening. No push or deployment.

@@ -83,7 +83,7 @@ async function initializeTelegram(){
  telegramCall(()=>tg?.BackButton?.onClick(()=>restorePage()));
 }
 async function api(path,data,timeout=35000){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeout);try{const response=await fetch(`/api/${path}`,{method:data===undefined?'GET':'POST',headers:{'Content-Type':'application/json','X-Telegram-Init-Data':tg.initData},body:data===undefined?undefined:JSON.stringify(data),signal:controller.signal});let result;try{result=await response.json();}catch{throw new Error(t('error'));}if(!response.ok&&typeof result.error==='string'&&/^(card|invite|social)_[a-z_]+$/.test(result.error))throw new Error(t(result.error));if(!response.ok)throw new Error(t(response.status===401?'open_telegram':response.status===400?'invalid':response.status===403?'stale':'error'));return result;}catch(error){if(error.name==='AbortError')throw new Error(t('error'));throw error;}finally{clearTimeout(timer);}}
-function labels(){$('owl-button').setAttribute('aria-label',t('owl_label'));$('owl-speech').textContent=t(owlState?(owlState==='tip'?'owl_tip_'+((owlTip+2)%3):'owl_'+owlState):owlDefaultKey());document.documentElement.lang=locale;document.documentElement.dir=['fa','ar'].includes(locale)?'rtl':'ltr';$('language').value=locale;$('guide-language').value=locale;$('guide-language').setAttribute('aria-label',t('language'));for(const [id,key] of Object.entries({'hero-title':'hero_title','hero-note':'hero_note',discover:'find_song','taste-card-open':'ux_build_card','query-label':'search_label','search-button':'search','search-hint':'search_hint','language-label':'language','guide-link':'guide'}))$(id).textContent=t(key);$('help').setAttribute('aria-label',t('guide'));document.querySelectorAll('[data-key]').forEach(el=>el.textContent=t(el.dataset.key));writePageTitle($('view-title'),view,similarSeed);renderBreadcrumbs();contextLabels();renderPreviewBanner();configureNavigation();}
+function labels(){$('owl-button').setAttribute('aria-label',t('owl_label'));$('owl-speech').textContent=t(owlCaptionKey||(owlState?(owlState==='tip'?'owl_tip_'+((owlTip+2)%3):'owl_'+owlState):owlDefaultKey()));document.documentElement.lang=locale;document.documentElement.dir=['fa','ar'].includes(locale)?'rtl':'ltr';$('language').value=locale;$('guide-language').value=locale;$('guide-language').setAttribute('aria-label',t('language'));for(const [id,key] of Object.entries({'hero-title':'hero_title','hero-note':'hero_note',discover:'find_song','taste-card-open':'ux_build_card','query-label':'search_label','search-button':'search','search-hint':'search_hint','language-label':'language','guide-link':'guide'}))$(id).textContent=t(key);$('help').setAttribute('aria-label',t('guide'));document.querySelectorAll('[data-key]').forEach(el=>el.textContent=t(el.dataset.key));writePageTitle($('view-title'),view,similarSeed);renderBreadcrumbs();contextLabels();renderPreviewBanner();configureNavigation();}
 function contextLabels(){
  const key={'for-you':'ux_home_intro',search:'ux_search_intro',card:'ux_card_intro',swaps:'ux_swaps_intro',connections:'ux_connections_intro',channels:'ux_channels_intro'}[view];
  $('view-intro').textContent=key?t(key):'';$('view-intro').hidden=!key;
@@ -359,17 +359,17 @@ function allRatingIndex(ratings,button){return [...ratings.children].indexOf(but
 const cardSavedIds=new Set();
 function syncCardSaved(card){cardSavedIds.clear();for(const song of card.songs||[])cardSavedIds.add(song.id);}
 function markCardSaved(button,id,animate=false){cardSavedIds.add(id);setActionLabel(button,t('card_saved_button'),'check');button.classList.add('is-saved');button.setAttribute('aria-pressed','true');button.disabled=true;if(animate)button.classList.add('saved-pop');}
-let owlTimer,owlFrame=0,owlPoint,owlTip=0,owlState='';
+let owlTimer,owlFrame=0,owlPoint,owlTip=0,owlState='',owlCaptionKey=null;
 function owlDefaultKey(){return view==='for-you'?'owl_home':view==='search'||view==='similar'?'owl_search':['swaps','connections'].includes(view)?'owl_exchanges':view==='card'?'owl_card':'owl_idle';}
 function owlPose(){return view==='search'||view==='similar'?'curious':view==='card'&&profilePanel==='saved'?'sleepy':'';}
 function owlIllustration(pose){const svg=$('owl-button').querySelector('.owl').cloneNode(true);svg.setAttribute('class','owl empty-owl '+pose);svg.setAttribute('width','72');svg.setAttribute('height','72');for(const pupil of svg.querySelectorAll('.owl-pupil'))pupil.removeAttribute('transform');return svg;}
-function owlRest(){const owl=$('owl-button')?.querySelector('.owl');owl?.setAttribute('class','owl '+owlPose());$('owl-speech').textContent=t(owlDefaultKey());}
-function owlReact(value){
- clearTimeout(owlTimer);owlState=value;const owl=$('owl-button')?.querySelector('.owl');if(!owl)return;
+function owlRest(){owlCaptionKey=null;const owl=$('owl-button')?.querySelector('.owl');owl?.setAttribute('class','owl '+owlPose());$('owl-speech').textContent=t(owlDefaultKey());}
+function owlReact(value,captionKey){
+ clearTimeout(owlTimer);owlState=value;owlCaptionKey=captionKey||null;const owl=$('owl-button')?.querySelector('.owl');if(!owl)return;
  owl.setAttribute('class','owl');void owl.getBoundingClientRect?.();
- owl.setAttribute('class','owl '+value+(['like','neutral','tip','shared','unlocked'].includes(value)?' bob':''));
- $('owl-speech').textContent=t(value==='tip'?'owl_tip_'+(owlTip++%3):'owl_'+value);
- if(value!=='loading')owlTimer=setTimeout(()=>{owlState='';owlRest();},value==='evil'?1100:value==='love'?2400:1800);
+ owl.setAttribute('class','owl '+value+(['like','neutral','tip','happy'].includes(value)?' bob':''));
+ $('owl-speech').textContent=t(owlCaptionKey||(value==='tip'?'owl_tip_'+(owlTip++%3):'owl_'+value));
+ if(value!=='loading')owlTimer=setTimeout(()=>{owlState='';owlRest();},['secret','happy'].includes(value)?1500:value==='love'?2400:1800);
 }
 $('owl-button').onclick=()=>owlReact('tip');
 document.addEventListener('pointermove',event=>{
@@ -390,7 +390,7 @@ async function setCardPrivacy(card,target){
  if(!next&&!window.confirm(t('privacy_confirm_share')))return;button.disabled=true;
  try{const result=preview?{guilty:next,visibility:next?'private':'private'}:await api('rating-privacy',{token:song.token,track_id:song.id,private:next,...(!next?{confirm_shared:true}:{})});if(version!==generation)return;
   card.songData={...card.songData,guilty:result.guilty,visibility:result.visibility};ratingPrivacyHint(card);rememberVisible();telegramCall(()=>tg?.HapticFeedback?.impactOccurred?.(result.guilty?'medium':'light'));
-  owlReact(result.guilty?'evil':result.visibility==='friends'?'shared':'unlocked');
+  owlReact(result.guilty?'secret':'happy',result.guilty?'owl_secret':result.visibility==='friends'?'owl_happy':'owl_unlocked');
   if(result.guilty){notice(t('privacy_now_private'));$('toast').append(action(t('privacy_undo'),()=>setCardPrivacy(card,false),'text-button'));if(!storageRead('lilcusin-private-tip')){storageWrite('lilcusin-private-tip','1');const tip=node('span',t('privacy_tooltip'),'privacy-tip');tip.setAttribute('role','tooltip');card.append(tip);setTimeout(()=>tip.remove(),3500);}}
   else notice(t(result.visibility==='friends'?'privacy_now_shared':'guilty_unlocked'));
  }catch(error){notice(error.message);}finally{button.disabled=false;}
