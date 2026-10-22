@@ -201,6 +201,17 @@ class SocialLoopTests(ServiceTestCase):
         async with self.database.sessions() as session:
             self.assertEqual(await session.scalar(select(Rating.value)),'love')
 
+    async def test_report_optional_details_are_actor_bound_and_bounded(self):
+        client=TestClient(TestServer(create_app(TOKEN,self.chat,self.workflow)));await client.start_server()
+        try:
+            payload={'invitation':self.token,'action':'report','reason':'other','details':'Optional report context'}
+            response=await client.post('/api/social/relationship',json=payload,headers={'X-Telegram-Init-Data':signed(123)})
+            self.assertEqual(response.status,200)
+            async with self.database.sessions() as session:self.assertIn('Optional report context',await session.scalar(select(SocialReport.evidence_note)))
+            self.assertEqual((await client.post('/api/social/relationship',json={**payload,'details':'x'*241},headers={'X-Telegram-Init-Data':signed(123)})).status,400)
+            self.assertEqual((await client.post('/api/social/relationship',json=payload,headers={'X-Telegram-Init-Data':signed(789)})).status,404)
+        finally:await client.close()
+
     async def test_owner_roles_and_forged_track_rejected(self):
         swap=await self.send()
         calls=[lambda:self.social.read(789,swap['token']),lambda:self.social.act(123,swap['token'],'save'),

@@ -374,7 +374,7 @@
     "invite_demo": "Demo invitation · preview only. No request is created or sent.",
     "invite_open_bot": "Open in Telegram",
     "invite_person": "A music friend",
-    "social_compare": "Compare selected favorites",
+    "social_compare": "Compare tastes",
     "social_compare_title": "Your music, next to {name}’s",
     "social_compare_scope": "Only the favorites you both agreed to share. Missing here means not selected, not unheard or unrated.",
     "social_sparse": "Not enough selected favorites yet: each person needs at least 3. Add a few songs, then renew consent. These are just the selections we can show so far.",
@@ -655,7 +655,14 @@
     "thread_open_name": "Open thread with {name}",
     "thread_empty": "Your next swap starts here. Send a song.",
     "thread_older": "Earlier songs",
-    "thread_other": "Other exchanges"
+    "thread_other": "Other exchanges",
+    "thread_you_sent": "You sent",
+    "thread_they_sent": "{name} sent",
+    "report_reason_label": "Reason",
+    "report_choose_reason": "Choose a reason",
+    "report_note_label": "Anything else? (optional)",
+    "report_note_limit": "Up to 240 characters. Only the moderation team sees your report.",
+    "report_submit": "Send report"
   },
   "fa": {
     "taste_sharing_title": "آهنگ‌های محبوبم برای دوستام",
@@ -1032,7 +1039,7 @@
     "invite_demo": "دعوت نمونه · فقط پیش‌نمایش است؛ درخواستی ساخته یا فرستاده نمی‌شود.",
     "invite_open_bot": "باز کردن در تلگرام",
     "invite_person": "یک دوست موسیقی‌دوست",
-    "social_compare": "مقایسهٔ آهنگ‌های انتخابی",
+    "social_compare": "مقایسهٔ سلیقه‌ها",
     "social_compare_title": "آهنگ‌های تو در کنار انتخاب‌های {name}",
     "social_compare_scope": "فقط آهنگ‌هایی که هر دو با اشتراکشان موافقت کرده‌اید. نبودن یک آهنگ در کارت یعنی انتخاب نشده؛ نه اینکه شنیده نشده یا امتیاز ندارد.",
     "social_sparse": "هنوز آهنگ کافی نداریم؛ هر نفر دست‌کم ۳ آهنگ انتخاب کند. چند آهنگ اضافه کنید و دوباره رضایت بدهید. فعلاً فقط همین انتخاب‌ها را می‌بینید.",
@@ -1313,7 +1320,14 @@
     "thread_open_name": "گفت‌وگو با {name}",
     "thread_empty": "آهنگ بعدی رو تو بفرست؛ گفت‌وگو از همین‌جا شروع می‌شه.",
     "thread_older": "آهنگ‌های قبلی",
-    "thread_other": "تبادل‌های دیگه"
+    "thread_other": "تبادل‌های دیگه",
+    "thread_you_sent": "تو فرستادی",
+    "thread_they_sent": "{name} فرستاد",
+    "report_reason_label": "دلیل گزارش",
+    "report_choose_reason": "یک دلیل انتخاب کن",
+    "report_note_label": "توضیح دیگه‌ای داری؟ (اختیاری)",
+    "report_note_limit": "تا ۲۴۰ نویسه؛ فقط تیم رسیدگی گزارشت را می‌بیند.",
+    "report_submit": "فرستادن گزارش"
   },
   "ar": {
     "for_you": "لك",
@@ -1659,7 +1673,7 @@
     "social_notice_loved": "Someone loved your song pick. Open the exchange for details.",
     "social_saves": "Your saved picks",
     "card_confirm_rotate": "Replace the link? The previous link will stop working.",
-    "social_compare": "Compare selected favorites",
+    "social_compare": "Compare tastes",
     "social_unavailable_audio": "The audio will arrive in this bot’s chat.",
     "social_report_done": "Report recorded for operator review. You can also block this person.",
     "social_note": "Add / edit note",
@@ -1964,7 +1978,14 @@
     "thread_open_name": "Open thread with {name}",
     "thread_empty": "Your next swap starts here. Send a song.",
     "thread_older": "Earlier songs",
-    "thread_other": "Other exchanges"
+    "thread_other": "Other exchanges",
+    "thread_you_sent": "You sent",
+    "thread_they_sent": "{name} sent",
+    "report_reason_label": "Reason",
+    "report_choose_reason": "Choose a reason",
+    "report_note_label": "Anything else? (optional)",
+    "report_note_limit": "Up to 240 characters. Only the moderation team sees your report.",
+    "report_submit": "Send report"
   },
   "tr": {
     "for_you": "Senin için",
@@ -2310,7 +2331,7 @@
     "social_notice_loved": "Someone loved your song pick. Open the exchange for details.",
     "social_saves": "Your saved picks",
     "card_confirm_rotate": "Replace the link? The previous link will stop working.",
-    "social_compare": "Compare selected favorites",
+    "social_compare": "Compare tastes",
     "social_unavailable_audio": "The audio will arrive in this bot’s chat.",
     "social_report_done": "Report recorded for operator review. You can also block this person.",
     "social_note": "Add / edit note",
@@ -2615,7 +2636,14 @@
     "thread_open_name": "Open thread with {name}",
     "thread_empty": "Your next swap starts here. Send a song.",
     "thread_older": "Earlier songs",
-    "thread_other": "Other exchanges"
+    "thread_other": "Other exchanges",
+    "thread_you_sent": "You sent",
+    "thread_they_sent": "{name} sent",
+    "report_reason_label": "Reason",
+    "report_choose_reason": "Choose a reason",
+    "report_note_label": "Anything else? (optional)",
+    "report_note_limit": "Up to 240 characters. Only the moderation team sees your report.",
+    "report_submit": "Send report"
   },
   "ru": {
     "for_you": "Для вас",
@@ -2961,7 +2989,7 @@
     "social_notice_loved": "Someone loved your song pick. Open the exchange for details.",
     "social_saves": "Your saved picks",
     "card_confirm_rotate": "Replace the link? The previous link will stop working.",
-    "social_compare": "Compare selected favorites",
+    "social_compare": "Compare tastes",
     "social_unavailable_audio": "The audio will arrive in this bot’s chat.",
     "social_report_done": "Report recorded for operator review. You can also block this person.",
     "social_note": "Add / edit note",
@@ -3266,7 +3294,14 @@
     "thread_open_name": "Open thread with {name}",
     "thread_empty": "Your next swap starts here. Send a song.",
     "thread_older": "Earlier songs",
-    "thread_other": "Other exchanges"
+    "thread_other": "Other exchanges",
+    "thread_you_sent": "You sent",
+    "thread_they_sent": "{name} sent",
+    "report_reason_label": "Reason",
+    "report_choose_reason": "Choose a reason",
+    "report_note_label": "Anything else? (optional)",
+    "report_note_limit": "Up to 240 characters. Only the moderation team sees your report.",
+    "report_submit": "Send report"
   },
   "es": {
     "for_you": "Para ti",
@@ -3612,7 +3647,7 @@
     "social_notice_loved": "Someone loved your song pick. Open the exchange for details.",
     "social_saves": "Your saved picks",
     "card_confirm_rotate": "Replace the link? The previous link will stop working.",
-    "social_compare": "Compare selected favorites",
+    "social_compare": "Compare tastes",
     "social_unavailable_audio": "The audio will arrive in this bot’s chat.",
     "social_report_done": "Report recorded for operator review. You can also block this person.",
     "social_note": "Add / edit note",
@@ -3917,7 +3952,14 @@
     "thread_open_name": "Open thread with {name}",
     "thread_empty": "Your next swap starts here. Send a song.",
     "thread_older": "Earlier songs",
-    "thread_other": "Other exchanges"
+    "thread_other": "Other exchanges",
+    "thread_you_sent": "You sent",
+    "thread_they_sent": "{name} sent",
+    "report_reason_label": "Reason",
+    "report_choose_reason": "Choose a reason",
+    "report_note_label": "Anything else? (optional)",
+    "report_note_limit": "Up to 240 characters. Only the moderation team sees your report.",
+    "report_submit": "Send report"
   },
   "fr": {
     "for_you": "Pour vous",
@@ -4263,7 +4305,7 @@
     "social_notice_loved": "Someone loved your song pick. Open the exchange for details.",
     "social_saves": "Your saved picks",
     "card_confirm_rotate": "Replace the link? The previous link will stop working.",
-    "social_compare": "Compare selected favorites",
+    "social_compare": "Compare tastes",
     "social_unavailable_audio": "The audio will arrive in this bot’s chat.",
     "social_report_done": "Report recorded for operator review. You can also block this person.",
     "social_note": "Add / edit note",
@@ -4568,7 +4610,14 @@
     "thread_open_name": "Open thread with {name}",
     "thread_empty": "Your next swap starts here. Send a song.",
     "thread_older": "Earlier songs",
-    "thread_other": "Other exchanges"
+    "thread_other": "Other exchanges",
+    "thread_you_sent": "You sent",
+    "thread_they_sent": "{name} sent",
+    "report_reason_label": "Reason",
+    "report_choose_reason": "Choose a reason",
+    "report_note_label": "Anything else? (optional)",
+    "report_note_limit": "Up to 240 characters. Only the moderation team sees your report.",
+    "report_submit": "Send report"
   },
   "de": {
     "for_you": "Für dich",
@@ -4914,7 +4963,7 @@
     "social_notice_loved": "Someone loved your song pick. Open the exchange for details.",
     "social_saves": "Your saved picks",
     "card_confirm_rotate": "Replace the link? The previous link will stop working.",
-    "social_compare": "Compare selected favorites",
+    "social_compare": "Compare tastes",
     "social_unavailable_audio": "The audio will arrive in this bot’s chat.",
     "social_report_done": "Report recorded for operator review. You can also block this person.",
     "social_note": "Add / edit note",
@@ -5219,6 +5268,13 @@
     "thread_open_name": "Open thread with {name}",
     "thread_empty": "Your next swap starts here. Send a song.",
     "thread_older": "Earlier songs",
-    "thread_other": "Other exchanges"
+    "thread_other": "Other exchanges",
+    "thread_you_sent": "You sent",
+    "thread_they_sent": "{name} sent",
+    "report_reason_label": "Reason",
+    "report_choose_reason": "Choose a reason",
+    "report_note_label": "Anything else? (optional)",
+    "report_note_limit": "Up to 240 characters. Only the moderation team sees your report.",
+    "report_submit": "Send report"
   }
 }

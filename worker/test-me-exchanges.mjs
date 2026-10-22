@@ -59,8 +59,12 @@ const removeFriend=buttons(sheetContent).find(el=>el.textContent==='friends_unfr
 ctx.activityHost=node('section');ctx.updates={activity:[{event:'accepted',name:'Approved friend',invitation:'friend-fixture'}]};vm.runInContext('renderSocialActivity(activityHost,updates)',ctx);assert.ok(walk(ctx.activityHost).some(el=>el.textContent==='activity_accepted'));assert.ok(buttons(ctx.activityHost).some(el=>el.textContent==='social_open'));
 console.log('Friend sheet separates Block/Unfriend; removal requires explicit confirmation; real activity renders with an action.');
 
-ctx.$=id=>id==='content'?content:id==='view-intro'?node('p'):walk(content).find(el=>el.id===id);ctx.friend={token:'thread-fixture',other:{nickname:'Approved friend'}};
+ctx.$=id=>id==='content'?content:['view-intro','view-title'].includes(id)?node('p'):walk(content).find(el=>el.id===id);ctx.friend={token:'thread-fixture',other:{nickname:'Approved friend'}};
 ctx.api=async(path,payload)=>{calls.push({path,payload});assert.equal(path,'social/thread');return {swaps:[swap,{...swap,token:'sent-fixture',role:'sender'}],before:null};};
 await vm.runInContext('openFriendThread(friend)',ctx);assert.ok(walk(content).some(el=>el.className==='friend-thread'));assert.equal(walk(content).filter(el=>el.className.includes('thread-entry')).length,2);assert.ok(buttons(content).some(el=>el.className.includes('friend-thread-send')));
 const row=vm.runInContext('friendThreadRow(friend,null)',ctx);assert.ok(!buttons(row).some(el=>el.textContent==='friends_unfriend'),'Unfriend lives in the menu');assert.ok(buttons(row).some(el=>el.className.includes('friend-open')));
 console.log('Participant thread renders both directions, pinned Send, name-first rows and menu-only Unfriend.');
+
+let reportCalls=0;ctx.api=async(path,payload)=>{reportCalls++;assert.equal(path,'social/relationship');assert.equal(payload.reason,'other');assert.equal(payload.details,'Optional context');return {state:'reported'};};
+vm.runInContext('socialReport("thread-fixture")',ctx);assert.equal(reportCalls,0,'opening Report never submits');const reason=walk(sheetContent).find(el=>el.id==='report-reason'),note=walk(sheetContent).find(el=>el.id==='report-note'),submit=buttons(sheetContent).find(el=>el.textContent==='report_submit');assert.ok(submit.disabled);reason.value='other';reason.onchange();note.value='Optional context';assert.equal(submit.disabled,false);await submit.onclick({currentTarget:submit});assert.equal(reportCalls,1);assert.equal(note.maxLength,240);
+console.log('Report waits for reason and explicit submission, with optional bounded context.');

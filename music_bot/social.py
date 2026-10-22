@@ -345,9 +345,12 @@ class Social:
                 result.append(dict(handle=item.handle,nickname=item.label))
             return dict(notifications=row.notifications, suspended=row.suspended, blocks=result)
 
-    async def relationship(self, telegram_id, invitation, action, reason='spam', swap_token=None):
+    async def relationship(self, telegram_id, invitation, action, reason='spam', swap_token=None, details=''):
         if not isinstance(action,str) or not isinstance(reason,str) or action not in {'block','unblock','report'} or reason not in {'spam','harassment','unsafe','other'}:
             raise CardError('social_invalid')
+        if not isinstance(details,str) or len(details)>240 or (action!='report' and details):raise CardError('social_invalid')
+        from .taste_cards import clean_text
+        details=clean_text(details,240)
         async with self.database.write() as session:
             actor=await user_id(session,telegram_id)
             if action=='unblock':
@@ -370,7 +373,7 @@ class Social:
                 if count>=5: raise CardError('social_limit')
                 duplicate=await session.scalar(select(SocialReport).where(SocialReport.reporter_id==actor,SocialReport.target_id==target,SocialReport.swap_token==swap_token,SocialReport.state=='open'))
                 if duplicate: return dict(state='reported')
-                session.add(SocialReport(token=secrets.token_urlsafe(24),reporter_id=actor,target_id=target,swap_token=swap_token,reason=reason,evidence_note=swap.note if swap_token else ''))
+                session.add(SocialReport(token=secrets.token_urlsafe(24),reporter_id=actor,target_id=target,swap_token=swap_token,reason=reason,evidence_note=(swap.note if swap_token else '')+('\nReporter note: '+details if details else '')))
             return dict(state='reported' if action=='report' else action)
 
     async def moderate(self, telegram_id, moderators, report=None, action=None):

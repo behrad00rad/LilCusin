@@ -65,7 +65,7 @@ def register_social_api(app, chat, body, *, bot_username=None):
         return await run(request,lambda:service.settings(request['user']['id'],**fields))
 
     async def relationship(request):
-        fields=await data(request,['invitation','action'],['reason','swap_token'])
+        fields=await data(request,['invitation','action'],['reason','swap_token','details'])
         return await run(request,lambda:service.relationship(request['user']['id'],**fields))
 
     async def get_song(request):
