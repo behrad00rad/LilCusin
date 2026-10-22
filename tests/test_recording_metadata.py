@@ -46,7 +46,7 @@ class RecordingMetadataTests(unittest.IsolatedAsyncioTestCase):
         track=NS(artist='Lyrics Channel',title='Kanye West Runaway lyrics',display_artist=None,display_title=None,metadata_source='youtube_recording',duration=200,album=None)
         provider=NS(call=AsyncMock(return_value=[TrackCandidate(artist='Kanye West',title='Runaway',source='itunes',duration=200,album='Some compilation')]))
         metadata=await resolve_metadata(track,provider)
-        self.assertEqual((metadata.title,metadata.artist,metadata.album),('Runaway','Kanye West',None))
+        self.assertEqual((metadata.title,metadata.artist,metadata.album),('Runaway','Kanye West','Some compilation'))
         self.assertEqual(track.artist,'Lyrics Channel')
         for row in [TrackCandidate(artist='Other',title='Runaway',source='itunes',duration=200),
                     TrackCandidate(artist='Kanye West',title='Runaway (Live)',source='itunes',duration=200),

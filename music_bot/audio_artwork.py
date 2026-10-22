@@ -38,23 +38,36 @@ async def image_bytes(url):
 def embed(path, cover, track):
     from mutagen.mp4 import MP4, MP4Cover
     from mutagen.id3 import ID3, ID3NoHeaderError, APIC, TALB, TIT2, TPE1
+    from .recording_metadata import label_credit
     artist, title = track.display_artist or track.artist, track.display_title or track.title
+    artist = artist if artist and not label_credit(artist) else ''
     if path.suffix == '.m4a':
         tags = MP4(path)
-        tags['covr'] = [MP4Cover(cover, imageformat=MP4Cover.FORMAT_JPEG)]
-        tags['\xa9nam'], tags['\xa9ART'] = [title], [artist]
+        if cover is not None:
+            tags['covr'] = [MP4Cover(cover, imageformat=MP4Cover.FORMAT_JPEG)]
+        tags['\xa9nam'] = [title]
+        if artist:
+            tags['\xa9ART'] = [artist]
+        else:
+            tags.pop('\xa9ART',None)
         if track.album:
             tags['\xa9alb'] = [track.album]
+        else:
+            tags.pop('\xa9alb',None)
         tags.save()
     elif path.suffix == '.mp3':
         try:
             tags = ID3(path)
         except ID3NoHeaderError:
             tags = ID3()
-        tags.delall('APIC')
-        tags.add(APIC(encoding=3, mime='image/jpeg', type=3, desc='Cover', data=cover))
+        if cover is not None:
+            tags.delall('APIC')
+            tags.add(APIC(encoding=3, mime='image/jpeg', type=3, desc='Cover', data=cover))
         tags.add(TIT2(encoding=3, text=title))
-        tags.add(TPE1(encoding=3, text=artist))
+        tags.delall('TPE1')
+        if artist:
+            tags.add(TPE1(encoding=3, text=artist))
+        tags.delall('TALB')
         if track.album:
             tags.add(TALB(encoding=3, text=track.album))
         tags.save(path)
@@ -72,16 +85,35 @@ def embed_atomic(path, cover, track, max_bytes):
         tagged.unlink(missing_ok=True)
 
 
+def embedded_cover(path):
+    """Read a bounded existing cover; malformed/missing tags are an ordinary miss."""
+    try:
+        if path.suffix == '.m4a':
+            from mutagen.mp4 import MP4
+            covers = MP4(path).get('covr', [])
+            data = bytes(covers[0]) if covers else None
+        elif path.suffix == '.mp3':
+            from mutagen.id3 import ID3
+            covers = ID3(path).getall('APIC')
+            data = covers[0].data if covers else None
+        else:
+            return None
+        return data if data and len(data) <= MAX_IMAGE_BYTES else None
+    except Exception:
+        return None
+
+
 async def prepare(fetcher, track, path, directory, alive):
     """Return thumbnail + cache identity, or no artwork if the optional source fails."""
     url = safe_url(track.artwork_url, artwork=True)
-    if not url:
+    existing = await asyncio.to_thread(embedded_cover, path)
+    if not url and not existing:
         return None, None
     folder = Path(directory)
     source, thumbnail = folder/'cover.input', folder/'cover.jpg'
     stage = 'retrieval'
     try:
-        source.write_bytes(await image_bytes(url))
+        source.write_bytes(existing or await image_bytes(url))
         if not await alive():
             raise FetchError('Request cancelled.')
         stage = 'conversion'
@@ -98,6 +130,8 @@ async def prepare(fetcher, track, path, directory, alive):
         if occupied + path.stat().st_size + len(cover) + 65536 > fetcher.settings.disk_bytes:
             thumbnail.unlink(missing_ok=True)
             return None, None
+        if existing:
+            return thumbnail, 'embedded:' + hashlib.sha256(existing).hexdigest()
         stage = 'embedding'
         task = asyncio.create_task(asyncio.to_thread(embed_atomic, path, cover, track, fetcher.settings.max_bytes))
         try:
@@ -120,3 +154,30 @@ async def prepare(fetcher, track, path, directory, alive):
         return None, None
     finally:
         source.unlink(missing_ok=True)
+
+
+async def tag_metadata(fetcher, metadata, path, directory, alive):
+    """Tag independently of artwork, preserving existing covers and the original on error."""
+    from types import SimpleNamespace
+    if path.suffix not in {'.mp3', '.m4a'}:
+        return False
+    if not await alive():
+        raise FetchError('Request cancelled.')
+    track = SimpleNamespace(title=metadata.title, artist=metadata.artist,
+        display_title=None, display_artist=None, album=metadata.album)
+    try:
+        occupied = sum(p.stat().st_size for p in Path(directory).rglob('*') if p.is_file())
+        if occupied + path.stat().st_size + 65536 > fetcher.settings.disk_bytes:
+            return False
+        task = asyncio.create_task(asyncio.to_thread(embed_atomic, path, None, track, fetcher.settings.max_bytes))
+        try:
+            await asyncio.shield(task)
+        except asyncio.CancelledError:
+            await asyncio.gather(task, return_exceptions=True)
+            raise
+        return True
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        logger.warning('Audio metadata tagging failed; delivery remains available. Details omitted.')
+        return False

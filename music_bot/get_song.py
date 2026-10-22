@@ -12,7 +12,7 @@ import weakref
 import hashlib
 from time import monotonic
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import timedelta, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -24,7 +24,7 @@ from .models import Track, User, utc_now
 from .youtube_fetch import FetchError, YouTubeFetcher, confident, VIDEO
 from .workflow import FlowError
 from .lilbro_fetch import LilBroFetcher, configured_fetcher
-from .audio_artwork import artwork_key, prepare as prepare_artwork
+from .audio_artwork import artwork_key, prepare as prepare_artwork, tag_metadata
 from .bot_copy import text as copy
 from .i18n import language
 
@@ -661,29 +661,42 @@ class GetSong:
                         await asyncio.sleep(.5)
                         path = await self.fetcher.fetch(job.video_id, directory, lambda: self.alive(job_id))
                 phase = 'prepare'
+                from types import SimpleNamespace
+                pending = await self.requests(job_id)
+                snapshot = pending[0][0].canonical_metadata if pending else None
+                metadata = await self.delivery_metadata(track, snapshot=snapshot, video=job.video_id)
+                from .recording_metadata import snapshot_metadata
+                canonical_art = snapshot_metadata(snapshot,job.video_id) is not None
+                art_track = (SimpleNamespace(id=track.id, title=metadata.title, artist=metadata.artist,
+                    display_title=None, display_artist=None, duration=track.duration,
+                    album=metadata.album, artwork_url=metadata.artwork_url or track.artwork_url)
+                    if canonical_art else track)
                 thumbnail, cover_key = None, None
                 try:
-                    async with asyncio.timeout(12):
-                        if self.artwork_loader and not artwork_key(track):
+                    async with asyncio.timeout(8):
+                        if self.artwork_loader and not canonical_art and not artwork_key(track):
                             await self.artwork_loader.load(track.id)
                             async with self.db.sessions() as s:
                                 track = await s.get(Track, track.id)
-                        if self.recognizer and not artwork_key(track):
-                            await self.shazam_artwork(track, path, directory, lambda: self.alive(job_id))
-                        thumbnail, cover_key = await prepare_artwork(self.fetcher, track, path, directory,
+                                art_track = track
+                        if self.recognizer and not artwork_key(art_track):
+                            await self.shazam_artwork(art_track, path, directory, lambda: self.alive(job_id))
+                        thumbnail, cover_key = await prepare_artwork(self.fetcher, art_track, path, directory,
                                                                     lambda: self.alive(job_id))
                         if not thumbnail and self.recognizer and track.id not in self.art_attempted:
-                            await self.shazam_artwork(track, path, directory, lambda: self.alive(job_id), force=True)
-                            thumbnail, cover_key = await prepare_artwork(self.fetcher, track, path, directory,
+                            await self.shazam_artwork(art_track, path, directory, lambda: self.alive(job_id), force=True)
+                            thumbnail, cover_key = await prepare_artwork(self.fetcher, art_track, path, directory,
                                                                         lambda: self.alive(job_id))
                 except TimeoutError:
-                    logger.warning('Artwork preparation timed out after 12 seconds; sending audio without artwork.')
+                    logger.warning('Artwork preparation timed out after 8 seconds; sending audio without artwork.')
                 except Exception:
                     logger.warning('Artwork preparation failed; sending audio without artwork. Details omitted for privacy.')
                 async with self.db.write() as s:
+                    previous_source = await s.scalar(select(AudioSource).where(AudioSource.track_id == track.id, AudioSource.video_id == job.video_id))
+                    previous = previous_source.fetch_metadata if previous_source else {}
                     await s.execute(delete(AudioSource).where(AudioSource.track_id == track.id, AudioSource.video_id == job.video_id))
                     s.add(AudioSource(track_id=track.id, video_id=job.video_id,
-                        fetch_metadata={**{k: v for k, v in job.metadata_json.items() if not k.startswith('lilbro_')},
+                        fetch_metadata={**previous, **{k: v for k, v in job.metadata_json.items() if not k.startswith('lilbro_')},
                                         'bytes': path.stat().st_size, 'container': path.suffix,
                                         'provider': 'youtube',
                                         'fetcher': 'lilbro' if isinstance(self.fetcher, LilBroFetcher) else 'yt-dlp'}))
@@ -737,15 +750,13 @@ class GetSong:
     async def delivery_metadata(self, track, *, snapshot=None, video=None):
         from .recording_metadata import resolve_metadata, snapshot_metadata
         canonical = snapshot_metadata(snapshot, video)
-        if canonical is not None:
-            return canonical
         key = (track.id, track.display_artist or track.artist, track.display_title or track.title,
-               track.metadata_source, track.duration)
+               track.metadata_source, track.duration, canonical, track.album, track.artwork_url)
         cached = self.metadata_cache.get(key)
         if cached and monotonic() - cached[0] < 300:
             return cached[1]
         providers = getattr(self.artwork_loader, 'providers', None)
-        metadata = await resolve_metadata(track, providers)
+        metadata = await resolve_metadata(track, providers, canonical=canonical)
         if len(self.metadata_cache) >= 128:
             self.metadata_cache.pop(next(iter(self.metadata_cache)))
         self.metadata_cache[key] = (monotonic(), metadata)
@@ -810,6 +821,18 @@ class GetSong:
                 if job.video_id:
                     query = query.where(AudioDelivery.video_id == job.video_id)
                 cached = await s.scalar(query.order_by(AudioDelivery.created_at.desc()))
+            if cached and track.metadata_source in {'youtube_recording', 'youtube_music'}:
+                metadata = await self.delivery_metadata(track, snapshot=req.canonical_metadata, video=cached.video_id)
+                async with self.db.sessions() as session:
+                    source = await session.scalar(select(AudioSource).where(AudioSource.track_id == track.id,
+                        AudioSource.video_id == cached.video_id))
+                try:
+                    since = datetime.fromisoformat(source.fetch_metadata.get('audio_tags_since') or source.fetched_at.isoformat()) if source else None
+                except (TypeError, ValueError):
+                    since = None
+                if (source is None or source.fetch_metadata.get('audio_tags_v1') != self.metadata_key(metadata)
+                        or since is None or cached.created_at < since):
+                    continue  # Refresh old upload tags once; no canonical/rating identity rewrite.
             if cached:
                 cached_job = FetchJob(id=job.id, track_id=track.id, video_id=cached.video_id)
                 try:
@@ -826,6 +849,16 @@ class GetSong:
     async def deliver(self, job, track, path, thumbnail=None, cover_key=None):
         for req, user_id in await self.requests(job.id):
             try:
+                metadata = await self.delivery_metadata(track, snapshot=req.canonical_metadata, video=job.video_id)
+                tagged = await tag_metadata(self.fetcher, metadata, path, path.parent, lambda: self.alive(job.id))
+                async with self.db.write() as session:
+                    source = await session.scalar(select(AudioSource).where(AudioSource.track_id == track.id, AudioSource.video_id == job.video_id))
+                    if source:
+                        previous = source.fetch_metadata
+                        profile = self.metadata_key(metadata)
+                        since = previous.get('audio_tags_since') if previous.get('audio_tags_v1') == profile else None
+                        source.fetch_metadata = {**previous,'audio_tags_v1':profile,
+                            'audio_tags_since':since or utc_now().isoformat(), 'tags_embedded':tagged}
                 await self.send(req, user_id, job, track, FSInputFile(path), thumbnail, cover_key)
             except TelegramBadRequest:
                 await self.request_state(req.id, 'failed')

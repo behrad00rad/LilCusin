@@ -13,6 +13,8 @@ class RecordingMetadata:
     title: str
     artist: str
     album: str | None = None
+    artwork_url: str | None = None
+    versions: tuple[str, ...] = ()
 
 
 def normalized(value):
@@ -214,41 +216,55 @@ def result_pages(rows):
     return slots, (start+len(other) if other else len(main))
 
 
-async def resolve_metadata(track, providers=None):
+async def resolve_metadata(track, providers=None, *, canonical=None):
+    """Enrich optional fields; a selected canonical identity is never re-parsed."""
+    from .chat_ui import safe_url
+    from .providers.common import TrackCandidate
     artist = getattr(track,'display_artist',None) or track.artist
     title = getattr(track,'display_title',None) or track.title
     source = getattr(track,'metadata_source','')
-    result = clean_recording(artist,title,source)
-    if source != 'youtube_recording':
-        return RecordingMetadata(result.title,result.artist,getattr(track,'album',None))
-    fallback = RecordingMetadata(result.title, result.artist if artist.endswith(' - Topic') else '')
-    if providers is None:
-        return fallback
-    # Query public catalogue metadata only for the selected recording, not every list row.
-    try:
-        async with asyncio.timeout(2):
-            rows = await providers.call('itunes','search_titles',result.title)
-        matches = {}
-        wanted = match_text(result.title)
-        for row in rows if isinstance(rows,list) else []:
-            if not row.artist or not row.title or version_words(row.title) != version_words(title):
+    parsed = clean_recording(artist,title,source) if canonical is None else canonical
+    fallback_artist = parsed.artist if canonical is not None or source != 'youtube_recording' or artist.endswith(' - Topic') else ''
+    base = canonical or RecordingMetadata(parsed.title, fallback_artist, getattr(track,'album',None),
+        safe_url(getattr(track,'artwork_url',None),artwork=True))
+    if providers is None or (base.album and safe_url(base.artwork_url,artwork=True)):
+        return base
+    # The clean artist/title query is metadata-only, independent of audio retrieval.
+    query = ' '.join(filter(None,[parsed.artist,parsed.title]))
+    async def lookup(provider, method, *args):
+        try:
+            async with asyncio.timeout(2):
+                rows = await providers.call(provider, method, *args)
+            return rows if isinstance(rows,list) else []
+        except Exception:
+            return []
+    groups = await asyncio.gather(lookup('itunes','search_titles',query),
+        lookup('musicbrainz','search_recordings',parsed.artist,parsed.title))
+    matches = {}
+    wanted_versions = set(base.versions) | version_words(parsed.title)
+    for rows in groups:
+        for row in rows:
+            if not isinstance(row,TrackCandidate) or not row.artist or not row.title or label_credit(row.artist) or version_words(row.title) != wanted_versions:
                 continue
-            if result.artist:
-                valid = ((match_text(row.artist) == match_text(result.artist) and match_text(row.title) == wanted)
-                         or (match_text(row.title) == match_text(result.artist) and match_text(row.artist) == wanted))
+            if parsed.artist:
+                direct = artist_matches(row.artist,parsed.artist) and match_text(row.title) == match_text(parsed.title)
+                reverse = canonical is None and artist_matches(row.artist,parsed.title) and match_text(row.title) == match_text(parsed.artist)
+                valid = direct or reverse
             else:
-                valid = wanted in {match_text(row.artist+' '+row.title),match_text(row.title+' '+row.artist)}
+                valid = match_text(parsed.title) in {match_text(row.artist+' '+row.title),match_text(row.title+' '+row.artist)}
             duration = getattr(track,'duration',None)
-            if duration and row.duration and duration >= 1 and abs(duration-row.duration) > max(12,duration*.08):
+            if duration and row.duration and abs(duration-row.duration) > max(12,duration*.08):
                 continue
             if valid:
-                matches[(match_text(row.artist),match_text(row.title))] = row
-        if len(matches) == 1:
-            row = next(iter(matches.values()))
-            return RecordingMetadata(row.title,row.artist,getattr(track,'album',None))
-    except Exception:
-        pass  # Failed lookup never turns a channel name into a song artist.
-    return fallback
+                matches.setdefault((artist_key(row.artist),match_text(row.title)),[]).append(row)
+    if len(matches) != 1:
+        return base
+    rows = next(iter(matches.values()))
+    row = rows[0]
+    album = base.album or next((r.album for r in rows if r.album),None)
+    art = safe_url(base.artwork_url,artwork=True) or next((safe_url(r.artwork_url,artwork=True) for r in rows if safe_url(r.artwork_url,artwork=True)),None)
+    return RecordingMetadata(base.title if canonical is not None else row.title,
+        base.artist if canonical is not None and base.artist else row.artist, album, art, base.versions)
 
 
 def canonical_snapshot(candidate, *, searched_artist=None):
@@ -258,7 +274,8 @@ def canonical_snapshot(candidate, *, searched_artist=None):
         candidate.artist, candidate.title, candidate.source, searched_artist=searched_artist)
     return {'version':1, 'artist':metadata.artist, 'title':metadata.title,
         'duration':candidate.duration, 'source_id':candidate.external_ids.get('youtube'),
-        'source':candidate.source, 'album':candidate.album, 'artwork_url':candidate.artwork_url}
+        'source':candidate.source, 'album':candidate.album, 'artwork_url':candidate.artwork_url,
+        'flags':saved.get('flags',[])}
 
 
 def snapshot_metadata(snapshot, video=None):
@@ -269,7 +286,7 @@ def snapshot_metadata(snapshot, video=None):
     artist = snapshot.get('artist') or ''
     if not isinstance(artist, str) or label_credit(artist):
         artist = ''
-    return RecordingMetadata(snapshot['title'], artist, snapshot.get('album'))
+    return RecordingMetadata(snapshot['title'], artist, snapshot.get('album'), snapshot.get('artwork_url'), tuple(snapshot.get('flags') or ()))
 
 
 def telegram_fields(metadata):
