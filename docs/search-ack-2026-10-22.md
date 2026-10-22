@@ -48,3 +48,8 @@ runtime-based changes while preserving unrelated dirty delivery work. Replay che
 Blank unified-diff context markers can trigger whitespace warnings; source/prose
 checks are separate. This older checkout is not a full runtime snapshot; do not
 replace the live checkout wholesale. No new frontend assets or dependencies.
+
+Publication: code/evidence commit `bb57933` is local. GitHub authentication blocked
+the noninteractive push; no force push or credential copying was attempted. The
+previous recovery commit `0fc8493` is verified on the remote. Runtime deployment
+and health verification are complete independently of this publication blocker.

@@ -10,6 +10,9 @@ four target hashes verified; API PID, Nginx, connector and configuration unchang
 Existing non-English catalogue parity failure remains; signed Telegram round-trip
 unverified. Runtime-based patch preserves dirty local delivery work; this checkout
 is not full source/runtime parity. [Evidence](search-ack-2026-10-22.md).
+Code/evidence commit `bb57933` is local; push is blocked by GitHub authentication.
+Remote `0fc8493` (the earlier search/cover recovery) was verified. Runtime fix is deployed.
+
 
 ## Search/artwork recovery deployed - 2026-10-21
 
