@@ -284,3 +284,12 @@ cover sample motivated scoped fixes. Artifact `ab739eac183fff74` deployed after
 hash/gzip/304, immutable cover headers, bot polling/API health and protected
 source/configuration verified. No signed Telegram receipt or physical-network
 claim. [Full evidence and rollback detail](search-cover-recovery-2026-10-21.md).
+
+## 2026-10-22 - Early search receipts
+
+Current source inspection identified pre-acknowledgement database/queue/reply work.
+Eight local and 45 distinct cumulative staging cases verify receipt ordering,
+reuse, cancellation/error cleanup and chat/search compatibility. Artifact
+`a5f28398fa68d32c` deployed; polling/hashes and unchanged API/Nginx/connector
+verified. Existing catalogue parity failure retained; real user round-trip open.
+[Full evidence](search-ack-2026-10-22.md).

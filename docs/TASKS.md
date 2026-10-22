@@ -38,3 +38,9 @@ network and signed Telegram first-open timing remain unverified. Stop at A2/A3.
 Timeout classification, cancellable slow-search status and bounded visible-image
 fallback are deployed with scoped checks. [Evidence and replayable patch](search-cover-recovery-2026-10-21.md).
 Remaining: confirm the user-reported songs and signed Telegram/mobile experience.
+
+## Silent text-search recovery - 2026-10-22
+
+Early receipt, bounded cancellation wait, status handover and visible failures are
+deployed; [45-case evidence](search-ack-2026-10-22.md). Remaining: user confirmation
+of the previously silent Telegram query and unrelated catalogue parity maintenance.

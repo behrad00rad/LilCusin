@@ -272,3 +272,11 @@ identity gates; give bounded source/detail searches a usable budget and update
 the existing cancellable status at 6/16s in EN/FA. Cover retries remain on the
 allowlisted proxy and expire after 10s of visibility, leaving a placeholder.
 Hidden lazy images must not expire before selection. [Evidence](search-cover-recovery-2026-10-21.md).
+
+## 2026-10-22 - Acknowledge searches before setup and queue waits
+
+Move plain private text acknowledgement outside language/database setup and action
+serialization. Reuse the receipt; stop updates before result rendering. Bound waits
+for cancellation-resistant tasks with Busy feedback while retaining the mutation
+lock. Unexpected failures complete the receipt instead of leaving Loading.
+[Evidence and deployment limits](search-ack-2026-10-22.md).

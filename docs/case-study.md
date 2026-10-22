@@ -234,3 +234,10 @@ Recovery now distinguishes outages from no-match, communicates ongoing source
 checks in EN/FA and ends stalled cover attempts with a lightweight placeholder.
 [83-case staging and guarded deployment evidence](search-cover-recovery-2026-10-21.md)
 retains the gap between passing checks and actual signed Telegram/mobile use.
+
+## 2026-10-22 - Remove silent waits before search acknowledgement
+
+An early middleware receipt makes database setup and cancellation waits visible.
+The same message becomes results or a clear failure; progress cannot overwrite
+finished results. [45 scoped checks and guarded deployment](search-ack-2026-10-22.md)
+retain concurrency protections and distinguish tests from a real Telegram journey.

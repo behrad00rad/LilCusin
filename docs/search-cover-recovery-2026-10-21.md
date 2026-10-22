@@ -69,3 +69,8 @@ the regression expectations against the newer runtime's test baseline.
 A real metadata-only lookup for Radiohead / Everything In Its Right Place returned
 one accepted recording in 1.32 seconds after deployment. No audio was downloaded
 or sent by the probe; this verifies source discovery, not Telegram playback.
+
+Patch replay check passed against the frozen source with
+`git apply --check --ignore-space-change`: the runtime mixes Windows/Linux line
+endings. Diff whitespace warnings on blank patch context markers are expected;
+the helper, tests and prose pass the scoped whitespace check.

@@ -1,5 +1,16 @@
 # Current handoff
 
+## Early text-search acknowledgement deployed - 2026-10-22
+
+Artifact `a5f28398fa68d32c` sends an EN/FA receipt before database setup or
+old-request waits, reuses it for results, and makes failures/cancellation visible.
+Uncooperative cancellation returns Busy after two seconds without releasing the
+mutation lock. 45 distinct scoped staging cases pass cumulatively. Bot polling and
+four target hashes verified; API PID, Nginx, connector and configuration unchanged.
+Existing non-English catalogue parity failure remains; signed Telegram round-trip
+unverified. Runtime-based patch preserves dirty local delivery work; this checkout
+is not full source/runtime parity. [Evidence](search-ack-2026-10-22.md).
+
 ## Search/artwork recovery deployed - 2026-10-21
 
 Artifact `ab739eac183fff74` fixes swallowed source timeouts and unbounded cover

@@ -1,0 +1,193 @@
+--- a/music_bot/__main__.py
++++ b/music_bot/__main__.py
+@@ -106,6 +106,8 @@
+             dispatcher.message.outer_middleware(LilBroInbound(get_song))
+             dispatcher.edited_message.outer_middleware(LilBroInbound(get_song))
+             dispatcher.update.outer_middleware(update_tasks)
++            from .search_ack import SearchAcknowledgement
++            dispatcher.message.outer_middleware(SearchAcknowledgement())
+             locale_middleware = LanguageMiddleware(database)
+             dispatcher.message.outer_middleware(locale_middleware)
+             dispatcher.callback_query.outer_middleware(locale_middleware)
+--- a/music_bot/handlers.py
++++ b/music_bot/handlers.py
+@@ -372,7 +372,7 @@
+ 
+ @router.message(F.text, ~F.text.lstrip().startswith("/"))
+ async def text_submission(message: Message, submissions: SubmissionService,
+-                          workflow: Workflow, enrichment: Enrichment, chat_service=None, recognition=None) -> None:
++                          workflow: Workflow, enrichment: Enrichment, chat_service=None, recognition=None, search_receipt=None) -> None:
+     if message.chat.type != "private":
+         await message.answer(messages.PRIVATE_ONLY)
+         return
+@@ -399,24 +399,32 @@
+     try:
+         if message.reply_to_message is not None:
+             result = await workflow.correct(user.telegram_user_id, message.reply_to_message.message_id, message.text, fast=chat_service is not None)
++            if search_receipt is not None: await search_receipt.stop()
+             await present(message, result, user.telegram_user_id, workflow, enrichment, chat_service)
+             await dismiss(message.reply_to_message)
+             return
+-        pending = await message.answer(copy('lookup'), reply_markup=cancel_keyboard())
++        pending = (search_receipt.claim() if search_receipt is not None else
++                   await message.answer(copy('lookup'), reply_markup=cancel_keyboard()))
+         from .message_reactions import acknowledge
+         acknowledge(message)
+         acknowledged = monotonic()
+         saved = await submissions.submit_search(user, message.text)
+     except InvalidSubmission:
++        if search_receipt is not None: await search_receipt.stop()
+         if pending is not None:
+             await pending.edit_text(messages.INVALID_TEXT, reply_markup=None)
+         else:
+             await message.answer(messages.INVALID_TEXT)
+         return
+     except FlowError:
+-        await message.answer(messages.STALE)
++        if search_receipt is not None: await search_receipt.stop()
++        if pending is not None:
++            await pending.edit_text(messages.STALE, reply_markup=None)
++        else:
++            await message.answer(messages.STALE)
+         return
+     except SQLAlchemyError:
++        if search_receipt is not None: await search_receipt.stop()
+         logger.error("Could not persist text submission.")
+         if pending is not None:
+             await pending.edit_text(messages.SAVE_FAILED, reply_markup=None)
+@@ -427,6 +435,7 @@
+         started = monotonic()
+         result = await workflow.start(saved.id, user.telegram_user_id, fast=chat_service is not None)
+         logger.info('Chat search completed: %s in %.0f ms.', result.kind, (monotonic() - started) * 1000)
++        if search_receipt is not None: await search_receipt.stop()
+         await present(message, result, user.telegram_user_id, workflow, enrichment, chat_service,
+                       status_message=pending if chat_service is not None else None)
+         logger.info('Chat first results displayed in %.0f ms after acknowledgement.', (monotonic() - acknowledged) * 1000)
+--- a/music_bot/lifecycle.py
++++ b/music_bot/lifecycle.py
+@@ -41,6 +41,17 @@
+                 if not previous.cancelling():
+                     previous.cancel()
+                 try:
++                    done, _ = await asyncio.wait({previous}, timeout=2)
++                    if not done:
++                        if self.waiting.get(user.id) is current:
++                            self.waiting.pop(user.id, None)
++                            from .bot_copy import text as copy
++                            from .chat_ui import cancel_keyboard
++                            if isinstance(event, CallbackQuery):
++                                await event.answer(copy('busy'))
++                            else:
++                                await event.answer(copy('busy'), reply_markup=cancel_keyboard())
++                        return
+                     await asyncio.gather(previous, return_exceptions=True)
+                 except asyncio.CancelledError:
+                     if self.waiting.get(user.id) is current:
+--- /dev/null
++++ b/music_bot/search_ack.py
+@@ -0,0 +1,105 @@
++"""Acknowledge private search text before DB setup or mutation-lock waits."""
++import asyncio
++import logging
++
++from aiogram import BaseMiddleware
++from aiogram.types import Message
++
++from .i18n import language, menu_action
++
++logger = logging.getLogger('music_bot')
++COPY = {
++    'received': ('Searching…', 'دارم جست‌وجو می‌کنم…'),
++    'slow': ('I received your search. Processing is taking longer than usual. You can cancel below.',
++             'جست‌وجویت را دریافت کردم؛ پردازشش بیشتر از معمول طول کشیده. اگر خواستی از پایین لغوش کن.'),
++    'waiting': ('Your search is still processing. I will update this message when it finishes.',
++                'جست‌وجویت هنوز در حال پردازش است. وقتی تمام شود همین پیام را به‌روز می‌کنم.'),
++    'failed': ('I could not finish this search. Please send it again or try /cancel.',
++               'نتوانستم این جست‌وجو را تمام کنم. دوباره بفرست یا /cancel را امتحان کن.'),
++}
++
++
++class SearchReceipt:
++    def __init__(self, message, code):
++        self.message, self.code = message, code
++        self.claimed, self.active, self.notifier = False, True, None
++
++    def text(self, key):
++        return COPY[key][1 if self.code == 'fa' else 0]
++
++    def claim(self):
++        self.claimed = True
++        self.code = language.get()
++        return self.message
++
++    async def stop(self):
++        self.active = False
++        if self.notifier is not None:
++            self.notifier.cancel()
++            await asyncio.gather(self.notifier, return_exceptions=True)
++
++    async def notify(self, delays):
++        from .chat_ui import cancel_keyboard
++        for delay, key in zip(delays, ('slow', 'waiting')):
++            await asyncio.sleep(delay)
++            if not self.active:
++                return
++            try:
++                async with asyncio.timeout(4):
++                    await self.message.edit_text(self.text(key), reply_markup=cancel_keyboard())
++            except Exception:
++                pass  # Status updates never fail the search.
++
++    async def discard(self):
++        try:
++            async with asyncio.timeout(2):
++                await self.message.delete()
++        except Exception:
++            pass
++
++
++class SearchAcknowledgement(BaseMiddleware):
++    def __init__(self, *, delays=(6, 10)):
++        self.delays = delays
++
++    async def __call__(self, handler, event, data):
++        if (not isinstance(event, Message) or not event.from_user or event.from_user.is_bot
++                or event.chat.type != 'private' or event.chat.id != event.from_user.id
++                or not (event.text or '').strip() or event.text.lstrip().startswith('/')
++                or menu_action(event.text) is not None):
++            return await handler(event, data)
++        from .chat_ui import cancel_keyboard
++        code = (event.from_user.language_code or 'en').split('-')[0]
++        try:
++            async with asyncio.timeout(4):
++                message = await event.answer(COPY['received'][1 if code == 'fa' else 0],
++                                             reply_markup=cancel_keyboard())
++        except Exception as error:
++            logger.warning('Search acknowledgement unavailable (%s).', type(error).__name__)
++            return await handler(event, data)  # Retain the handler's normal reply attempt.
++        receipt = SearchReceipt(message, code)
++        data['search_receipt'] = receipt
++        receipt.notifier = asyncio.create_task(receipt.notify(self.delays))
++        failed = cancelled = False
++        try:
++            return await handler(event, data)
++        except asyncio.CancelledError:
++            cancelled = True
++            was_active = receipt.active
++            await receipt.stop()
++            if was_active:
++                await receipt.discard()
++            raise
++        except Exception as error:
++            failed = True
++            logger.error('Search processing failed (%s); details omitted.', type(error).__name__)
++            await receipt.stop()
++            try:
++                async with asyncio.timeout(4):
++                    await receipt.message.edit_text(receipt.text('failed'), reply_markup=None)
++            except Exception:
++                pass
++        finally:
++            await receipt.stop()
++            if not receipt.claimed and not failed and not cancelled:
++                await receipt.discard()
