@@ -63,6 +63,7 @@ class Database:
         from .social_chat import SwapPrompt
         from . import taste_learning
         from .recommendations.queue import QueuedRecommendation
+        from .feed_history import FeedHistory
         async with self.engine.begin() as connection:
             await connection.exec_driver_sql("BEGIN IMMEDIATE")
             await connection.run_sync(migrate)

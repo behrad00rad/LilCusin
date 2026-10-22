@@ -1,6 +1,5 @@
 """Feed discovery from currently consented friend shares, never private taste."""
 from datetime import timedelta
-from uuid import uuid4
 
 from sqlalchemy import select
 
@@ -93,8 +92,6 @@ async def mix_friend_songs(database, telegram_id, rows, *, limit=5, exclude=()):
             position = 1 if personal and limit > 1 else 0
             mixed = personal[:max(0, limit - 1)]
             mixed.insert(position, friend)
-            session.add(RecommendationHistory(user_id=actor, track_id=track_id,
-                reason='From an opted-in friend' if value != 'shared' else 'Shared by a friend',
-                source='friend_positive' if value != 'shared' else 'friend_shared', batch_id=uuid4().hex, position=position))
+            # Composition is prefetch, not a view. Home records one-second visibility.
             return mixed
     return rows[:limit]

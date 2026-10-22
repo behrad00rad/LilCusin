@@ -33,3 +33,6 @@ Home card step 1: local/tested, undeployed. Steps 2/3 pending. See STATE for sco
 
 
 Exchanges cleanup (2026-10-22): steps 1-3 implemented locally (layout/icon controls, friend menus/report/thread wording, secret/happy owl). Evidence in STATE; not deployed. Step 4 durable skipped-card persistence/cooldowns/resume remains pending; stopped at usage-limit boundary.
+
+
+Home persistence step 4 (2026-10-22): implemented locally with private views/skips/hides, cooldowns, action exclusions, queue-backed resume/refill and exhausted state. Scoped evidence/migration requirements in STATE. Deployment and real-phone/offline/EN-FA phone-layout checks remain; optional artist skip ranking deferred.

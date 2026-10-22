@@ -58,6 +58,9 @@ class MiniAppTests(ServiceTestCase):
     async def asyncSetUp(self):
         await super().asyncSetUp()
         self.chat = ChatService(self.database, AsyncMock())
+        async def queued(user, limit=5, *, feed=False):
+            return await self.chat.recommendations.recommend_for_user(user, limit=limit)
+        self.chat.recommendations.queue.reserve.side_effect = queued
         await self.chat.ensure_user(Submitter(123))
         async with self.database.write() as session:
             track = Track(artist='Test', title='Song', metadata_source='lastfm')

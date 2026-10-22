@@ -262,6 +262,8 @@ class Social:
                 if row.state == 'draft':
                     row.state = 'sent';row.sent_at = utc_now()
                     await notice(session, row, row.recipient_id, 'pick')
+                from .feed_history import record_event
+                await record_event(session, actor, row.track_id, 'engaged')
             elif action == 'save':
                 from .taste_learning import feedback
                 await feedback(session,actor,row.track_id,'save')

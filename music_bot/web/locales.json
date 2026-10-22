@@ -663,7 +663,13 @@
     "report_note_limit": "Up to 240 characters. Only the moderation team sees your report.",
     "report_submit": "Send report",
     "owl_secret": "Shh. Just between us.",
-    "owl_happy": "Visible to friends again."
+    "owl_happy": "Visible to friends again.",
+    "feed_caught_up": "All caught up",
+    "feed_caught_up_hint": "Fresh picks are on their way. Your saved songs and card are still in Me.",
+    "feed_more_loved": "More like what you loved",
+    "feed_more_options": "Song options",
+    "feed_not_now": "Not now · hide for 30 days",
+    "feed_not_interested": "Not interested · hide this song"
   },
   "fa": {
     "taste_sharing_title": "آهنگ‌های محبوبم برای دوستام",
@@ -1329,7 +1335,13 @@
     "report_note_limit": "تا ۲۴۰ نویسه؛ فقط تیم رسیدگی گزارشت را می‌بیند.",
     "report_submit": "فرستادن گزارش",
     "owl_secret": "هیس! بین خودمون بمونه.",
-    "owl_happy": "دوستات دوباره می‌بیننش."
+    "owl_happy": "دوستات دوباره می‌بیننش.",
+    "feed_caught_up": "فعلاً همه رو دیدی",
+    "feed_caught_up_hint": "آهنگ‌های تازه در راهن. ذخیره‌ها و کارتت هنوز توی «من» هستن.",
+    "feed_more_loved": "بازم از آهنگ‌های محبوبم بیار",
+    "feed_more_options": "گزینه‌های آهنگ",
+    "feed_not_now": "فعلاً نه · ۳۰ روز نشون نده",
+    "feed_not_interested": "علاقه ندارم · دیگه نشون نده"
   },
   "ar": {
     "for_you": "لك",

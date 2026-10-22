@@ -167,9 +167,33 @@ def create_app(token, chat, workflow, *, bot_username=None):
                     visible.append(item['id'])
                     expected_token = grant.token
         async with capacity:
-            result = await chat.recommendations.recommend_for_user(request['user']['id'], limit=20 if replace else 5)
-        rows = [track_json(row, row.reason) for row in result.recommendations if row.track_id not in exclude]
-        return await bundle(request['user']['id'], rows[:5 if batch else 1] if replace else rows, result.status, visible, expected_token)
+            result = await chat.recommendations.queue.reserve(request['user']['id'], limit=20 if replace else 5, feed=True)
+        # Recheck stored ratings at the response boundary, including catalogue aliases.
+        from .models import Rating
+        from .recommendations.repository import load_items, aliases
+        from .providers.common import TrackCandidate
+        async with chat.database.sessions() as session:
+            rated_tracks = list(await session.scalars(select(Track).join(Rating).join(User)
+                .where(User.telegram_user_id == request['user']['id'])))
+            rated_items = await load_items(session, rated_tracks)
+        rated_ids = set(rated_items)
+        rated_aliases = set().union(*(item.identities for item in rated_items.values())) if rated_items else set()
+        rows = [track_json(row, row.reason) for row in result.recommendations
+                if row.track_id not in exclude and row.track_id not in rated_ids
+                and not aliases(TrackCandidate(title=row.title, artist=row.artist,
+                    source='recommendation', external_ids=getattr(row, 'external_ids', {}))) & rated_aliases]
+        from .friend_recommendations import mix_friend_songs
+        rows = await mix_friend_songs(chat.database, request['user']['id'], rows,
+            limit=(5 if batch else 1) if replace else 5, exclude=exclude)
+        from .feed_history import filter_rows
+        rows = await filter_rows(chat.database, request['user']['id'], rows, exclude)
+        try:
+            return await bundle(request['user']['id'], rows, 'ok' if rows else (
+                'insufficient_preferences' if result.status == 'insufficient_preferences' else 'caught_up'), visible, expected_token)
+        finally:
+            # Grants authorize actions; prefetching never consumes a queue item.
+            if getattr(result, 'batch_id', None):
+                await chat.recommendations.queue.release(request['user']['id'], result.batch_id)
 
     async def search(request):
         data = await body(request)
@@ -279,6 +303,8 @@ def create_app(token, chat, workflow, *, bot_username=None):
     app.router.add_post('/api/channels/connect', channel_connect)
     app.router.add_post('/api/channels/disconnect', channel_disconnect)
     register_channel_api(app,chat,workflow,body,bundle,track_json,capacity)
+    from .feed_api import register_feed_api
+    register_feed_api(app, chat, body)
     register_taste_card_api(app, chat, body, bot_username=bot_username)
     from .social_api import register_social_api
     register_social_api(app, chat, body, bot_username=bot_username)

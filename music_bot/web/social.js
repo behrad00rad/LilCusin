@@ -98,7 +98,7 @@ function makeFeedSwap(swap){
 async function openFeedSwap(token){await switchView('swaps');if(view!=='swaps')return;const fresh=lastResult?.swaps?.find(swap=>swap.token===token);if(fresh)renderSocialSwap(fresh);}
 async function socialStrip(){loadMusicFriendPrompts();const version=generation;try{
  const result=await socialData();if(version!==generation||view!=='for-you')return;
- const incoming=result.swaps.filter(s=>s.role==='recipient'&&s.state==='sent'&&!s.rated&&!s.loved&&!ratedFeedIds.has(s.song.id)).slice(0,3);if(!incoming.length)return;
+ const incoming=result.swaps.filter(s=>s.role==='recipient'&&s.state==='sent'&&!s.rated&&!s.loved&&!ratedFeedIds.has(s.song.id));if(!incoming.length)return;if(!preview){const allowed=await api('feed/swaps');if(version!==generation||view!=='for-you')return;for(let i=incoming.length-1;i>=0;i--)if(!allowed.tokens.includes(incoming[i].token))incoming.splice(i,1);if(!incoming.length)return;}incoming.splice(3);
  const active=deckItems()[deckIndex];let anchor=deckItems()[0];if(!anchor)$('content').replaceChildren();
  for(const swap of incoming){if([...$('content').children].some(el=>el.dataset.swapToken===swap.token))continue;const card=makeFeedSwap(swap);if(anchor)anchor.after(card);else $('content').append(card);anchor=card;}
  if(active)deckIndex=Math.max(0,deckItems().indexOf(active));installDeck();
