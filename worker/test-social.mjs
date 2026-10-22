@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import worker,{routes} from './worker.mjs';
 const root='https://fixture.example';
-const expected=[['/api/delivery-status','POST'],['/api/delivery-request','POST'],['/api/social','GET'],['/api/social/compare','POST'],['/api/social/choices','POST'],['/api/social/draft','POST'],['/api/social/action','POST'],['/api/social/settings','GET'],['/api/social/settings/update','POST'],['/api/social/relationship','POST'],['/api/social/get-song','POST'],['/api/social/unsave','POST']];
+const expected=[['/api/social/thread','POST'],['/api/friend-invites','POST'],['/api/friend-invites/revoke','POST'],['/api/delivery-status','POST'],['/api/delivery-request','POST'],['/api/social','GET'],['/api/social/compare','POST'],['/api/social/choices','POST'],['/api/social/draft','POST'],['/api/social/action','POST'],['/api/social/settings','GET'],['/api/social/settings/update','POST'],['/api/social/relationship','POST'],['/api/social/get-song','POST'],['/api/social/unsave','POST']];
 for(const [path,method] of expected){assert.equal(routes.get(path),method);assert.equal((await worker.fetch(new Request(root+path,{method}),{})).status,401);}
 let received;
 const response=await worker.fetch(new Request(root+'/api/social/action?user_id=foreign',{method:'POST',headers:{'X-Telegram-Init-Data':'fictional-signed','Content-Type':'application/json'},body:JSON.stringify({token:'fictional',action:'save'})}),{LILCUSIN_API:{fetch:async request=>{received=request;return Response.json({saved:true});}}});

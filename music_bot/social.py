@@ -303,6 +303,23 @@ class Social:
                 values.append(await self._projection(session, actor, row))
             return values
 
+    async def thread(self, telegram_id, invitation, before=None):
+        """Bounded participant-only history; every page rechecks current consent."""
+        async with self.database.sessions() as session:
+            actor=await user_id(session,telegram_id)
+            connection=await consent(session,invitation,actor)
+            query=select(SongSwap).where(SongSwap.invitation==invitation,SongSwap.expires_at>utc_now(),
+                (SongSwap.state=='sent')|((SongSwap.state=='draft')&(SongSwap.sender_id==actor)))
+            if before is not None:
+                cursor=await self._swap(session,actor,before,draft=True)
+                if cursor.invitation!=invitation:raise CardError('social_unavailable')
+                query=query.where((SongSwap.created_at<cursor.created_at)|((SongSwap.created_at==cursor.created_at)&(SongSwap.token<cursor.token)))
+            rows=list(await session.scalars(query.order_by(SongSwap.created_at.desc(),SongSwap.token.desc()).limit(41)))
+            page=rows[:40]
+            other=connection.recipient_snapshot if actor==connection.sender_id else connection.sender_snapshot
+            return dict(swaps=[await self._projection(session,actor,row) for row in reversed(page)],
+                before=page[-1].token if len(rows)>40 else None,partner=other.get('nickname',''))
+
     async def remove_save(self,telegram_id,track_id):
         if type(track_id) is not int: raise CardError('social_invalid')
         async with self.database.write() as session:

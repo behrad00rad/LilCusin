@@ -29,8 +29,15 @@ def register_social_api(app, chat, body, *, bot_username=None):
                 rows=(await session.scalars(select(Track).join(SavedSong).where(SavedSong.user_id==actor).order_by(SavedSong.created_at.desc()).limit(50))).all()
                 saved_count=await session.scalar(select(func.count()).select_from(SavedSong).where(SavedSong.user_id==actor))
                 saves=[dict(id=row.id,artist=row.display_artist or row.artist,title=row.display_title or row.title) for row in rows]
-            return dict(swaps=swaps,saves=saves,saved_count=saved_count)
+            from .social_activity import activity
+            updates=await activity(chat.database,request['user']['id'])
+            settings=await service.settings(request['user']['id'])
+            return dict(swaps=swaps,saves=saves,saved_count=saved_count,activity=updates,notifications=settings['notifications'])
         return await run(request,operation)
+
+    async def thread(request):
+        fields=await data(request,['invitation'],['before'])
+        return await run(request,lambda:service.thread(request['user']['id'],**fields))
 
     async def compare(request):
         fields=await data(request,['token'])
@@ -42,7 +49,7 @@ def register_social_api(app, chat, body, *, bot_username=None):
         return await run(request,operation)
 
     async def draft(request):
-        fields=await data(request,['invitation','track_id'],['reply_to'])
+        fields=await data(request,['invitation','track_id'],['reply_to','source_token'])
         return await run(request,lambda:service.draft(request['user']['id'],**fields))
 
     async def act(request):
@@ -76,6 +83,7 @@ def register_social_api(app, chat, body, *, bot_username=None):
         return await run(request,lambda:service.remove_save(request['user']['id'],fields['track_id']))
 
     app.router.add_get('/api/social',home)
+    app.router.add_post('/api/social/thread',thread)
     app.router.add_post('/api/social/compare',compare)
     app.router.add_post('/api/social/choices',choices)
     app.router.add_post('/api/social/draft',draft)
