@@ -97,3 +97,19 @@ class SearchPagesTests(ServiceTestCase):
             max_duration=900, process=AsyncMock(side_effect=cancel))
         with self.assertRaises(FlowError):
             await page_result(self.workflow, 123, 77, self.submission_id, 1, 12)
+
+    async def test_sparse_main_page_reaches_alternatives_without_search_or_index_change(self):
+        from dataclasses import replace
+        rows=[replace(self.rows[0],recording_metadata={'demoted':False}),
+              replace(self.rows[1],recording_metadata={'demoted':True})]
+        async with self.database.write() as session:
+            flow=await session.get(IdentificationFlow,self.submission_id)
+            flow.candidates=[encode_track(row) for row in rows]
+        self.workflow.recording_search=type('NoSearch',(),{'search':AsyncMock(),'process':AsyncMock()})()
+        result=await page_result(self.workflow,123,77,self.submission_id,1,5)
+        keyboard=candidate_keyboard(result,chat=True,offset=5)
+        choices=[b.callback_data for group in keyboard.inline_keyboard for b in group if b.callback_data.startswith('c:')]
+        self.assertEqual(choices,[f'c:{self.submission_id}:1:1'])
+        self.workflow.recording_search.process.assert_not_awaited()
+        selected=await self.workflow.select(self.submission_id,123,1,1)
+        self.assertEqual(selected.title,'Song 1')

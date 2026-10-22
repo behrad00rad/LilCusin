@@ -6,6 +6,8 @@ from aiogram.types import ForceReply, InlineKeyboardButton, InlineKeyboardMarkup
 
 from . import messages
 from .bot_copy import text as copy
+from .recording_metadata import search_label, result_metadata, result_pages
+from .i18n import language
 
 
 def parse_callback(data):
@@ -32,19 +34,20 @@ def rating_keyboard(result):
 
 
 def candidate_keyboard(result, *, chat=False, offset=0, can_expand=True):
+    slots, extent = result_pages(result.candidates)
+    visible = {index for slot,index in slots.items() if offset <= slot < offset + 5}
     rows = [[InlineKeyboardButton(
-        text=messages.candidate_label(candidate.artist, candidate.title) + (
-            f' · YouTube {candidate.youtube_views:,}' if candidate.youtube_views is not None else ''),
+        text=search_label(candidate.artist, candidate.title, candidate.source, locale=language.get(),
+            duration=candidate.duration, metadata=result_metadata(candidate), flags=candidate.recording_metadata.get('flags', ())),
         callback_data=f"c:{result.submission_id}:{result.revision}:{index}",
-    )] for index, candidate in enumerate(result.candidates) if offset <= index < offset + 5]
-    from .i18n import language
+    )] for index, candidate in enumerate(result.candidates) if index in visible]
     navigation = []
     if offset:
         navigation.append(InlineKeyboardButton(text='قبلی' if language.get() == 'fa' else 'Previous',
             callback_data=f'p:{result.submission_id}:{result.revision}:{max(0, offset - 5)}'))
-    if offset + 5 < len(result.candidates) or (chat and can_expand and len(result.candidates) < 60):
+    if offset + 5 < extent or (chat and can_expand and len(result.candidates) < 60):
         navigation.append(InlineKeyboardButton(text='بیشتر' if language.get() == 'fa' else 'More songs',
-            callback_data=f'p:{result.submission_id}:{result.revision}:{min(offset + 5, len(result.candidates))}'))
+            callback_data=f'p:{result.submission_id}:{result.revision}:{min(offset + 5, extent)}'))
     if navigation:
         rows.append(navigation)
     rows.append([InlineKeyboardButton(text=messages.NONE, callback_data=f"n:{result.submission_id}:{result.revision}")])
@@ -56,8 +59,6 @@ def candidate_keyboard(result, *, chat=False, offset=0, can_expand=True):
 
 def candidate_heading(result, *, chat=False):
     heading = messages.CHOOSE + ('\n\n' + copy('search_refine') if chat else '')
-    if any(candidate.youtube_views is not None for candidate in result.candidates):
-        heading += '\n\n' + copy('search_views')
     return heading
 
 

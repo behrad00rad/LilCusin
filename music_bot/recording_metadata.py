@@ -101,11 +101,11 @@ def clean_recording(artist, title, source='', *, searched_artist=None, known_art
 
 
 
-def search_label(artist, title, source='', *, locale='en', limit=52):
-    metadata = clean_recording(artist, title, source)
+def search_label(artist, title, source='', *, locale='en', limit=64, duration=None, metadata=None, flags=()):
+    metadata = metadata or clean_recording(artist, title, source)
     title = metadata.title
     qualifiers = re.findall(r'\([^()]*\)|\[[^\[\]]*\]', title)
-    versions = set().union(*(version_words(part) for part in qualifiers)) if qualifiers else set()
+    versions = (set().union(*(version_words(part) for part in qualifiers)) if qualifiers else set()) | set(flags)
     suffix = re.search(r'\b(live|acoustic|remix|instrumental|cover|karaoke|remaster(?:ed)?|slowed|sped up)(?:\s+(?:at|in)\b.*)?$', title, re.I)
     if suffix and suffix.start() > 0:
         versions |= version_words(suffix[0])
@@ -122,9 +122,96 @@ def search_label(artist, title, source='', *, locale='en', limit=52):
     if len(edition) > 24:
         edition = edition[:23].rstrip() + '…'
     prefix = edition + ' · ' if edition else ''
-    available = max(8, limit-len(prefix))
+    import math
+    duration_text = ''
+    if isinstance(duration, (float, int)) and not isinstance(duration, bool) and math.isfinite(duration) and duration > 0:
+        seconds = int(duration)
+        duration_text = f'{seconds // 60}:{seconds % 60:02d} • '
+    artist = metadata.artist
+    artist = artist if len(artist) <= 22 else artist[:21].rstrip() + '…'
+    suffix = ' — ' + artist if artist else ''
+    available = max(8, limit-len(prefix)-len(duration_text)-len(suffix))
     title = ' '.join(title.split())
-    return prefix + (title if len(title) <= available else title[:available-1].rstrip() + '…')
+    title = title if len(title) <= available else title[:available-1].rstrip() + '…'
+    return duration_text + prefix + title + suffix
+
+
+def result_metadata(row):
+    saved = row.recording_metadata
+    if saved.get('version') == 1:
+        return RecordingMetadata(saved['title'], saved['artist'], saved.get('album'))
+    return clean_recording(row.artist, row.title, row.source)
+
+
+def query_artist(query, rows):
+    """Infer context only from catalogue/Topic credits actually present in the query."""
+    if any(row.source == 'youtube_music' and match_text(row.title or '') == match_text(query) for row in rows):
+        return None  # A complete catalogue title is not evidence for an artist-qualified query.
+    tokens = normalized(query).split()
+    choices = []
+    for row in rows:
+        if row.source == 'youtube_music' or re.search(r'-\s*Topic$', row.artist or '', re.I):
+            artist = clean_recording(row.artist, row.title, row.source).artist
+            width = len(artist.split())
+            if width and len(tokens) > width and any(artist_matches(' '.join(tokens[i:i+width]).strip(' -:'), artist)
+                    for i in range(len(tokens)-width+1)):
+                if not any(artist_matches(artist, other) for other in choices):
+                    choices.append(artist)
+    return choices[0] if len(choices) == 1 else None
+
+
+def prepare_results(query, rows, *, searched_artist=None):
+    """Clean/dedupe discovery once, keeping raw source fields and alternative recordings."""
+    from dataclasses import replace
+    searched_artist = searched_artist or query_artist(query, rows)
+    known = [clean_recording(r.artist, r.title, r.source).artist for r in rows if r.source == 'youtube_music']
+    primary, alternatives, positions = [], [], {}
+    explicit_versions = bool(re.search(r'\b(?:live|concert|cover|karaoke|instrumental|mix|compilation)\b|کاور|کارائوکه|بی.کلام|گلچین|اجرای زنده', query, re.I))
+    for row in rows:
+        raw = row.recording_metadata
+        raw_title = raw.get('raw_title', row.title) or ''
+        channel = raw.get('channel', row.artist) or ''
+        clean = clean_recording(row.artist, row.title if row.source == 'youtube_music' else raw_title,
+            row.source, searched_artist=searched_artist, known_artists=known, channel=channel)
+        text = raw_title + ' ' + channel
+        flags = set()
+        if re.search(r'\bkaraoke\b|کارائوکه', text, re.I): flags.add('karaoke')
+        if re.search(r'\bcovers?\b|کاور', text, re.I): flags.add('cover')
+        if re.search(r'\binstrumental\b|classical guitar|بی.کلام', text, re.I): flags.add('instrumental')
+        compilation = bool((row.duration and row.duration > 480) or re.search(r'\b(?:mix|best of|non[- ]?stop|compilation)\b|گلچین', text, re.I))
+        non_song = bool(searched_artist and (artist_matches(clean.title, searched_artist)
+            or re.fullmatch(r'.*\b(?:iranian|persian)\s+singer\b.*', raw_title, re.I)))
+        if non_song:
+            continue
+        mismatch = bool(searched_artist and not artist_matches(clean.artist, searched_artist))
+        demoted = bool(not explicit_versions and (flags or compilation or mismatch))
+        saved = {**raw, 'version':1, 'artist':clean.artist, 'title':clean.title, 'album':row.album,
+            'duration':row.duration, 'source_id':row.external_ids.get('youtube'),
+            'flags':sorted(flags), 'demoted':demoted, 'searched_artist':searched_artist}
+        row = replace(row, recording_metadata=saved)
+        # Editions cannot disappear into an original-song duplicate.
+        key = (artist_key(clean.artist), match_text(clean.title), tuple(sorted(flags)), tuple(sorted(version_words(raw_title))))
+        bucket = alternatives if demoted else primary
+        quality = (row.source == 'youtube_music', bool(re.search(r'-\s*Topic$', channel, re.I)), not label_credit(channel))
+        if key in positions:
+            previous_bucket, index, old_quality = positions[key]
+            if quality > old_quality:
+                previous_bucket[index] = row
+                positions[key] = (previous_bucket, index, quality)
+        else:
+            positions[key] = (bucket, len(bucket), quality)
+            bucket.append(row)
+    return primary + alternatives
+
+
+def result_pages(rows):
+    """Virtual slots leave the first page clean without changing physical choice indices."""
+    main = [i for i, r in enumerate(rows) if not r.recording_metadata.get('demoted')]
+    other = [i for i, r in enumerate(rows) if r.recording_metadata.get('demoted')]
+    start = max(5, ((len(main)+4)//5)*5) if other else len(main)
+    slots = dict(enumerate(main))
+    slots.update({start+i:index for i,index in enumerate(other)})
+    return slots, (start+len(other) if other else len(main))
 
 
 async def resolve_metadata(track, providers=None):

@@ -9,6 +9,7 @@ from aiogram.types import Message
 from . import messages
 from .interactions import candidate_keyboard
 from .matching import decode_track, encode_track, identity_key
+from .recording_metadata import prepare_results, result_metadata, result_pages
 from .models import IdentificationFlow
 from .workflow import FlowError, Result, active, owned_submission
 
@@ -24,15 +25,17 @@ async def page_result(workflow, user_id, message_id, submission_id, revision, of
         submission = await owned_submission(session, submission_id, user_id)
         flow = await session.get(IdentificationFlow, submission_id)
         active(flow, revision)
+        _, extent = result_pages([decode_track(row) for row in flow.candidates])
         if (flow.state != 'candidates' or flow.prompt_message_id != message_id
-                or offset < 0 or offset > len(flow.candidates) or offset >= 60):
+                or offset < 0 or offset > extent or offset > 65
+                or (offset >= extent and len(flow.candidates) >= 60)):
             raise FlowError('stale')
         original = list(flow.candidates)
         rows = [decode_track(row) for row in original]
         search_query = (' '.join(filter(None, (flow.corrected_artist, flow.corrected_title)))
                         if flow.corrected_artist is not None or flow.corrected_title
                         else submission.raw_text or ' '.join(filter(None, (submission.parsed_artist, submission.parsed_title))))
-    if offset < len(rows):
+    if offset < extent:
         return Result('candidates', submission_id, revision, rows)
     provider = workflow.recording_search
     if provider is None:
@@ -53,17 +56,19 @@ async def page_result(workflow, user_id, message_id, submission_id, revision, of
                 payload = response.get('entries') if isinstance(response, dict) else None
     if not isinstance(payload, list):
         raise FlowError('provider')
-    names = {identity_key(row.artist, row.title) for row in rows}
+    names = {identity_key(result_metadata(row).artist, result_metadata(row).title) for row in rows}
     videos = {row.external_ids.get('youtube') for row in rows} - {None}
     additional = []
-    for entry in payload[:150] if isinstance(payload, list) else []:
-        for row in recordings([entry], music=music, max_duration=provider.max_duration):
-            name = identity_key(row.artist, row.title)
-            video = row.external_ids.get('youtube')
-            if name not in names and video not in videos:
-                additional.append(row)
-                names.add(name)
-                videos.add(video)
+    candidates = recordings(payload[:150], music=music, max_duration=provider.max_duration, limit=60)
+    context = next((r.recording_metadata.get('searched_artist') for r in rows if r.recording_metadata.get('searched_artist')), None)
+    for row in prepare_results(search_query, candidates, searched_artist=context):
+        metadata = result_metadata(row)
+        name = identity_key(metadata.artist, metadata.title)
+        video = row.external_ids.get('youtube')
+        if name not in names and video not in videos:
+            additional.append(row)
+            names.add(name)
+            videos.add(video)
         if len(additional) == min(5, 60 - len(rows)):
             break
     async with workflow.database.write() as session:

@@ -35,3 +35,5 @@ selection canonical snapshot and exact cached send args; step 4 canonical send/t
 and bounded album/art enrichment; step 5 dry-run local-file cache repair; step 6
 end-to-end selection/tag/dry-run integration fixtures. Current delivery can still
 emit Unknown artist; this step does not claim that end-to-end issue is fixed.
+
+Step 2 is now implemented and locally tested; see [result labels and paging](song-metadata-step2-2026-10-22.md). Steps 3-6 remain pending.
