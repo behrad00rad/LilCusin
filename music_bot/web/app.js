@@ -80,7 +80,7 @@ async function initializeTelegram(){
  telegramCall(()=>tg?.ready());telegramCall(()=>tg?.expand());safeArea();
  telegramCall(()=>tg?.onEvent('safeAreaChanged',safeArea));telegramCall(()=>tg?.onEvent('contentSafeAreaChanged',safeArea));
  telegramCall(()=>tg?.onEvent('viewportChanged',fitDeck));
- telegramCall(()=>tg?.BackButton?.onClick(()=>restorePage()));
+ telegramCall(()=>tg?.BackButton?.onClick(()=>guessState?closeGuessGame():restorePage()));
 }
 async function api(path,data,timeout=35000){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeout);try{const response=await fetch(`/api/${path}`,{method:data===undefined?'GET':'POST',headers:{'Content-Type':'application/json','X-Telegram-Init-Data':tg.initData},body:data===undefined?undefined:JSON.stringify(data),signal:controller.signal});let result;try{result=await response.json();}catch{throw new Error(t('error'));}if(!response.ok&&typeof result.error==='string'&&/^(card|invite|social)_[a-z_]+$/.test(result.error))throw new Error(t(result.error));if(!response.ok)throw new Error(t(response.status===401?'open_telegram':response.status===400?'invalid':response.status===403?'stale':'error'));return result;}catch(error){if(error.name==='AbortError')throw new Error(t('error'));throw error;}finally{clearTimeout(timer);}}
 function labels(){$('owl-button').setAttribute('aria-label',t('owl_label'));$('owl-speech').textContent=t(owlCaptionKey||(owlState?(owlState==='tip'?'owl_tip_'+((owlTip+2)%3):'owl_'+owlState):owlDefaultKey()));document.documentElement.lang=locale;document.documentElement.dir=['fa','ar'].includes(locale)?'rtl':'ltr';$('language').value=locale;$('guide-language').value=locale;$('guide-language').setAttribute('aria-label',t('language'));for(const [id,key] of Object.entries({'hero-title':'hero_title','hero-note':'hero_note',discover:'find_song','taste-card-open':'ux_build_card','query-label':'search_label','search-button':'search','search-hint':'search_hint','language-label':'language','guide-link':'guide'}))$(id).textContent=t(key);$('help').setAttribute('aria-label',t('guide'));document.querySelectorAll('[data-key]').forEach(el=>el.textContent=t(el.dataset.key));writePageTitle($('view-title'),view,similarSeed);renderBreadcrumbs();contextLabels();renderPreviewBanner();configureNavigation();}
@@ -520,6 +520,7 @@ async function restorePage(index=pageTrail.length-1){if(index<0)return;const pag
 
 async function openSimilar(card,button){const song=card.songData,version=generation;card.dataset.feedAction='true';button.disabled=true;status(t('loading'));try{const next=preview?{tracks:demo.filter(s=>s.id!==song.id)}:await api('similar',{token:song.token,track_id:song.id});if(version!==generation||!card.isConnected)return;pageTrail.push(snapshot());if(pageTrail.length>12)pageTrail.splice(1,1);await switchView('similar',next,{keepTrail:true,seed:{id:song.id,title:song.title,artist:song.artist}});}catch(error){if(version===generation)status(error.message);}finally{button.disabled=false;}}
 async function loadView(next,restored,options={}){
+ closeGuessGame();
  if(!['search','similar'].includes(next)&&typeof clearMusicSendTarget==='function')clearMusicSendTarget();
  clearSwipe();document.querySelectorAll('.settings-sheet').forEach(sheet=>sheet.close());telegramCall(()=>tg?.enableVerticalSwipes?.());
  document.querySelector('.app-menu').open=false;document.body.classList.remove('feed-ready','feed-tight');if(typeof clearFriendThread==='function')clearFriendThread();$('deck-controls')?.remove();if(!options.keepTrail)pageTrail.length=0;similarSeed=options.seed||null;view=next;clearTimeout(owlTimer);owlState='';owlRest();deckLoading=false;setDeckBusy(false);document.body.dataset.view=view;if(next==='for-you'&&!restored)deckIndex=0;document.querySelector('.hero').hidden=view!=='for-you';const version=++generation;lastResult=null;
@@ -609,6 +610,7 @@ async function boot(){
   if(!preview){for(const id of ['language','guide-language'])$(id).disabled=true;const prefs=await api('preferences',undefined,8000);locale=normalize(prefs.language);guideDone=prefs.ui_guide_done;setupDone=prefs.taste_setup_done!==false;labels();}
   let saved;try{saved=JSON.parse(sessionStorage.getItem(storageKey));if(preview||!saved||Date.now()-saved.time>25*60*1000||saved.view!=='search'||!Array.isArray(saved.result?.tracks)||!saved.result.tracks.length)saved=null;}catch{}
   const entry=new URLSearchParams(location.search).get('view');await switchView(['swaps','connections','card','search'].includes(entry)?entry:saved?.view||'for-you',['swaps','connections','card','search'].includes(entry)?undefined:saved?.result);
+  await openGuessLink();
  }catch{
   status(catalogue.en?t('startup_error'):'Could not connect. Try again. / وصل نشد. دوباره تلاش کن.');
   $('content').replaceChildren(action(catalogue.en?t('retry'):'Retry / تلاش دوباره',()=>location.reload(),'primary'));
@@ -678,4 +680,65 @@ function renderTasteCard(card){syncCardSaved(card);
 function renderInvitations(invitations){renderSocialInvitations(invitations);}
 document.addEventListener('visibilitychange',()=>{if(document.hidden)resetLanguageTransition();});
 window.addEventListener('pagehide',resetLanguageTransition);
+// Guess game: only server projections enter the screen; no answer inference.
+let guessState=null;
+const guessColors=new Map(),guessPreloads=new Map();
+async function guessRequest(path,data){
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),18000);
+ try{const response=await fetch('/api/guess/'+path,{method:data===undefined?'GET':'POST',headers:{'Content-Type':'application/json','X-Telegram-Init-Data':tg?.initData||''},body:data===undefined?undefined:JSON.stringify(data),signal:controller.signal});const result=await response.json();if(!response.ok){const error=new Error(t(result.error==='not_enough'?'guess_not_enough':/^guess_[a-z_]+$/.test(result.error)?result.error:'guess_unavailable'));error.details=result;throw error;}return result;}catch(error){if(error.name==='AbortError')throw new Error(t('guess_retry'));throw error;}finally{clearTimeout(timer);}
+}
+function guessCoverURL(url){return '/cover?url='+encodeURIComponent(artworkURL(url,false));}
+function preloadGuessRound(round){
+ for(const song of round?.options||[]){if(!song.cover_url||guessPreloads.has(song.cover_url))continue;const img=new Image();guessPreloads.set(song.cover_url,img);img.onload=()=>{try{const canvas=document.createElement('canvas');canvas.width=canvas.height=4;const context=canvas.getContext('2d',{willReadFrequently:true});context.drawImage(img,0,0,4,4);const pixels=context.getImageData(0,0,4,4).data,buckets=new Map();for(let i=0;i<pixels.length;i+=4){const key=[pixels[i],pixels[i+1],pixels[i+2]].map(v=>Math.round(v/48)*48).join(',');buckets.set(key,(buckets.get(key)||0)+1);}const color=[...buckets].sort((a,b)=>b[1]-a[1])[0]?.[0];if(color)guessColors.set(song.cover_url,'rgb('+color+')');}catch{} };img.src=guessCoverURL(song.cover_url);if(guessPreloads.size>40){const key=guessPreloads.keys().next().value;guessPreloads.delete(key);guessColors.delete(key);}}
+}
+function closeGuessGame(){const state=guessState;if(!state)return;guessState=null;clearTimeout(state.timer);state.dialog.close();state.dialog.remove();document.body.classList.remove('guess-open');telegramCall(()=>tg?.BackButton?.hide());state.returnFocus?.focus();}
+async function appendGuessEntry(host,friend){
+ if(preview)return;const version=generation;
+ try{const settings=await api('taste-sharing');if(!settings.guess_game||version!==generation||!host.isConnected)return;const result=await guessRequest('status?friend_id='+encodeURIComponent(friend.token));if(!result.permitted||version!==generation||activeFriendThread?.friend.token!==friend.token)return;
+ const box=node('section',undefined,'guess-entry');const name=friend.other.nickname;
+ if(result.eligible){const button=action(t('guess_entry',{name}),()=>startGuessGame(friend,result),'secondary','heart');box.append(button);if(result.new_loves_since_last_game>0)box.append(node('span',t('guess_new',{n:result.new_loves_since_last_game}),'guess-badge'));}
+ else{box.append(node('p',t('guess_locked',{name,have:result.have,need:result.need})));const nudge=action(t(result.nudged?'guess_nudged':'guess_nudge',{name}),async()=>{nudge.disabled=true;try{await guessRequest('nudge',{friend_id:friend.token});setActionLabel(nudge,t('guess_nudged'),'check');}catch(error){notice(error.message);nudge.disabled=false;}},'secondary','send');nudge.disabled=Boolean(result.nudged);box.append(nudge);}
+ host.querySelector('.guess-entry')?.remove();host.insertBefore(box,host.children[1]||null);
+ }catch{} // Feature/status failures never disrupt the friend thread.
+}
+function makeGuessDialog(friend,context){
+ closeGuessGame();const dialog=node('dialog',undefined,'guess-screen');dialog.setAttribute('aria-label',t('guess_entry',{name:friend.other.nickname}));const state={dialog,friend,context,returnFocus:document.activeElement};guessState=state;dialog.oncancel=event=>{event.preventDefault();closeGuessGame();};document.body.append(dialog);document.body.classList.add('guess-open');dialog.showModal();telegramCall(()=>tg?.BackButton?.show());return state;
+}
+function guessHeader(state,idx){
+ const header=node('div',undefined,'guess-header');header.append(action(t('guess_back'),closeGuessGame,'icon-button guess-back','arrow-left'),node('span',t('guess_round',{n:Math.min(idx+1,5)})));
+ const dots=node('div',undefined,'guess-progress');dots.setAttribute('aria-label',t('guess_round',{n:Math.min(idx+1,5)}));for(let i=0;i<5;i++){const dot=node('span',undefined,'guess-dot'+(i<=idx?' is-active':''));dot.setAttribute('aria-hidden','true');dots.append(dot);}header.append(dots);return header;
+}
+async function startGuessGame(friend,context){
+ const state=makeGuessDialog(friend,context);state.dialog.append(guessHeader(state,0),node('p',t('loading'),'hint'));
+ try{const result=await guessRequest('start',{friend_id:friend.token});if(guessState!==state)return;state.gameId=result.game_id;renderGuessRound(state,result.round);}catch(error){if(guessState!==state)return;state.dialog.replaceChildren(guessHeader(state,0),node('p',error.message,'hint'),action(t('retry'),()=>startGuessGame(friend,context),'secondary'));}
+}
+function renderGuessRound(state,round){
+ if(guessState!==state)return;state.round=round;state.picked=null;preloadGuessRound(round);const name=state.friend.other.nickname,dialog=state.dialog;
+ const prompt=node('h1',t('guess_prompt',{name}),'guess-prompt'),grid=node('div',undefined,'guess-grid'),reaction=node('div',undefined,'guess-reaction');reaction.setAttribute('role','status');const owl=owlIllustration('');reaction.append(owl,node('p',''));state.reaction=reaction;
+ for(const song of round.options){const button=node('button',undefined,'guess-option');button.type='button';button.dataset.recordingId=String(song.recording_id);button.setAttribute('aria-label',song.title+' — '+song.artist);const cover=node('span',undefined,'guess-cover');cover.style.backgroundColor=guessColors.get(song.cover_url)||'var(--raised)';if(song.cover_url){const img=node('img');img.src=guessCoverURL(song.cover_url);img.alt='';img.decoding='async';img.onerror=()=>img.remove();cover.append(img);}button.append(cover,node('bdi',song.title,'guess-title'),node('bdi',song.artist,'guess-artist'));button.onclick=()=>pickGuess(state,song.recording_id);grid.append(button);}
+ state.grid=grid;dialog.replaceChildren(guessHeader(state,round.idx),prompt,grid,reaction);dialog.scrollTop=0;dialog.querySelector('button')?.focus();
+}
+async function pickGuess(state,recordingId){
+ if(guessState!==state||state.picked!==null)return;state.picked=recordingId;for(const button of state.grid.children)button.disabled=true;
+ const submit=async()=>{state.dialog.querySelector('.guess-retry')?.remove();const began=Date.now();try{const response=await guessRequest(state.gameId+'/answer',{idx:state.round.idx,recording_id:recordingId});if(guessState!==state)return;preloadGuessRound(response.next_round);
+ const reveal=()=>{if(guessState!==state)return;for(const button of state.grid.children){const id=Number(button.dataset.recordingId),correct=id===response.correct_recording_id,wrong=id===recordingId&&!response.correct;if(correct||wrong){button.classList.add(correct?'is-correct':'is-wrong');button.querySelector('.guess-cover').append(icon(correct?'check':'x'));button.setAttribute('aria-label',button.getAttribute('aria-label')+' · '+t(correct?'guess_correct':'guess_wrong'));}}
+ const owl=state.reaction.querySelector('.owl');owl.setAttribute('class','owl empty-owl '+(response.correct?'bob':'squint'));state.reaction.querySelector('p').textContent=t(response.correct?'guess_nice':'guess_close');state.dialog.append(action(t('guess_next'),()=>response.result?renderGuessResult(state,response.result):renderGuessRound(state,response.next_round),'primary guess-next'));};
+ const delay=matchMedia('(prefers-reduced-motion: reduce)').matches?0:Math.max(0,300-(Date.now()-began));if(delay)state.timer=setTimeout(reveal,delay);else reveal();
+ }catch(error){if(guessState!==state)return;const retry=node('div',undefined,'guess-retry');retry.append(node('p',error.message,'hint'),action(t('guess_retry'),submit,'secondary'));state.dialog.append(retry);}};await submit();
+}
+function guessShare(state,text,url){const share='https://t.me/share/url?url='+encodeURIComponent(url||'')+'&text='+encodeURIComponent(text);if(tg?.openTelegramLink)tg.openTelegramLink(share);else window.open(share,'_blank','noopener');}
+function renderGuessResult(state,result){
+ if(guessState!==state)return;const name=state.friend.other.nickname,heading=node('h1',t('guess_result',{name,score:result.score}),'guess-result-title'),dots=node('div',undefined,'guess-result-dots');
+ for(const correct of result.rounds){const dot=node('span',undefined,correct?'is-correct':'is-wrong');dot.append(icon(correct?'check':'x'));dot.setAttribute('aria-label',t(correct?'guess_correct':'guess_wrong'));dots.append(dot);}const box=node('div',undefined,'guess-result');box.append(owlIllustration(result.score>=3?'bob':'squint'),heading,dots);
+ if(result.missed.length)box.append(node('p',t('guess_missed',{titles:result.missed.join(' · ')}),'guess-missed'));
+ if(result.head_to_head?.you!=null&&result.head_to_head?.them!=null)box.append(node('p',t('guess_head',{you:result.head_to_head.you,name,them:result.head_to_head.them})));
+ const challenge=action(t('guess_challenge',{name}),()=>guessShare(state,t('guess_challenge_text',{name:state.context.your_name||t('guess_friend')}),state.context.challenge_url),'primary');challenge.disabled=!state.context.challenge_url;box.append(challenge);
+ const share=action(t('guess_send'),()=>guessShare(state,t('guess_share_score',{you:state.context.your_name||t('guess_friend'),name,score:result.score}),state.context.share_url),'secondary','share-2');share.disabled=!state.context.share_url;box.append(share);
+ if(result.can_play_again)box.append(action(t('guess_again'),()=>startGuessGame(state.friend,state.context),'secondary','radio'));else box.append(node('p',t('guess_return',{name}),'hint'));
+ state.dialog.replaceChildren(guessHeader(state,4),box);state.dialog.scrollTop=0;
+}
+async function openGuessLink(){
+ const query=new URLSearchParams(location.search),parameter=tg?.initDataUnsafe?.start_param||query.get('tgWebAppStartParam')||'',token=query.get('guess')||(parameter.startsWith('guess_')?parameter.slice(6):'');if(preview||!/^[A-Za-z0-9_-]{32}$/.test(token))return;
+ try{const context=await guessRequest('status?friend_id='+encodeURIComponent(token));if(!context.permitted)return;const friend={token,other:{nickname:context.target_name||t('guess_friend')}};if(context.eligible)await startGuessGame(friend,context);else{await switchView('swaps');await openFriendThread(friend);}}catch(error){notice(error.message);}
+}
 boot();

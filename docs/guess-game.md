@@ -126,3 +126,25 @@ notification persistence/batching/quiet hours/mute and tests, browser RTL/360/39
 checks, live catalogue coverage and real two-person Telegram acceptance.
 
 The exact staged database/API registration passed the signed-auth API case again (29.312s); the exact staged Worker passed the guess routing fixture. This checks the selectively staged prerequisites without claiming a wholly clean checkout run.
+
+
+## Step 3 ? game screens, 2026-10-24
+
+Implemented friend-thread entry with new-Love badge and locked count, full-screen
+five-round choice/reveal/result flow, immutable choice/retry, reduced motion,
+server-projected next-round cover preload, cached sampled dominant-color placeholders,
+reused owl bob/squint states, challenge link and score-only Telegram share sheet.
+Sharing requires the configured bot username; missing configuration disables buttons.
+The status projection adds permission and display-name context so private opt-outs
+are hidden and reverse links open the same authorized friend relationship. Existing
+sharing names only appear in share text; results never include titles/covers in links.
+
+English/Persian logical CSS and translations are implemented; [all new Persian
+strings](guess-game-persian.md) are listed for review. The local UI fixture passed
+immutable/retry picks, right/wrong reveals, preloading, score-only share, Persian
+and reduced motion. The affected signed-auth API case passed (14.039s), plus JS
+syntax and Worker regeneration. No browser surfaces were available and opening
+the in-app browser returned unavailable: requested EN390 locked/reveal/result and
+Persian round/360/390 visual acceptance remains UNVERIFIED. No visual screenshots,
+real Telegram share, push or deployment. Nudge sending and finish notifications
+are the next separate step; the entry's nudge control is wired for that API.

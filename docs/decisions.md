@@ -263,3 +263,8 @@ Use additive private tables and an ordered-pair partial unique index; keep allow
 ## 2026-10-23 — Guess game server privacy boundary
 
 Use the existing opaque friend-relationship token as friend_id. Revalidate current relationship, consent, all five answers and lifetime interaction exclusions before resume/reveal. Candidate-service cached/local metadata and a bounded popular fallback require explicit matching language tags; abstain when safe decoys are unavailable. SQLite writer serialization keeps first picks immutable and resumes free; day limits use Tehran calendar days. Previously dirty consent API/table registration is included narrowly as a prerequisite. [Tradeoffs and evidence](guess-game.md#step-2--server-rules-and-apis-2026-10-23). Local only; UI/notifications pending.
+
+
+## 2026-10-24 ? Guess game screen privacy
+
+Use one modal game state, lock the first pick through network retries, and reuse only server round projections. Sample/cache cover colors during preload; never use mascot art as a cover. Result sharing sends only display names/score and a bot URL; reverse challenge uses the authorized relationship token. No browser visual acceptance yet. [Handoff](guess-game.md#step-3--game-screens-2026-10-24).

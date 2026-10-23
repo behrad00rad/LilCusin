@@ -78,6 +78,7 @@ async function openFriendThread(friend){
  const draw=()=>{timeline.replaceChildren();if(!state.rows.length)timeline.append(node('p',t('thread_empty'),'hint'));if(state.before)timeline.append(action(t('thread_older'),async event=>{event.currentTarget.disabled=true;await load(state.before);},'secondary'));for(const swap of state.rows){const entry=exchangeCard(swap,true);entry.classList.add('thread-entry',swap.role==='sender'?'is-outgoing':'is-incoming');timeline.append(entry);}};
  const load=async before=>{try{const page=preview?{swaps:[],before:null}:await api('social/thread',{invitation:friend.token,...(before?{before}:{})});if(version!==generation||activeFriendThread!==state)return;const seen=new Set(state.rows.map(row=>row.token));state.rows=[...(page.swaps||[]).filter(row=>!seen.has(row.token)),...state.rows];state.before=page.before;draw();}catch(error){if(version!==generation||activeFriendThread!==state)return;timeline.replaceChildren(node('p',error.message,'hint'),action(t('retry'),()=>load(before),'secondary'));}};
  await load();
+ if(activeFriendThread===state)appendGuessEntry(content,friend);
 }
 function backToFriendThread(){return activeFriendThread?openFriendThread(activeFriendThread.friend):switchView('swaps');}
 

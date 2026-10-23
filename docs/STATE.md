@@ -1,5 +1,9 @@
 # Current handoff
 
+## Guess game screens ? 2026-10-24
+
+Local/default off. Friend entry, five-round fullscreen reveal/result, preload, score-only share/challenge and EN/FA logical CSS implemented. UI fixture and affected signed-auth API case passed. Browser inventory empty and in-app browser unavailable: requested visual/360/390 acceptance unverified. Notifications/nudges remain next. [Handoff](guess-game.md#step-3--game-screens-2026-10-24), [Persian review](guess-game-persian.md). No deployment/push/audio change.
+
 ## Guess their taste: server rules/APIs step — 2026-10-23
 
 Local only and default off. Current shared-Love/signature eligibility, lock/alias/version filtering, lifetime decoy exclusions, cache/local candidate fallback, status/start/answer routes, auth, immutable picks/resume, three games per Tehran day and 14-day correct-pick avoidance implemented. Twelve service/API cases plus three connector cases and Worker/bridge checks passed. Explicit language metadata is required; insufficient safe cached decoys fail closed. Game screens, nudges, notifications and visual/live acceptance remain pending. [Details and decisions](guess-game.md#step-2--server-rules-and-apis-2026-10-23). No push/deployment/audio changes.

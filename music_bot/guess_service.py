@@ -171,14 +171,14 @@ class GuessService:
             try:
                 target = await relationship(session, actor, friend_id=friend_id)
             except GuessError:
-                return dict(eligible=False, have=0, need=NEED, new_loves_since_last_game=0,
+                return dict(eligible=False, permitted=False, have=0, need=NEED, new_loves_since_last_game=0,
                             head_to_head={'you': None, 'them': None})
             safe, changed = await answers(session, target)
             have = len({group(item) for item in safe.values()})
             last = await session.scalar(select(func.max(GuessGame.finished_at)).where(
                 GuessGame.guesser_id == actor, GuessGame.target_id == target, GuessGame.status == 'done'))
             new = len({group(safe[key]) for key, when in changed.items() if last and when > last})
-            return dict(eligible=have >= NEED, have=have, need=NEED,
+            return dict(eligible=have >= NEED, permitted=True, have=have, need=NEED,
                         new_loves_since_last_game=new, head_to_head=await head_to_head(session, actor, target))
 
     async def start(self, telegram_id, friend_id):

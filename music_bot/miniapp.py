@@ -287,7 +287,7 @@ def create_app(token, chat, workflow, *, bot_username=None):
 
     app = web.Application(middlewares=[security], client_max_size=16384)
     from .guess_api import register_guess_api
-    register_guess_api(app, chat, body)
+    register_guess_api(app, chat, body, bot_username=bot_username)
     from .taste_sharing import register_taste_sharing
     register_taste_sharing(app, chat, body)
     app.on_cleanup.append(lambda app: artwork.close())
