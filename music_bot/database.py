@@ -65,6 +65,7 @@ class Database:
         from .recommendations.queue import QueuedRecommendation
         from .feed_history import FeedHistory
         from . import guess_game  # Additive, dormant Guess their taste persistence.
+        from .taste_sharing import FriendTasteSharing, GuiltyPleasure
         async with self.engine.begin() as connection:
             await connection.exec_driver_sql("BEGIN IMMEDIATE")
             await connection.run_sync(migrate)

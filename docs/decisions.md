@@ -259,3 +259,7 @@ Deploy the frozen, tested snapshot using explicit Git blobs and runtime hashes, 
 ## 2026-10-23 — Guess game data/consent
 
 Use additive private tables and an ordered-pair partial unique index; keep allow_guess independent of Love sharing. Opt-out removes games about the user; unfriend/block purges both directions inside the existing transaction. This prioritizes revocable visibility over retaining scores. Step 1 only, default-off, local tests; gameplay and notification policy pending. [Evidence/rollback](guess-game.md).
+
+## 2026-10-23 — Guess game server privacy boundary
+
+Use the existing opaque friend-relationship token as friend_id. Revalidate current relationship, consent, all five answers and lifetime interaction exclusions before resume/reveal. Candidate-service cached/local metadata and a bounded popular fallback require explicit matching language tags; abstain when safe decoys are unavailable. SQLite writer serialization keeps first picks immutable and resumes free; day limits use Tehran calendar days. Previously dirty consent API/table registration is included narrowly as a prerequisite. [Tradeoffs and evidence](guess-game.md#step-2--server-rules-and-apis-2026-10-23). Local only; UI/notifications pending.

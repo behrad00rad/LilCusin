@@ -19,6 +19,35 @@ from .types import Item
 logger = logging.getLogger(__name__)
 
 
+async def guess_pool(session, profile, *, limit=600):
+    """Cache/local candidates only; no taste mutations or external requests.
+
+    The caller must apply its stricter, lifetime game exclusions. Popularity is
+    used only to order the bounded same-language fallback, never returned.
+    """
+    from sqlalchemy import func
+    from ..models import Rating, Track
+    primary = await local_candidates(session, profile, {})
+    edges = await load_edges(session, [seed.item.track_id for seed in profile.positives])
+    cached = []
+    for edge in edges:
+        try:
+            item = candidate_item(decode_track(edge.candidate))
+        except (ValueError, KeyError, TypeError):
+            continue
+        if item is not None:
+            cached.append(item)
+    resolved, tracks = await resolve_tracks(session, cached)
+    canonical = await load_items(session, tracks)
+    primary.extend(canonical[key] for key in resolved if key in canonical)
+    popular = select(Rating.track_id, func.count().label('popularity')).where(
+        Rating.value.in_(['love', 'like'])).group_by(Rating.track_id).subquery()
+    tracks = list(await session.scalars(select(Track).outerjoin(popular, popular.c.track_id == Track.id)
+        .order_by(popular.c.popularity.desc().nullslast(), Track.id).limit(limit)))
+    fallback = await load_items(session, tracks)
+    return deduplicate(primary), list(fallback.values())
+
+
 def candidate_item(metadata):
     if not isinstance(metadata, TrackCandidate) or not metadata.artist or not metadata.title:
         return None

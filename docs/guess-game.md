@@ -1,8 +1,8 @@
 # Guess their taste — data and settings, 2026-10-23
 
-Step 1 implemented locally; no deployment or push. The game is not playable yet.
-`GUESS_GAME` defaults off; true/1/yes/on exposes only the new consent control
-in Settings. No gameplay endpoint, notification sender or audio change exists.
+Steps 1–2 implemented locally; no deployment or push. `GUESS_GAME` defaults off.
+The consent control and server game APIs exist; playable screens and notification
+sending remain pending. No audio fetching changes.
 
 ## Data and privacy decisions
 
@@ -46,7 +46,7 @@ opt-out cleanup, repeat initialization, settings flag and existing `/forgetme`.
 No live bot/network/provider calls. Initial sandbox fixture setup failed with
 temporary-directory permissions; tests were rerun outside that sandbox.
 
-Remaining: answer eligibility/current visibility and alias revalidation,
+At the end of step 1, remaining work was: answer eligibility/current visibility and alias revalidation,
 candidate-service decoys and exclusions, five-round creation, start/status/
 answer/nudge APIs and limits, idempotency/repeat avoidance, gameplay/result/
 challenge/share UI, notification queue/batching/quiet-hours/mute, their scoped
@@ -60,3 +60,69 @@ notification privacy guarantees are claimed for code that is not implemented.
 - `guess_allow_help`: فقط از آهنگ‌هایی استفاده می‌شه که دوستات همین حالا می‌بینن. آهنگ‌های محبوب خصوصی‌ات، خصوصی می‌مونن. با خاموش کردنش، بازی‌های مربوط به سلیقه‌ات پاک می‌شن.
 - `guess_on`: روشن
 - `guess_off`: خاموش
+
+## Step 2 — server rules and APIs, 2026-10-23
+
+Implemented `GET /api/guess/status?friend_id=`, `POST /api/guess/start`, and
+`POST /api/guess/{id}/answer`. `friend_id` is the existing opaque 32-character
+friend relationship token used by the thread, not a Telegram or internal user ID.
+All routes inherit signed initData auth and no-store headers. Worker, bridge and
+connector forward only these exact routes and the one validated status query;
+their destination stays fixed. The existing consent settings registration/table
+imports were previously dirty prerequisites and are included narrowly in this
+step's commit; unrelated application edits remain uncommitted.
+
+Correct songs use current unlocked, opted-in shared Loves plus current explicit
+signature selections. Locks filter both aliases and base titles. No existing
+version grouping was found in the relevant matching/candidate modules: the game
+uses normalized titles, strips bracketed edition text and trailing version labels,
+and groups across performers conservatively. Alias identities also prevent reuse.
+
+Decoys come from the existing recommendation candidate module's new read-only
+cache/local pool (shared tags, artist/related-track cache), then a bounded
+popularity-ordered local catalogue fallback. Tags rank genre/era overlap. Language
+requires matching explicit catalogue language tags; script is not treated as proof
+of language. Unknown languages or fewer than 15 safe distinct decoys yield a 503
+`guess_unavailable`, never an unsafe padded game. No provider or bot calls occur.
+The local fallback inspects at most 600 tracks; live catalogue coverage is unverified.
+
+Server exclusions cover all target ratings, locks, signatures, saves, requests,
+submission/signal records, audio-request/selection records, swaps, preferences,
+and feed history regardless of cooldown age. Seen-only history and draft/cancelled
+interactions are excluded conservatively too. Both canonical IDs, aliases and base
+titles are filtered. All 20 option recordings/base songs are distinct in a game.
+Private interactions are never included in responses or errors.
+
+Start resumes a safe open game and expires/replaces stale games after 24 hours.
+There are at most three newly created games per ordered pair per Asia/Tehran
+calendar day (currently UTC+03:30); resuming is free. Completed and unfinished
+correct picks within 14 days are deprioritized when alternatives exist. A single
+SQLite writer transaction serializes simultaneous starts and answers. Answers
+must be sequential and in the persisted option set; the first pick is immutable.
+Repeating the same pick returns the same reveal without incrementing the score;
+a changed pick returns 409. Privacy revocation overrides replay availability.
+
+Start/next-round projections contain only idx and shuffled option display fields.
+The correct option necessarily appears among the four option IDs; no field marks
+which one is correct before a pick. Only the answered round reveals its correct ID.
+All five answers and all decoy exclusions are revalidated before resume/reveal;
+new private locks or target interactions fail closed. Head-to-head uses each
+direction's latest completed score. New-Love badges count current distinct shared
+Loves updated since the previous completed game; the first game has no badge.
+The result offers replay only when five songs remain outside recent correct groups.
+
+Verification: 12 service/API cases passed (11-case run, then the additional
+concurrent-start/wrong-score/unfinished-history case plus the affected daily-limit
+case). Includes real signed-auth middleware, wrong actor, blocks in both directions,
+opt-out, private/locked versions, lifetime exclusions, under-five grouping, resume,
+concurrent duplicate picks, hidden answer fields, scores, signatures, new Loves,
+limits, expiry, language abstention, and unfriend replay denial. Three connector
+cases and Worker/proxy/bridge route checks passed. Tests use temporary SQLite,
+mock providers/bot, and the existing dirty checkout; this is local verification,
+not deployment or a real-user acceptance claim. No new Persian strings in step 2.
+
+Remaining: game/locked/result/challenge/share screens, nudges and their limit,
+notification persistence/batching/quiet hours/mute and tests, browser RTL/360/390
+checks, live catalogue coverage and real two-person Telegram acceptance.
+
+The exact staged database/API registration passed the signed-auth API case again (29.312s); the exact staged Worker passed the guess routing fixture. This checks the selectively staged prerequisites without claiming a wholly clean checkout run.

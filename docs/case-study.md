@@ -220,3 +220,7 @@ The music-identity release now joins consented taste cards, explainable comparis
 ## 2026-10-23 — Revocable friend-game persistence
 
 The first Guess their taste step stores game state separately from Love sharing, enforces one open game per ordered pair, and removes persisted answers when consent is withdrawn or the relationship ends. Ten isolated cases verify the data/settings foundation; gameplay and notifications remain pending. Local only and default off. [Evidence](guess-game.md).
+
+## 2026-10-23 — Guess game answers stay server-side
+
+The second game step separates safe round projections from persisted answers and rechecks privacy before reveals. Lifetime interaction exclusions and version/alias filtering keep private taste out of decoys and locked songs out of answers. Twelve isolated service/API cases and routing checks support the local result; cached language coverage, screens and real friend acceptance remain unverified. [Evidence and limitations](guess-game.md#step-2--server-rules-and-apis-2026-10-23).

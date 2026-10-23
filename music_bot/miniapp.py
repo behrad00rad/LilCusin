@@ -286,6 +286,10 @@ def create_app(token, chat, workflow, *, bot_username=None):
         return web.FileResponse(ASSETS / name)
 
     app = web.Application(middlewares=[security], client_max_size=16384)
+    from .guess_api import register_guess_api
+    register_guess_api(app, chat, body)
+    from .taste_sharing import register_taste_sharing
+    register_taste_sharing(app, chat, body)
     app.on_cleanup.append(lambda app: artwork.close())
     app.router.add_get('/', asset)
     app.router.add_get('/{name:index.html|app.js|social.js|style.css|locales.json|bot-logo.jpg|vazirmatn.woff2|Vazirmatn-OFL.txt}', asset)

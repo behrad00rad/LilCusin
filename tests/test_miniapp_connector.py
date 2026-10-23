@@ -1,9 +1,21 @@
 import asyncio
 import unittest
 from unittest.mock import AsyncMock, MagicMock
-from music_bot.miniapp_connector import answer
+from music_bot.miniapp_connector import answer, route_method
 
 class ConnectorTests(unittest.IsolatedAsyncioTestCase):
+    def test_guess_routes_only_forward_expected_query_and_method(self):
+        friend = 'f' * 32
+        self.assertEqual(route_method('/api/guess/start'), 'POST')
+        self.assertEqual(route_method('/api/taste-sharing', 'POST'), 'POST')
+        self.assertEqual(route_method('/api/guess/'+friend+'/answer'), 'POST')
+        self.assertEqual(route_method('/api/guess/status?friend_id='+friend), 'GET')
+        for path in ['/api/guess/status', '/api/guess/bad/answer',
+                     '/api/guess/start?target=x', '/api/guess/status?friend_id='+friend+'&target=x',
+                     '/api/guess/status?friend_id='+friend+'&friend_id='+friend,
+                     'http://[', 'https://elsewhere/api/guess/status?friend_id='+friend]:
+            self.assertIsNone(route_method(path))
+
     async def test_rejects_other_hosts_paths_methods_and_large_bodies(self):
         session=MagicMock()
         socket=AsyncMock()

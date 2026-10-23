@@ -1,5 +1,9 @@
 # Current handoff
 
+## Guess their taste: server rules/APIs step — 2026-10-23
+
+Local only and default off. Current shared-Love/signature eligibility, lock/alias/version filtering, lifetime decoy exclusions, cache/local candidate fallback, status/start/answer routes, auth, immutable picks/resume, three games per Tehran day and 14-day correct-pick avoidance implemented. Twelve service/API cases plus three connector cases and Worker/bridge checks passed. Explicit language metadata is required; insufficient safe cached decoys fail closed. Game screens, nudges, notifications and visual/live acceptance remain pending. [Details and decisions](guess-game.md#step-2--server-rules-and-apis-2026-10-23). No push/deployment/audio changes.
+
 ## Guess their taste: data/settings step — 2026-10-23
 
 Local only, feature default off. Additive game/round/consent persistence, pair uniqueness, account/forgetme/unfriend/block cleanup and bilingual Settings switch implemented. Ten isolated cases passed (8+1+1); JS syntax, Worker build and whitespace checks passed. Gameplay rules/APIs/screens/notifications and phone visuals remain unimplemented or unverified. See [step handoff and rollback](guess-game.md). Existing dirty work preserved; no push/deployment/audio change.

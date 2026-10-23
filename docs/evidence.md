@@ -268,3 +268,9 @@ Runtime f7f0739 pushed and deployed; 424 cumulative Linux staging cases and five
 ## 2026-10-23 — Guess game step 1
 
 Ten scoped SQLite/settings/forgetme cases passed (8 cases in 109.806s, settings in 31.095s, forgetme in 32.816s), with mocked bot and no provider calls. First sandbox fixture setup failed on temporary-directory permissions; reruns outside sandbox passed. JS/Worker syntax, Worker regeneration and scoped whitespace passed. No game UI, visuals, deployment or real Telegram verification. [Files and remaining work](guess-game.md).
+
+## 2026-10-23 — Guess game service/API verification
+
+Eleven initial isolated service/API cases passed in 198.839s; the added concurrent-start/wrong-score/unfinished-history case and affected daily-limit case passed in 141.877s. Twelve unique service/API cases total. Three connector cases and Worker/proxy/bridge checks passed. Signed auth/no-store exercised in-process; providers/bot mocked, no external calls. Existing dirty checkout; unrelated changes excluded from commit. No browser, deployment or real Telegram acceptance. [Step handoff](guess-game.md#step-2--server-rules-and-apis-2026-10-23).
+
+The exact staged database/API registration passed the signed-auth API case again (29.312s); the exact staged Worker passed the guess routing fixture. This checks the selectively staged prerequisites without claiming a wholly clean checkout run.
