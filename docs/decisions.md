@@ -268,3 +268,8 @@ Use the existing opaque friend-relationship token as friend_id. Revalidate curre
 ## 2026-10-24 ? Guess game screen privacy
 
 Use one modal game state, lock the first pick through network retries, and reuse only server round projections. Sample/cache cover colors during preload; never use mascot art as a cover. Result sharing sends only display names/score and a bot URL; reverse challenge uses the authorized relationship token. No browser visual acceptance yet. [Handoff](guess-game.md#step-3--game-screens-2026-10-24).
+
+
+## 2026-10-24 - Human-triggered game alerts
+
+Use a two-minute finish batch and persistent pair/day attempt cap; retain existing notification permission and add explicit game quiet-hour controls (default 22-08 Tehran). Commit claims before bounded sends, recheck privacy under the writer lock, and never replay uncertain sends. Nudge limits are three days and counts are recalculated before sending. Corrected UTF-8 copy through file-based serialization and added Persian assertions. [Tradeoffs/rollback](guess-game.md).

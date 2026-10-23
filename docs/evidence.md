@@ -279,3 +279,11 @@ The exact staged database/API registration passed the signed-auth API case again
 ## 2026-10-24 ? Guess game screens
 
 Local UI state fixture, JS syntax and affected signed-auth API case (14.039s) passed. Browser inventory was empty; in-app browser open returned unavailable, so no phone/visual claim. Existing dirty edits preserved. [Evidence/limits](guess-game.md#step-3--game-screens-2026-10-24).
+
+
+## 2026-10-24 - Guess game alerts
+
+The combined 32-case run had one Persian-copy encoding failure. After UTF-8 correction, eight notice cases passed (37.417s), then the quiet-race/batch case passed (18.289s). Thirty-three unique related Python cases passed across scoped runs; UI/Unicode and Worker/bridge fixtures pass. Sends/providers mocked; no browser/live acceptance. [Details and limitations](guess-game.md#step-4---nudges-and-notifications-2026-10-24).
+
+
+Exact staged database/API registration passed the batch/quiet-race and signed-auth API checks (2 cases, 3.983s). Exact staged Worker routes, JS syntax and all Persian game-string Unicode assertions passed.

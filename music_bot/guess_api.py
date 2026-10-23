@@ -44,8 +44,36 @@ def register_guess_api(app, chat, body, *, bot_username=None):
         data = await body(request)
         if set(data) != {'idx', 'recording_id'}:
             raise web.HTTPBadRequest(text='guess_invalid')
-        return await run(lambda: service.answer(request['user']['id'], request.match_info['id'], **data))
+        return await run(lambda: service.answer(request['user']['id'], request.match_info['id'], human=not request['user'].get('is_bot',False), **data))
+
+    async def nudge(request):
+        data = await body(request)
+        if set(data) != {'friend_id'} or request['user'].get('is_bot'):
+            raise web.HTTPBadRequest(text='guess_invalid')
+        from .guess_notices import nudge as enqueue
+        return await run(lambda: enqueue(chat.database,request['user']['id'],data['friend_id']))
+
+    async def preferences(request):
+        from .guess_notices import settings
+        data = await body(request) if request.method=='POST' else None
+        return await run(lambda: settings(chat.database,request['user']['id'],data))
+
+    async def notice_lifecycle(app):
+        import asyncio, os
+        from .guess_notices import worker
+        from .guess_game import enabled
+        bot=getattr(chat,'social_bot',None)
+        task=asyncio.create_task(worker(chat.database,bot,os.environ.get('MINIAPP_URL',''))) if bot and enabled() else None
+        try: yield
+        finally:
+            if task:
+                task.cancel()
+                await asyncio.gather(task,return_exceptions=True)
 
     app.router.add_get('/api/guess/status', status)
     app.router.add_post('/api/guess/start', start)
     app.router.add_post('/api/guess/{id}/answer', answer)
+    app.router.add_post('/api/guess/nudge', nudge)
+    app.router.add_get('/api/guess/preferences', preferences)
+    app.router.add_post('/api/guess/preferences', preferences)
+    app.cleanup_ctx.append(notice_lifecycle)

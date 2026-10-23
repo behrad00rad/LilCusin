@@ -1,6 +1,6 @@
-# Guess game Persian strings - 2026-10-24
+# Guess game Persian strings — 2026-10-24
 
-New game UI strings for review.
+All new game, setting and notification strings for review.
 
 | Key | English | Persian |
 |---|---|---|
@@ -38,3 +38,20 @@ New game UI strings for review.
 | guess_return | Come back when {name} loves new songs | وقتی {name} آهنگ‌های تازه‌ای رو خیلی دوست داشت، برگرد |
 | guess_friend | Your friend | دوستت |
 | guess_back | Back to friend | برگشت به دوستت |
+| guess_nudge_limit | You already nudged this friend. Try again after three days. | قبلاً به این دوستت یادآوری کردی. سه روز بعد دوباره تلاش کن. |
+| guess_alerts_title | Game alerts | اعلان‌های بازی |
+| guess_alerts_help | Uses your existing notification permission. Quiet hours use Tehran time (hours 0–23). | فقط وقتی اعلان‌های فعلی‌ات روشن باشن، پیام می‌فرسته. ساعت سکوت به وقت تهرانه (از ۰ تا ۲۳). |
+| guess_alerts_on | Game alerts: on | اعلان‌های بازی: روشن |
+| guess_alerts_off | Game alerts: off | اعلان‌های بازی: خاموش |
+| guess_quiet_start | Quiet from | سکوت از ساعت |
+| guess_quiet_end | Quiet until | سکوت تا ساعت |
+| guess_quiet_save | Save quiet hours | ذخیرهٔ ساعت سکوت |
+| guess_notice_finish | {name} guessed {score}/5 of your taste. Guess theirs? | {name} سلیقه‌ات رو {score} از ۵ حدس زد. تو هم سلیقه‌اش رو حدس می‌زنی؟ |
+| guess_notice_nudge | {name} wants to guess your taste. Love {n} more songs to unlock. | {name} می‌خواد سلیقه‌ات رو حدس بزنه. برای {n} آهنگ دیگه «خیلی دوست دارم» رو بزن تا بازی باز بشه. |
+| guess_notice_nudge_one | {name} wants to guess your taste. Love one more song to unlock. | {name} می‌خواد سلیقه‌ات رو حدس بزنه. برای یه آهنگ دیگه «خیلی دوست دارم» رو بزن تا بازی باز بشه. |
+| guess_notice_batch | {n} games today · latest result | امروز {n} بازی · آخرین نتیجه |
+| guess_notice_open | Guess their taste | سلیقه‌اش رو حدس بزن |
+| guess_notice_mute | Mute this friend | بی‌صدا کردن این دوست |
+| guess_notice_stop | Stop game alerts | توقف اعلان‌های بازی |
+| guess_notice_muted | Game alerts muted. | اعلان‌های بازی بی‌صدا شد. |
+| guess_notice_find | Find songs to Love | آهنگ‌های محبوبت رو پیدا کن |

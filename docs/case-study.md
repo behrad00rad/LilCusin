@@ -229,3 +229,8 @@ The second game step separates safe round projections from persisted answers and
 ## 2026-10-24 ? Friend-game screens
 
 The game UI now advances through locked choices, explicit reveals and score-only sharing while preserving server answer privacy. Local state fixtures passed; real Telegram and phone visuals remain unverified because browser surfaces were unavailable. [Evidence](guess-game.md#step-3--game-screens-2026-10-24).
+
+
+## 2026-10-24 - Bounded friend-game alerts
+
+Game results now queue only after explicit human completion, aggregate into one daily pair alert, and respect current consent, blocks, existing notification permission, quiet hours and mute. Local mocked checks cover batching, suppression, uncertain sends and removal; a Persian encoding regression was caught and corrected. Browser and real Telegram acceptance remain outstanding. [Evidence](guess-game.md).

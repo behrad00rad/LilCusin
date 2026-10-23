@@ -30,9 +30,9 @@ def route_method(path, requested_method=None):
             and re.fullmatch(r'[A-Za-z0-9_-]{32}', query['friend_id'][0])) else None
     if parsed.query:
         return None
-    if parsed.path == '/api/taste-sharing':
+    if parsed.path in {'/api/taste-sharing','/api/guess/preferences'}:
         return requested_method if requested_method in {'GET', 'POST'} else 'GET'
-    if parsed.path == '/api/guess/start' or re.fullmatch(r'/api/guess/[A-Za-z0-9_-]{32}/answer', parsed.path):
+    if parsed.path in {'/api/guess/start','/api/guess/nudge'} or re.fullmatch(r'/api/guess/[A-Za-z0-9_-]{32}/answer', parsed.path):
         return 'POST'
     return ROUTES.get(path)
 

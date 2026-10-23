@@ -178,7 +178,8 @@ class GuessService:
             last = await session.scalar(select(func.max(GuessGame.finished_at)).where(
                 GuessGame.guesser_id == actor, GuessGame.target_id == target, GuessGame.status == 'done'))
             new = len({group(safe[key]) for key, when in changed.items() if last and when > last})
-            return dict(eligible=have >= NEED, permitted=True, have=have, need=NEED,
+            from .guess_notices import nudged
+            return dict(eligible=have >= NEED, permitted=True, nudged=await nudged(session,actor,target), have=have, need=NEED,
                         new_loves_since_last_game=new, head_to_head=await head_to_head(session, actor, target))
 
     async def start(self, telegram_id, friend_id):
@@ -252,7 +253,7 @@ class GuessService:
             session.add_all(rows); await session.flush()
             return dict(game_id=game.id, round=await round_payload(session, rows[0]))
 
-    async def answer(self, telegram_id, game_id, idx, recording_id):
+    async def answer(self, telegram_id, game_id, idx, recording_id, *, human=False):
         if not token_valid(game_id) or type(idx) is not int or not 0 <= idx < NEED or type(recording_id) is not int or recording_id <= 0:
             raise GuessError('guess_invalid', 400)
         async with self.db.write() as session:
@@ -276,6 +277,9 @@ class GuessService:
                 game.score += int(row.correct)
                 if idx == NEED - 1:
                     game.status, game.finished_at = 'done', utc_now()
+                    if human:
+                        from .guess_notices import enqueue_finish
+                        await enqueue_finish(session, game)
                 await session.flush()
             result = None
             if idx == NEED - 1:

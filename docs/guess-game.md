@@ -1,8 +1,8 @@
 # Guess their taste — data and settings, 2026-10-23
 
-Steps 1–2 implemented locally; no deployment or push. `GUESS_GAME` defaults off.
-The consent control and server game APIs exist; playable screens and notification
-sending remain pending. No audio fetching changes.
+Steps 1-4 are implemented locally behind default-off `GUESS_GAME`. No deployment
+or push. Phone visuals and real-user/Telegram acceptance remain unverified.
+No audio fetching changes.
 
 ## Data and privacy decisions
 
@@ -148,3 +148,64 @@ the in-app browser returned unavailable: requested EN390 locked/reveal/result an
 Persian round/360/390 visual acceptance remains UNVERIFIED. No visual screenshots,
 real Telegram share, push or deployment. Nudge sending and finish notifications
 are the next separate step; the entry's nudge control is wired for that API.
+
+
+## Step 4 - nudges and notifications, 2026-10-24
+
+Implemented signed nudge and game-alert preference APIs, a once-per-three-days
+pair nudge, finish queueing only on the first final pick from an explicitly human
+request, and an API-server cleanup-managed worker using the already configured
+bot. The business service defaults human=False; startup/status/replay never
+creates alerts. No second Telegram poller or external messages were run.
+
+The existing social notification permission is required. Added optional game
+alerts and quiet start/end controls because the existing social settings had no
+quiet-hour fields. Defaults are 22:00-08:00 Tehran; users can set an overnight or
+daytime interval (hours 0-23). Muting a friend or stopping game alerts is owner-
+checked and removes queued alerts. Stop applies to game alerts only. Existing
+notification opt-out, suspension, current friendship, allow_guess and block
+checks run again before sending. Nudge text recalculates the number still needed;
+if five songs are now available, it is suppressed. Nudge opens song search;
+finish opens the reverse game directly.
+
+Finish messages batch for two minutes, showing the latest score and number of
+games in that window, with no songs/covers/ratings. Later games that day do not
+create a second alert. A persistent pair/day attempt timestamp also caps old
+quiet-hour backlog and survives deletion of game notice receipts on opt-out.
+A conservative cap of three game-alert attempts per recipient per rolling 24 hours is applied.
+Nudges have their separate three-day pair limit. API acknowledgement means queued,
+not confirmed Telegram delivery. Mute/Stop buttons are included on both kinds.
+
+The send claim commits before the network request. A second write transaction
+rechecks privacy and holds the writer lock through a five-second bounded send,
+so a block/unfriend cannot finish before a stale send. An uncertain/attempted
+send is never automatically retried. Missing MINIAPP_URL leaves notices queued.
+Multiple API workers serialize claims through SQLite. The worker checks every
+30 seconds; flag-off prevents sending and lifecycle cleanup cancels the task.
+
+Migration adds only guess_alert_settings, guess_pairs and guess_notices (including
+a due-state index). Account/forgetme cascade, unfriend/block and opt-out cleanup
+are covered. Before any real-data startup, take the normal consistent private
+SQLite backup with writers stopped. Code rollback can leave these tables unused.
+Permanent removal: stop writers and drop guess_notices, then guess_pairs and
+guess_alert_settings; existing game tables are handled by the step-1 note. No
+real database was initialized or changed in this session.
+
+Verification: the combined related Python run completed 32 cases with one
+Persian-copy encoding failure. The copy was corrected with direct UTF-8 file
+writes; all new Persian keys now have Unicode/content assertions. All eight
+notification cases then passed in a fresh process (37.417s), and the affected
+quiet-hour race/batch case passed again (18.289s). Across scoped runs, 33 unique
+related Python cases passed (10 data, 12 service/API, 8 notices, 3 connector),
+plus the UI state/translation fixture and Worker/proxy/bridge checks. Providers
+and every Telegram send were mocked. Tests ran in the existing dirty checkout;
+unrelated edits are excluded from the commits. [Persian copy review](guess-game-persian.md).
+
+Remaining acceptance: EN390 locked/reveal/result visuals and one Persian round,
+360/390 overflow/tap checks, actual Telegram share/deep-link/notification taps,
+real two-person journeys and live candidate-language coverage. Browser inventory
+was empty and opening the in-app browser returned unavailable, so these visual
+checks could not be performed. No deployment, push, live send or dependency change.
+
+
+Exact staged database/API registration passed the batch/quiet-race and signed-auth API checks (2 cases, 3.983s). Exact staged Worker routes, JS syntax and all Persian game-string Unicode assertions passed.

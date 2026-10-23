@@ -1,9 +1,10 @@
 // The binding is pinned to the bot's loopback HTTP service, never a caller URL.
 export const routes = new Map([
   ['/api/guess/status','GET'], ['/api/guess/start','POST'],
+  ['/api/guess/nudge','POST'],
   ['/api/friend-invites','POST'], ['/api/friend-invites/revoke','POST'],
   ['/api/delivery-status','POST'], ['/api/delivery-request','POST'],
-  ['/api/feed/events','POST'], ['/api/feed/swaps','GET'],
+  ['/api/music','POST'], ['/api/music/grant','POST'], ['/api/music/change','POST'], ['/api/music/undo','POST'], ['/api/feed/events','POST'], ['/api/feed/swaps','GET'],
   ['/api/social/thread','POST'], ['/api/social/unsave','POST'],
   ['/api/social','GET'], ['/api/social/compare','POST'], ['/api/social/choices','POST'], ['/api/social/draft','POST'], ['/api/social/action','POST'], ['/api/social/settings','GET'], ['/api/social/settings/update','POST'], ['/api/social/relationship','POST'], ['/api/social/get-song','POST'],
   ['/api/taste-card/image','POST'], ['/api/comparison-invitations','GET'], ['/api/comparison-invitations/create','POST'], ['/api/comparison-invitations/decide','POST'], ['/api/taste-card','GET'], ['/api/taste-card/update','POST'], ['/api/taste-card/share','POST'], ['/api/taste-card/view','POST'],
@@ -13,7 +14,7 @@ export const routes = new Map([
   ['/api/artwork', 'POST'], ['/api/channels/songs', 'POST'], ['/api/channels/review', 'POST'], ['/api/channels', 'GET'], ['/api/channels/connect', 'POST'], ['/api/channels/disconnect', 'POST'],
 ]);
 export function routeMethod(path, requestedMethod) {
-  if(path==='/api/taste-sharing') return ['GET','POST'].includes(requestedMethod) ? requestedMethod : 'GET';
+  if(['/api/taste-sharing','/api/guess/preferences'].includes(path)) return ['GET','POST'].includes(requestedMethod) ? requestedMethod : 'GET';
   return /^\/api\/guess\/[A-Za-z0-9_-]{32}\/answer$/.test(path) ? 'POST' : routes.get(path);
 }
 export function guessQuery(url) {

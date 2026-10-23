@@ -81,6 +81,8 @@ async def allow_guess(session, user_id, value=None):
         if not value:
             # Withdraw all persisted answers as soon as consent is withdrawn.
             await session.execute(delete(GuessGame).where(GuessGame.target_id == user_id))
+            from .guess_notices import GuessNotice
+            await session.execute(delete(GuessNotice).where(GuessNotice.target_id == user_id))
     return row.allow_guess if row is not None else True
 
 
@@ -90,3 +92,5 @@ async def purge_games(session, first, second=None):
     if second is not None:
         pair &= (GuessGame.guesser_id == second) | (GuessGame.target_id == second)
     await session.execute(delete(GuessGame).where(pair))
+    from .guess_notices import purge
+    await purge(session, first, second)

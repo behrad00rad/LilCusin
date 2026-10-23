@@ -1,5 +1,9 @@
 # Current handoff
 
+## Guess game nudges/notifications - 2026-10-24
+
+Local/default off. UI step committed separately; signed nudges, durable batched finish alerts, pair/day limits, quiet hours, mute/stop, current privacy checks, cleanup and worker lifecycle implemented. Across scoped runs 33 related Python cases passed; initial Persian encoding failure fixed and Unicode assertions added. UI and Worker/bridge fixtures pass. No deployment/push/live send/audio change. Browser unavailable, so requested EN/FA 360/390 visuals and real Telegram acceptance remain unverified. [Handoff/rollback](guess-game.md), [all Persian strings](guess-game-persian.md).
+
 ## Guess game screens ? 2026-10-24
 
 Local/default off. Friend entry, five-round fullscreen reveal/result, preload, score-only share/challenge and EN/FA logical CSS implemented. UI fixture and affected signed-auth API case passed. Browser inventory empty and in-app browser unavailable: requested visual/360/390 acceptance unverified. Notifications/nudges remain next. [Handoff](guess-game.md#step-3--game-screens-2026-10-24), [Persian review](guess-game-persian.md). No deployment/push/audio change.

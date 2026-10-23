@@ -7,6 +7,8 @@ class ConnectorTests(unittest.IsolatedAsyncioTestCase):
     def test_guess_routes_only_forward_expected_query_and_method(self):
         friend = 'f' * 32
         self.assertEqual(route_method('/api/guess/start'), 'POST')
+        self.assertEqual(route_method('/api/guess/nudge'), 'POST')
+        self.assertEqual(route_method('/api/guess/preferences','POST'), 'POST')
         self.assertEqual(route_method('/api/taste-sharing', 'POST'), 'POST')
         self.assertEqual(route_method('/api/guess/'+friend+'/answer'), 'POST')
         self.assertEqual(route_method('/api/guess/status?friend_id='+friend), 'GET')

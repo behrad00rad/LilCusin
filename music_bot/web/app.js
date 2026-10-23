@@ -454,7 +454,7 @@ async function appendTasteSharingSettings(content){
   if(result.guess_game){
    const guessLabel=node('span',t('guess_allow')),guessToggle=node('button',undefined,'secondary');guessToggle.type='button';guessToggle.setAttribute('role','switch');guessToggle.setAttribute('aria-checked',String(result.allow_guess));guessToggle.setAttribute('aria-label',t('guess_allow'));guessToggle.append(icon('user-round'),node('span',t(result.allow_guess?'guess_on':'guess_off')));
    guessToggle.onclick=async()=>{guessToggle.disabled=true;try{await api('taste-sharing',{allow_guess:!result.allow_guess});await show();}catch(error){notice(error.message);guessToggle.disabled=false;}};
-   const guessRow=node('div',undefined,'guess-setting');guessRow.append(guessLabel,guessToggle);section.append(guessRow,node('p',t('guess_allow_help'),'hint'));
+   const guessRow=node('div',undefined,'guess-setting');guessRow.append(guessLabel,guessToggle);section.append(guessRow,node('p',t('guess_allow_help'),'hint'));appendGuessAlertSettings(section);
   }
   section.append(action(t('guilty_manage'),async event=>{
    event.currentTarget.disabled=true;try{
@@ -680,6 +680,13 @@ function renderTasteCard(card){syncCardSaved(card);
 function renderInvitations(invitations){renderSocialInvitations(invitations);}
 document.addEventListener('visibilitychange',()=>{if(document.hidden)resetLanguageTransition();});
 window.addEventListener('pagehide',resetLanguageTransition);
+async function appendGuessAlertSettings(host){
+ const section=node('section',undefined,'guess-alert-settings');host.append(section);
+ const show=async()=>{try{const prefs=await guessRequest('preferences');if(!section.isConnected)return;section.replaceChildren(node('h3',t('guess_alerts_title')),node('p',t('guess_alerts_help'),'hint'));
+ const toggle=action(t(prefs.alerts?'guess_alerts_on':'guess_alerts_off'),async()=>{toggle.disabled=true;try{await guessRequest('preferences',{...prefs,alerts:!prefs.alerts});await show();}catch(error){notice(error.message);toggle.disabled=false;}},'secondary','shield');toggle.setAttribute('aria-pressed',String(prefs.alerts));section.append(toggle);
+ const form=node('form'),inputs={};for(const key of ['quiet_start','quiet_end']){const label=node('label',t('guess_'+key)),input=node('input');input.type='number';input.min='0';input.max='23';input.step='1';input.required=true;input.value=prefs[key];input.style.inlineSize='72px';label.append(input);form.append(label);inputs[key]=input;}const save=action(t('guess_quiet_save'),()=>{},'secondary');save.type='submit';form.append(save);form.onsubmit=async event=>{event.preventDefault();save.disabled=true;try{await guessRequest('preferences',{alerts:prefs.alerts,quiet_start:Number(inputs.quiet_start.value),quiet_end:Number(inputs.quiet_end.value)});await show();}catch(error){notice(error.message);save.disabled=false;}};section.append(form);
+ }catch(error){section.replaceChildren(node('p',error.message,'hint'),action(t('retry'),show,'secondary'));}};await show();
+}
 // Guess game: only server projections enter the screen; no answer inference.
 let guessState=null;
 const guessColors=new Map(),guessPreloads=new Map();
