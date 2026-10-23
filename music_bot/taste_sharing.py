@@ -66,11 +66,16 @@ async def own_rating_states(database, telegram_id, tracks):
 def register_taste_sharing(app, chat, body):
     async def settings(request):
         enabled = None
+        guess_value = None
+        from .guess_game import enabled as guess_enabled, allow_guess
         if request.method == 'POST':
             data = await body(request)
-            if set(data) != {'enabled'} or type(data['enabled']) is not bool:
+            if set(data) == {'allow_guess'} and guess_enabled() and type(data['allow_guess']) is bool:
+                guess_value = data['allow_guess']
+            elif set(data) == {'enabled'} and type(data['enabled']) is bool:
+                enabled = data['enabled']
+            else:
                 raise web.HTTPBadRequest(text='Choose whether to share positive ratings.')
-            enabled = data['enabled']
         async with chat.database.write() as session:
             actor = await session.scalar(select(User.id).where(User.telegram_user_id == request['user']['id']))
             row = await session.get(FriendTasteSharing, actor)
@@ -80,7 +85,10 @@ def register_taste_sharing(app, chat, body):
                     session.add(row)
                 else:
                     row.enabled = enabled
-            return web.json_response({'enabled': bool(row and row.enabled)})
+            result = {'enabled': bool(row and row.enabled), 'guess_game': guess_enabled()}
+            if result['guess_game']:
+                result['allow_guess'] = await allow_guess(session, actor, guess_value)
+            return web.json_response(result)
 
     async def private_likes(request):
         async with chat.database.sessions() as session:

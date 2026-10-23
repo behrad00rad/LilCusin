@@ -1,5 +1,9 @@
 # Current handoff
 
+## Guess their taste: data/settings step — 2026-10-23
+
+Local only, feature default off. Additive game/round/consent persistence, pair uniqueness, account/forgetme/unfriend/block cleanup and bilingual Settings switch implemented. Ten isolated cases passed (8+1+1); JS syntax, Worker build and whitespace checks passed. Gameplay rules/APIs/screens/notifications and phone visuals remain unimplemented or unverified. See [step handoff and rollback](guess-game.md). Existing dirty work preserved; no push/deployment/audio change.
+
 ## Direct delivery and unseen feed refresh - local, 2026-10-21
 
 Implementation `61150aa`: explicit signed POST /api/delivery-request validates

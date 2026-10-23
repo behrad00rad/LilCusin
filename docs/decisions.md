@@ -255,3 +255,7 @@ Telegram receipt/playback remains unverified; Mini App unchanged.
 ## 2026-10-19 — Verified release
 
 Deploy the frozen, tested snapshot using explicit Git blobs and runtime hashes, preserving concurrent recording-search edits. Keep private configuration and persistent data; use a consistent backup and rollback guard. Longer cold-start readiness succeeded after a safe rollback. See [release evidence](deployment-2026-10-19.md).
+
+## 2026-10-23 — Guess game data/consent
+
+Use additive private tables and an ordered-pair partial unique index; keep allow_guess independent of Love sharing. Opt-out removes games about the user; unfriend/block purges both directions inside the existing transaction. This prioritizes revocable visibility over retaining scores. Step 1 only, default-off, local tests; gameplay and notification policy pending. [Evidence/rollback](guess-game.md).

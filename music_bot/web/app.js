@@ -451,6 +451,11 @@ async function appendTasteSharingSettings(content){
    if(preview){notice(t('preview_only'));return;}if(!result.enabled&&!window.confirm(t('privacy_confirm_enable')))return;toggle.disabled=true;
    try{await api('taste-sharing',{enabled:!result.enabled});await show();}catch(error){notice(error.message);toggle.disabled=false;}
   },'secondary','shield');toggle.setAttribute('aria-pressed',String(result.enabled));section.append(toggle);
+  if(result.guess_game){
+   const guessLabel=node('span',t('guess_allow')),guessToggle=node('button',undefined,'secondary');guessToggle.type='button';guessToggle.setAttribute('role','switch');guessToggle.setAttribute('aria-checked',String(result.allow_guess));guessToggle.setAttribute('aria-label',t('guess_allow'));guessToggle.append(icon('user-round'),node('span',t(result.allow_guess?'guess_on':'guess_off')));
+   guessToggle.onclick=async()=>{guessToggle.disabled=true;try{await api('taste-sharing',{allow_guess:!result.allow_guess});await show();}catch(error){notice(error.message);guessToggle.disabled=false;}};
+   const guessRow=node('div',undefined,'guess-setting');guessRow.append(guessLabel,guessToggle);section.append(guessRow,node('p',t('guess_allow_help'),'hint'));
+  }
   section.append(action(t('guilty_manage'),async event=>{
    event.currentTarget.disabled=true;try{
     const data=preview?{tracks:[]}:await api('taste-sharing/private'),list=node('div');

@@ -123,6 +123,8 @@ async def notice(session, swap, user, event):
 
 
 async def stop_interactions(session, first, second=None):
+    from .guess_game import purge_games
+    await purge_games(session, first, second)
     pair = ((SongSwap.sender_id == first) | (SongSwap.recipient_id == first))
     invites = ((ComparisonInvitation.sender_id == first) | (ComparisonInvitation.recipient_id == first))
     if second is not None:

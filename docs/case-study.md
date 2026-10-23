@@ -216,3 +216,7 @@ Telegram receipt/playback remains unverified; Mini App unchanged.
 ## 2026-10-19 — Verified release
 
 The music-identity release now joins consented taste cards, explainable comparisons and reciprocal song exchange across chat and Mini App. It is committed and deployed, with measured staging and runtime evidence; public connectivity and real two-account delivery remain explicit validation gaps. See [release evidence](deployment-2026-10-19.md).
+
+## 2026-10-23 — Revocable friend-game persistence
+
+The first Guess their taste step stores game state separately from Love sharing, enforces one open game per ordered pair, and removes persisted answers when consent is withdrawn or the relationship ends. Ten isolated cases verify the data/settings foundation; gameplay and notifications remain pending. Local only and default off. [Evidence](guess-game.md).

@@ -1,5 +1,9 @@
 {
   "en": {
+    "guess_allow": "Let friends guess my taste",
+    "guess_allow_help": "Uses only songs already shared with friends. Private Loves stay private. Turning this off removes games about your taste.",
+    "guess_on": "On",
+    "guess_off": "Off",
     "taste_sharing_title": "Share my Loves with friends",
     "taste_sharing_help": "Off by default. When enabled, accepted friends can discover unlocked Loves. Like, Neutral and Dislike stay private. Already sent songs cannot be recalled.",
     "taste_sharing_on": "Sharing Loves: on",
@@ -672,6 +676,10 @@
     "feed_not_interested": "Not interested · hide this song"
   },
   "fa": {
+    "guess_allow": "دوستام سلیقه‌ام رو حدس بزنن",
+    "guess_allow_help": "فقط از آهنگ‌هایی استفاده می‌شه که دوستات همین حالا می‌بینن. آهنگ‌های محبوب خصوصی‌ات، خصوصی می‌مونن. با خاموش کردنش، بازی‌های مربوط به سلیقه‌ات پاک می‌شن.",
+    "guess_on": "روشن",
+    "guess_off": "خاموش",
     "taste_sharing_title": "آهنگ‌های محبوبم برای دوستام",
     "taste_sharing_help": "پیش‌فرض خاموشه. اگر روشنش کنی، دوستات آهنگ‌های لاوشدهٔ بدون قفل رو توی پیشنهادها می‌بینن. بقیهٔ امتیازها خصوصیه؛ آهنگ‌های قبلاً فرستاده‌شده پس گرفته نمی‌شن.",
     "taste_sharing_on": "اشتراک آهنگ‌های محبوب: روشن",

@@ -264,3 +264,7 @@ Telegram receipt/playback remains unverified; Mini App unchanged.
 ## 2026-10-19 — Verified release
 
 Runtime f7f0739 pushed and deployed; 424 cumulative Linux staging cases and five Node checks passed. VPS hashes/services/moderator/auth gates verified; Cloudflare publication confirmed. Public retrieval and real Telegram journeys remain unverified. See [release evidence](deployment-2026-10-19.md).
+
+## 2026-10-23 — Guess game step 1
+
+Ten scoped SQLite/settings/forgetme cases passed (8 cases in 109.806s, settings in 31.095s, forgetme in 32.816s), with mocked bot and no provider calls. First sandbox fixture setup failed on temporary-directory permissions; reruns outside sandbox passed. JS/Worker syntax, Worker regeneration and scoped whitespace passed. No game UI, visuals, deployment or real Telegram verification. [Files and remaining work](guess-game.md).
