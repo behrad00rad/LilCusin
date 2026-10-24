@@ -1,5 +1,11 @@
 # LilCusin 🎵
 
+**LilCusin** is a Telegram-first music discovery product that helps people
+identify and find songs, build a personal taste profile, and discover music
+through recommendations and consent-based social features. See
+[Introducing LilCusin](docs/introducing-lilcusin.md) for a feature overview and
+[recent project updates](docs/evidence.md#2026-10-24---project-overview-and-recent-updates).
+
 A Telegram bot that learns what music you like. Send it a song, rate the match,
 and ask for recommendations.
 

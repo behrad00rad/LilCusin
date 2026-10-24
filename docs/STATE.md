@@ -1,5 +1,12 @@
 # Current handoff
 
+## Project introduction documentation - 2026-10-24
+
+Added [a product feature overview](introducing-lilcusin.md) and README links to
+it and the recent update record. This is documentation only. GitHub was
+unreachable during the update; remote contents and publication remain
+unverified. See [evidence](evidence.md#2026-10-24---project-overview-and-recent-updates).
+
 ## Early text-search acknowledgement deployed - 2026-10-22
 
 Artifact `a5f28398fa68d32c` sends an EN/FA receipt before database setup or

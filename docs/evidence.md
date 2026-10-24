@@ -311,3 +311,38 @@ reuse, cancellation/error cleanup and chat/search compatibility. Artifact
 `a5f28398fa68d32c` deployed; polling/hashes and unchanged API/Nginx/connector
 verified. Existing catalogue parity failure retained; real user round-trip open.
 [Full evidence](search-ack-2026-10-22.md).
+
+# 2026-10-24 - Project overview and recent updates
+
+Added a public-facing LilCusin introduction and linked it from the repository
+README. The overview gathers the documented discovery, recognition, Get song,
+ratings, recommendations, Mini App, channel, social sharing and privacy
+capabilities in one place.
+
+The recent-update summary reflects the checkout handoff: artwork/startup
+performance and slow-source recovery are documented as deployed; early private
+text-search acknowledgement and bounded cancellation are documented as
+deployed; the stricter catalogue-attributed original-source policy remains local
+and undeployed. The checkout contains pre-existing unrelated dirty code; this
+documentation task did not modify it. No application tests were run. Documentation
+links, scoped diff and whitespace were inspected locally. GitHub could not be
+reached from this environment, so remote state and publication are unverified.
+
+## Recent runtime changes summarized
+
+- Public Mini App assets reuse available artwork variants and support compression
+  and cache validation to reduce repeat transfer cost.
+- Slow source-search failures remain distinct from a clean no-match; Get song
+  reports bounded progress and retains cancellation. Cover retries have bounded
+  waits and leave a placeholder when unavailable.
+- Private text searches receive an early acknowledgement before setup or queued
+  action waits; progress, failure and cancellation are surfaced in that status.
+- Persian Get song matching was corrected to require artist evidence and use
+  unambiguous recording aliases. A stricter catalogue-attributed original-source
+  policy is a separate local-only change and is not described as deployed.
+
+Evidence and limitations: the dated [STATE handoff](STATE.md), linked release
+evidence therein, and the relevant [decision history](decisions.md) record
+targeted checks and guarded runtime verification. Physical mobile behavior,
+signed Telegram round trips, and playback are not established by those checks.
+This overview is documentation, not a new runtime release.

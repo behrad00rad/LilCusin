@@ -259,3 +259,14 @@ An early middleware receipt makes database setup and cancellation waits visible.
 The same message becomes results or a clear failure; progress cannot overwrite
 finished results. [45 scoped checks and guarded deployment](search-ack-2026-10-22.md)
 retain concurrency protections and distinguish tests from a real Telegram journey.
+
+# 2026-10-24 - Make the product easier to introduce
+
+LilCusin's documented feature set had grown across search, recognition, Get
+song, personalized recommendations, social taste sharing and its Telegram Mini
+App. A single introduction now gathers those user-facing capabilities and links
+to the setup guides, while the README points readers to that overview and the
+recent evidence record. The summary keeps deployed reliability improvements
+separate from the local-only stricter original-source policy. This is a
+documentation change only; no application behavior changed. GitHub publication
+and real-user product verification remain unconfirmed.
