@@ -105,6 +105,18 @@ If a match is wrong, choose another candidate or reply to the correction prompt
 with a song name (the artist is optional). `/cancel` closes an unfinished search. The match is
 based on metadata and can be wrong even when the names look similar.
 
+### Recent reliability updates
+
+October 2026 runtime releases reduced repeat Mini App artwork transfers with
+reusable image variants, compression and cache validation. Slow song-source
+searches now show bounded English/Persian progress and cancellation, distinguish
+provider timeouts from definite no-match results, and leave a placeholder when
+artwork cannot load. Private text searches receive an early acknowledgement
+before setup or queued-action waits, with failures and cancellation made visible.
+The deployed Vigen/Viguen correction requires artist evidence and uses verified
+recording aliases. The stricter catalogue-only original-source policy remains
+local and is not deployed. See the [release evidence and verification limits](docs/evidence.md#2026-10-24---project-overview-and-recent-updates).
+
 Search and version results have **Close** controls. Delivery keeps one status
 message with contextual cancellation, retry, and recording choices. Ratings after
 delivery are optional. Recently expired song controls can recover using retained
@@ -359,10 +371,10 @@ The chat flow, rating controls, delivery performance and metadata recovery chang
 are summarized in [the October 17 release record](docs/chat-release-2026-10-17.md).
 
 
-### Local social-loop additions (not deployed)
+### Social features and development status
 
-The current uncommitted implementation includes consented selected-song comparisons,
-reciprocal picks and interaction controls in chat and the Mini App. Bot commands:
-`/swaps`, `/savedsongs`, `/socialsettings`; existing `/cardimage` and `/invitations`
-remain. Operator review uses `/socialreports` only for explicitly configured
-`LILCUSIN_MODERATOR_IDS`. See [contract, tests and release gates](docs/social-loop-release-2026-10-19.md).
+Taste cards support controlled previews and revocable sharing. Friend-based
+recommendations are a consent-scoped design and are not an implemented recommender.
+Selected-song comparisons, reciprocal picks and related interaction controls have
+a local implementation, but are not deployed or available in the published
+runtime. See [the contract, tests and release gates](docs/social-loop-release-2026-10-19.md).

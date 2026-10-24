@@ -42,15 +42,17 @@ status are called out separately where relevant.
 - A private saved library and taste cards provide ways to keep and present
   selected music. Taste sharing is deliberate and revocable.
 
-## Discover with other listeners
+## Share music with other listeners
 
-- Accepted friends can optionally share taste for friend-based discovery. The
-  feature is consent- and access-checked; personal ratings are not automatically
-  exposed. A separate purple lock control keeps a song out of friend discovery
-  while preserving its private rating.
-- Taste cards can be previewed and shared through revocable, owner-controlled
-  links. Comparison and reciprocal song exchange are explicit interactions;
-  LilCusin does not claim an unsupported compatibility score.
+- Taste cards support controlled previews and revocable, owner-controlled
+  sharing. Private ratings are not automatically exposed.
+- A distinct purple privacy lock marks a song as private, independently of its
+  Like or Love rating. It does not enable sharing when unlocked.
+- Friend-based recommendations remain a consent-scoped design; an implemented
+  friend recommender is not included in this repository state.
+- Selected-song comparisons, reciprocal picks and related controls have a local
+  implementation, but are not deployed. LilCusin does not claim an unsupported
+  compatibility score.
 - An optional connected playlist channel can provide new song posts as weak
   taste signals after identification. Historical posts are not imported.
 
