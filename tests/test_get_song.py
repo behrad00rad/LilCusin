@@ -9,7 +9,7 @@ from music_bot.chat_service import ChatService
 from music_bot.models import Track
 from music_bot.get_song import GetSong, FetchSettings
 from music_bot.fetch_models import AudioRequest, AudioDelivery, FetchJob, AudioSelection
-from music_bot.youtube_fetch import FetchError, rank_candidates, confident
+from music_bot.youtube_fetch import FetchError, rank_candidates, confident, YouTubeFetcher
 from music_bot.workflow import FlowError
 from music_bot.submissions import Submitter
 
@@ -55,6 +55,70 @@ class GetSongTests(ServiceTestCase):
         self.assertEqual(self.fetcher.fetch.await_count, 1)
         self.assertEqual(self.bot.send_audio.call_args.kwargs['audio'], 'telegram-file')
         self.assertEqual(list(self.service.root.iterdir()), [])
+
+    def strict_fetcher(self, rows):
+        fetcher = YouTubeFetcher(self.service.settings)
+        fetcher.search = AsyncMock(return_value=rows)
+        fetcher.fetch = AsyncMock(side_effect=self.audio)
+        self.service.fetcher = fetcher
+        return fetcher
+
+    async def test_legacy_unverified_cache_and_preference_cannot_bypass_original_policy(self):
+        request = await self.service.request(123, self.track_id)
+        await self.service.execute((await self.job(request))[0])
+        async with self.database.write() as s:
+            req = await s.get(AudioRequest, request)
+            s.add(AudioSelection(user_id=req.user_id, track_id=self.track_id, video_id=VIDEO, rejected_ids=[]))
+        fetcher = self.strict_fetcher([])
+        retry = await self.service.request(123, self.track_id)
+        await self.service.execute((await self.job(retry))[0])
+        self.assertEqual(self.bot.send_audio.await_count, 1)
+        fetcher.fetch.assert_not_awaited()
+        self.assertEqual((await self.job(retry))[1], 'failed')
+        async with self.database.sessions() as s:
+            self.assertIsNone((await s.scalar(select(AudioSelection))).video_id)
+            self.assertIsNotNone(await s.scalar(select(AudioDelivery)))  # No bulk cache deletion.
+
+    async def test_verified_catalogue_cache_remains_reusable(self):
+        self.fetcher.search.return_value[0]['source_policy'] = 'catalogue-original-v1'
+        request = await self.service.request(123, self.track_id)
+        await self.service.execute((await self.job(request))[0])
+        fetcher = self.strict_fetcher([])
+        retry = await self.service.request(123, self.track_id)
+        await self.service.execute((await self.job(retry))[0])
+        fetcher.search.assert_not_awaited()
+        fetcher.fetch.assert_not_awaited()
+        self.assertEqual((await self.job(retry))[1], 'done')
+
+    async def test_legacy_choice_cannot_authorize_unverified_original(self):
+        self.fetcher.search.return_value[0]['exact'] = False
+        request = await self.service.request(123, self.track_id)
+        await self.service.execute((await self.job(request))[0])
+        self.strict_fetcher([])
+        with self.assertRaises(FlowError):
+            await self.service.choose(123, request, 9, 0)
+
+    async def test_explicit_alternatives_keep_manual_choice_separate(self):
+        rows = [dict(id=VIDEO, title='Artist - Song', artist='Artist', duration=200,
+                     score=1, exact=False, recording_title='Song')]
+        fetcher = self.strict_fetcher(rows)
+        request = await self.service.request(123, self.track_id, other_versions=True)
+        await self.service.execute((await self.job(request))[0])
+        self.assertEqual((await self.job(request))[1], 'choice')
+        fetcher.fetch.assert_not_awaited()
+        await self.service.choose(123, request, 9, 0)
+        async with self.database.sessions() as s:
+            req = await s.get(AudioRequest, request)
+            selected = await s.get(FetchJob, req.job_id)
+            self.assertEqual(selected.metadata_json['source_policy'], 'explicit-alternative-v1')
+        await self.service.execute((await self.job(request))[0])
+        self.assertEqual((await self.job(request))[1], 'done')
+        # An explicitly chosen unlabelled alternative must not become the default original.
+        fetcher.search.return_value = []
+        retry = await self.service.request(123, self.track_id)
+        await self.service.execute((await self.job(retry))[0])
+        self.assertEqual((await self.job(retry))[1], 'failed')
+        self.assertEqual(self.bot.send_audio.await_count, 1)
 
     async def test_artwork_exception_or_timeout_does_not_block_audio_delivery(self):
         await self.check_artwork_failure(RuntimeError('private details'))
@@ -221,7 +285,7 @@ class GetSongTests(ServiceTestCase):
         await self.service.execute((await self.job(req))[0])
         self.assertEqual((await self.job(req))[1], 'failed')
         self.assertEqual(self.fetcher.search.await_count, 2)
-        self.assertIn('source search failed', self.bot.send_message.await_args.args[1])
+        self.assertIn('Could not verify an original recording', self.bot.send_message.await_args.args[1])
 
     async def test_wrong_button_is_bound_to_delivered_request_and_message(self):
         req = await self.service.request(123, self.track_id)

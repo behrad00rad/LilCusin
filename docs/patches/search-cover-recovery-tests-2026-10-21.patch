@@ -1,0 +1,30 @@
+--- a/tests/test_recording_resolver.py
++++ b/tests/test_recording_resolver.py
+@@ -85,8 +85,8 @@
+         flat = [dict(id=f'video{i:06d}', title='Faramaz Aslani - Darigh | دریغ', duration=167) for i in range(6)]
+         self.fetcher.process.side_effect = [json.dumps({'entries':flat}).encode(),
+                                           FetchError('Audio source unavailable.'), FetchError('Audio source unavailable.')]
+-        rows = await self.fetcher.search(NS(artist='Faramarz Aslani', title='Darigh', duration=165), '.', self.alive)
+-        self.assertEqual(rows, [])
++        with self.assertRaisesRegex(FetchError, 'Source search unavailable'):
++            await self.fetcher.search(NS(artist='Faramarz Aslani', title='Darigh', duration=165), '.', self.alive)
+         self.assertEqual(self.fetcher.process.await_count, 3)
+ 
+     async def test_relevant_flat_result_enriched_before_artist_gate_with_topic_provenance(self):
+@@ -161,3 +161,16 @@
+         self.assertIsNone(normalize_track({'name':'Song','artist':'Artist','duration':'234'}).duration)
+         self.assertEqual(normalize_track({'name':'Song','artist':'Artist','duration':'234000'}).duration,234)
+         self.assertIn('instrumental', version_words('Shekoofeha (Music Only)'))
++
++    async def test_fallback_timeout_is_not_a_clean_no_match(self):
++        self.discovery.search.return_value = ([], False)
++        self.resolver.aliases.return_value = []
++        self.fetcher.process.side_effect = TimeoutError()
++        with self.assertRaisesRegex(FetchError, 'Source search unavailable'):
++            await self.fetcher.search(self.track, '.', self.alive)
++
++    async def test_genuine_empty_results_remain_no_match(self):
++        self.discovery.search.return_value = ([], False)
++        self.resolver.aliases.return_value = []
++        self.fetcher.process.return_value = b'{"entries": []}'
++        self.assertEqual(await self.fetcher.search(self.track, '.', self.alive), [])

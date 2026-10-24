@@ -1,5 +1,14 @@
 # Recognition and search evidence
 
+## 2026-10-20 - Recommendation loop deployed
+
+Release `4835ec7d93767fb4`, code `cbad204`, deployed after explicit approval.
+Both exact Git and production-preserving candidates passed 183 isolated Linux
+tests each. Consistent backup, 22 live hashes, four additive tables, active bot/API
+and polling verified; unrelated source/configuration and Nginx PID preserved.
+Existing dependency preflight gaps remain unchanged; no real Telegram receipt
+claimed. See [deployment checkpoint](recommendation-loop-2026-10-19.md).
+
 ## 2026-10-19 - Private recommendation loop
 
 185 distinct affected Windows fixture tests passed in the final sequential
@@ -255,3 +264,85 @@ Telegram receipt/playback remains unverified; Mini App unchanged.
 ## 2026-10-19 — Verified release
 
 Runtime f7f0739 pushed and deployed; 424 cumulative Linux staging cases and five Node checks passed. VPS hashes/services/moderator/auth gates verified; Cloudflare publication confirmed. Public retrieval and real Telegram journeys remain unverified. See [release evidence](deployment-2026-10-19.md).
+
+## 2026-10-20 - Vigen/Sogand Get song correction, deployed
+
+Read-only deployed-job metadata confirmed the wrong 175-second Sam H candidate.
+The corrected matcher passed 24 focused tests and found the 288-second Viguen
+Topic recording in a live VPS metadata-only run in memory. The user-approved
+one-file release has a verified deployed hash and active bot process; later SSH
+timeouts blocked post-restart polling/live-lookup checks. Uncommitted; no audio
+or Telegram verification. [Details](vigen-get-song-fix-2026-10-20.md).
+
+### 2026-10-20 - Dele Divaneh follow-up, local
+
+Stored source metadata confirmed the unlabelled Sam Shirazi upload was offered
+for Vigen's Dele Divaneh; instrumental content is user-reported. The stricter
+candidate passed 78 distinct affected cases across runs and returned only
+catalogue-attributed Topic releases for both reported songs in live metadata
+checks. A three-file patch passes production apply checking but is not deployed.
+No download/playback verification. [Evidence and limits](strict-original-get-song-2026-10-20.md).
+
+## 2026-10-20 - A2/A3 measured Mini App performance release
+
+Integrated Terminal 1 A1 before measuring current public/runtime responses.
+14 local and 14 isolated runtime HTTP/API checks plus 13 Node scripts pass.
+English static body budget falls 74.5%; a controlled 300 ms response-delay
+fixture reached the first song heading at 1,065.5 -> 725.5 ms. EN/FA phone
+geometry/actions checked; screenshot/physical-device and signed-network timings
+remain unavailable. [Full measurements](performance-2026-10-20.md). Deployed as `dbd57299600da7b3` from pushed commit `dafc654`; exact public hashes,
+gzip/304/immutable headers and unchanged protected services verified. Live public
+EN/FA preview loaded WebP; signed Telegram remains unverified.
+
+## 2026-10-21 - Search/artwork recovery
+
+Five live search failures, an offline timeout-to-empty reproduction and a slow
+cover sample motivated scoped fixes. Artifact `ab739eac183fff74` deployed after
+83 isolated Python checks and the local Node lifecycle regression. Public app
+hash/gzip/304, immutable cover headers, bot polling/API health and protected
+source/configuration verified. No signed Telegram receipt or physical-network
+claim. [Full evidence and rollback detail](search-cover-recovery-2026-10-21.md).
+
+## 2026-10-22 - Early search receipts
+
+Current source inspection identified pre-acknowledgement database/queue/reply work.
+Eight local and 45 distinct cumulative staging cases verify receipt ordering,
+reuse, cancellation/error cleanup and chat/search compatibility. Artifact
+`a5f28398fa68d32c` deployed; polling/hashes and unchanged API/Nginx/connector
+verified. Existing catalogue parity failure retained; real user round-trip open.
+[Full evidence](search-ack-2026-10-22.md).
+
+# 2026-10-24 - Project overview and recent updates
+
+Added a public-facing LilCusin introduction and linked it from the repository
+README. The overview gathers the documented discovery, recognition, Get song,
+ratings, recommendations, Mini App, channel, social sharing and privacy
+capabilities in one place.
+
+The recent-update summary reflects the checkout handoff: artwork/startup
+performance and slow-source recovery are documented as deployed; early private
+text-search acknowledgement and bounded cancellation are documented as
+deployed; the stricter catalogue-attributed original-source policy remains local
+and undeployed. The checkout contains pre-existing unrelated dirty code; this
+documentation task did not modify it. No application tests were run. Documentation
+links, scoped diff and whitespace were inspected locally. GitHub could not be
+reached from this environment, so remote state and publication are unverified.
+
+## Recent runtime changes summarized
+
+- Public Mini App assets reuse available artwork variants and support compression
+  and cache validation to reduce repeat transfer cost.
+- Slow source-search failures remain distinct from a clean no-match; Get song
+  reports bounded progress and retains cancellation. Cover retries have bounded
+  waits and leave a placeholder when unavailable.
+- Private text searches receive an early acknowledgement before setup or queued
+  action waits; progress, failure and cancellation are surfaced in that status.
+- Persian Get song matching was corrected to require artist evidence and use
+  unambiguous recording aliases. A stricter catalogue-attributed original-source
+  policy is a separate local-only change and is not described as deployed.
+
+Evidence and limitations: the dated [STATE handoff](STATE.md), linked release
+evidence therein, and the relevant [decision history](decisions.md) record
+targeted checks and guarded runtime verification. Physical mobile behavior,
+signed Telegram round trips, and playback are not established by those checks.
+This overview is documentation, not a new runtime release.

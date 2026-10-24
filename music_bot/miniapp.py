@@ -90,7 +90,10 @@ def create_app(token, chat, workflow, *, bot_username=None):
         except Exception:
             # Never echo request data, provider errors or secrets.
             response = web.json_response({'error': 'Something went wrong. Please try again.'}, status=500)
-        response.headers['Cache-Control'] = 'no-store'
+        if request.path.startswith('/api/'):
+            response.headers['Cache-Control'] = 'no-store'
+        else:
+            response.headers.setdefault('Cache-Control', 'no-store')
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['Referrer-Policy'] = 'no-referrer'
         response.headers['X-Robots-Tag'] = 'noindex, nofollow'
@@ -257,9 +260,12 @@ def create_app(token, chat, workflow, *, bot_username=None):
         name = request.match_info.get('name', 'index.html')
         if name not in {'index.html', 'app.js', 'social.js', 'style.css', 'locales.json', 'bot-logo.jpg', 'vazirmatn.woff2', 'Vazirmatn-OFL.txt'}:
             raise web.HTTPNotFound()
-        return web.FileResponse(ASSETS / name)
+        from .web_assets import asset_response
+        return asset_response(request, ASSETS / name)
 
     app = web.Application(middlewares=[security], client_max_size=16384)
+    from .cover_proxy import register_cover_proxy
+    register_cover_proxy(app)
     app.on_cleanup.append(lambda app: artwork.close())
     app.router.add_get('/', asset)
     app.router.add_get('/{name:index.html|app.js|social.js|style.css|locales.json|bot-logo.jpg|vazirmatn.woff2|Vazirmatn-OFL.txt}', asset)

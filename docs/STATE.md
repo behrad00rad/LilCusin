@@ -1,5 +1,115 @@
 # Current handoff
 
+## Project introduction documentation - 2026-10-24
+
+Added [a product feature overview](introducing-lilcusin.md) and README links to
+it and the recent update record. This is documentation only. GitHub was
+unreachable during the update; remote contents and publication remain
+unverified. See [evidence](evidence.md#2026-10-24---project-overview-and-recent-updates).
+
+## Early text-search acknowledgement deployed - 2026-10-22
+
+Artifact `a5f28398fa68d32c` sends an EN/FA receipt before database setup or
+old-request waits, reuses it for results, and makes failures/cancellation visible.
+Uncooperative cancellation returns Busy after two seconds without releasing the
+mutation lock. 45 distinct scoped staging cases pass cumulatively. Bot polling and
+four target hashes verified; API PID, Nginx, connector and configuration unchanged.
+Existing non-English catalogue parity failure remains; signed Telegram round-trip
+unverified. Runtime-based patch preserves dirty local delivery work; this checkout
+is not full source/runtime parity. [Evidence](search-ack-2026-10-22.md).
+Code/evidence commit `bb57933` is local; push is blocked by GitHub authentication.
+Remote `0fc8493` (the earlier search/cover recovery) was verified. Runtime fix is deployed.
+
+
+## Search/artwork recovery deployed - 2026-10-21
+
+Artifact `ab739eac183fff74` fixes swallowed source timeouts and unbounded cover
+fallback. Get song now updates its existing EN/FA status after roughly 6/16s with
+Cancel retained. 83 isolated runtime Python cases and local Node cover lifecycle
+checks pass. Bot polling/API health, all six runtime hashes and public gzip/cache
+checks verified; first readiness-check rollback is documented. Current dirty
+delivery work is preserved via a runtime-based patch. Signed Telegram/physical
+mobile verification remains open. [Evidence](search-cover-recovery-2026-10-21.md).
+
+## Stricter Get song source policy ready locally - 2026-10-20
+
+The Vigen alias fix below did not prevent an unlabelled instrumental/personal
+upload being offered as an uncertain original. Normal Get song now requires
+catalogue-attributed Topic/verified-artist sources; other uploads require explicit
+Find other versions. Cache, preference and stale-choice guards enforce the same
+rule. All 78 affected cases passed across runs, and the candidate found catalogue
+releases for Dele Divaneh and Sogand using live VPS metadata. Three-file patch
+passed production git apply --check; not applied. Uncommitted, not deployed;
+audio fingerprint, vocals and playback are not verified. This supersedes the
+earlier local-only cache workaround after deployment. See
+[source policy, patch and evidence](strict-original-get-song-2026-10-20.md).
+
+## Vigen Get song fix deployed - 2026-10-20
+
+Artist evidence is now required; verified recording aliases recover Vigen/Viguen,
+and broader discovery precedes duration relaxation. All 24 focused tests passed.
+The candidate found the 288-second Sogand Topic recording using live VPS metadata.
+User-approved one-file deployment completed with matching SHA-256 and the expected
+bot process active/running; configuration and adjacent protected sources unchanged.
+Later SSH timeouts prevented post-restart polling/live-lookup verification.
+Uncommitted; existing saved wrong choices require Wrong recording. No audio or
+Telegram receipt/playback verification.
+See [cause, verification and limits](vigen-get-song-fix-2026-10-20.md).
+
+## Search More correction deployed - 2026-10-20
+
+`8b779c1` corrects the cached-pool-only limitation below. More stays available at
+the end of fetched results and requests a deeper batch for the same query, with
+YouTube fallback. Only unseen artist/title identities and recording IDs append;
+old indices remain stable. Five new songs per extension, bounded to 60 total;
+explicit exhaustion keeps the displayed page instead of cycling old songs.
+Seven focused tests passed locally and in isolated runtime staging. Live public
+Radiohead metadata probe returned 37 unique songs, 25 beyond the initial 12.
+Both deployed hashes/polling verified; API PID and configuration unchanged.
+Owner/message/expiry/revision and post-provider cancellation guards retained.
+Native Telegram taps and phone rendering remain unverified.
+
+## Terminal 3 Telegram UX deployed - 2026-10-20
+
+Search paging `1108497` deployed first: five existing results per page, More songs/
+Previous in EN/FA, stable choice indices and owner/message/revision/expiry checks;
+no extra provider calls. This browses the fetched result pool, not an unlimited
+artist discography. Then `edf6e51` deployed direct two-column card ratings and
+Get audio / دریافت فایل آهنگ labels. Existing evidence-based localized ranking
+reasons retained; no invented artist attribution or AI requests.
+Four pagination tests passed locally and on isolated production-source staging.
+Seventeen UX/chat cases covered locally; three old row-index expectations were
+corrected and rerun successfully, without repeating the whole module. Three
+focused runtime rating/navigation checks passed. Both releases used exclusive
+deployment locking, live-source guards, scoped backups and rollback; hashes,
+polling and unchanged API PID/configuration verified. Forbidden delivery modules
+untouched. No Telegram browser session was available; actual native 320/390px
+layout/overflow and physical taps remain unverified. No Mini App assets changed.
+
+## A1 deployed - 2026-10-20
+
+UI commit `02259c0` deployed as asset release `a00194180b159c2a` after explicit
+user authorization. Four frontend assets updated after prior-hash checks; rollback
+copies retained. All five public HTTPS UI assets returned 200 with matching hashes;
+unsigned delivery-status returned 401. Service states/PIDs, Python sources and
+private configuration unchanged; no restart. Initial upload disconnected before
+application; retry succeeded. Supersedes the pending status below. Physical
+Telegram gestures and real delivery remain unverified. No further development.
+
+## A1 UI polish - 2026-10-20
+
+Completed whole-card swipe and tab animations with reduced-motion support,
+compact Home/Search layouts, five-slot Taste Card placeholders and clearer
+exchange filters/actions. Existing palette, consent, delivery and backend APIs
+are preserved. Eight scoped Node checks, two translation tests, JS syntax and
+Worker generation passed; the final four affected Node checks passed again.
+EN/FA browser layouts checked at 320px/390px and desktop, including long titles,
+missing artwork and safe-area geometry. Physical Telegram touch and real delivery
+remain unverified; screenshot capture was unreliable. A1 deployment is pending:
+the existing three-asset release procedure needs four-asset reconciliation.
+Production remains on swipe asset release `28bb9f95e81cc9ab`. Development stopped
+at the user's request; unrelated changes preserved.
+
 ## UI release - 2026-10-19
 
 User-approved UI commit `cdcc4d2` is pushed to `codex/safe-publish` and deployed
@@ -20,9 +130,11 @@ Save/known/not-for-me/Next controls. Pause/reset/library management are availabl
 in /taste. 185 affected tests passed with monitored source hashes unchanged;
 all 16 chat cases passed again after final copy changes. See [resumable checkpoint and
 limits](recommendation-loop-2026-10-19.md). Code committed/pushed as `cbad204`;
-remote SHA verified. Exact staged snapshot: 183 Windows tests passed. Deployment
-is blocked by automatic-review refusal of private-source transfer to the existing
-VPS, pending explicit destination/payload approval. No production mutation occurred.
+remote SHA verified. Exact staged snapshot: 183 Windows tests passed. Deployed
+on 2026-10-20 as release `4835ec7d93767fb4` after explicit upload/deployment approval.
+Both exact Git and reconciled runtime snapshots passed 183 Linux tests each.
+Bot polling and Mini App API active; 22 source hashes and four additive tables
+verified. Existing dependency gaps remain; real Telegram receipt is unverified.
 Friends' taste remains a consent-scoped design, not an implemented recommender.
 
 ## Recommendation recovery - 2026-10-19
@@ -143,3 +255,15 @@ source hash verified, restart succeeded; all 20 isolated regressions passed agai
 the deployed module. The identical candidate retrieved/validated actual audio.
 Telegram receipt/playback remains unverified; Mini App unchanged.
 [Deployment evidence](navan-medley-fix-2026-10-19.md).
+
+## A2/A3 performance deployed - 2026-10-20
+
+Terminal 1 A1 is integrated. Scoped artwork sizing/WebP, static gzip/ETag
+revalidation, locale preload and demand-loaded font are implemented. English
+static body budget 576,346 -> 146,999 bytes; Persian 258,151 bytes. Fourteen
+local and fourteen isolated runtime HTTP/API tests plus 13 Node checks pass.
+EN/FA 320/390px DOM/accessibility checks and preview song actions pass; screenshot
+capture timed out. Commit `dafc654` is pushed and artifact `dbd57299600da7b3` deployed. All seven
+public assets match hashes and revalidate with 304; sized WebP caches immutably.
+API restarted/healthy; bot, connector, Nginx and configuration unchanged. Preserve
+concurrent delivery fixes. See [measurements and limitations](performance-2026-10-20.md).

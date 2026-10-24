@@ -164,6 +164,32 @@ actual baseline rather than claiming it passed or upgrading unrelated dependenci
 
 ## Resume rule
 
+### Deployment completed - 2026-10-20
+
+This supersedes the blocked checkpoint above. The user explicitly approved source
+upload, staging and deployment. Release `4835ec7d93767fb4` completed at 07:28 UTC
+(10:58 Asia/Tehran), based on code `cbad204` and tree `7d31e75c0367`.
+The exact Git snapshot passed 183 Linux tests in 120.570 seconds; the final
+runtime-preserving candidate passed 183 tests as well. An earlier candidate also
+passed, but a live hash guard caught a concurrent nine-line audio-caption addition
+before switching; a clean three-way merge preserved it and tests were rerun.
+SSH observation timed out on an earlier test run; its completed passing receipt
+was reconciled, not treated as a production failure or blindly redeployed.
+
+The API service is now `lilcusin-miniapp`, not the obsolete `lilcusin-miniapp-api`.
+Both writers stopped for a consistent integrity-checked SQLite backup. Installed
+22 reviewed/reconciled modules and initialized only the four expected additive
+tables. Bot and API restarted; stable bot polling, all live source hashes,
+unchanged protected sources/configuration and unchanged Nginx PID verified.
+The private deployment receipt was downloaded after a read-permission correction;
+the successful switch was not rerun. No production user data was used for tests.
+
+Full preflight is not green: the existing environment reports an aiohttp version
+mismatch and missing Pillow, arabic-reshaper and python-bidi. Before/after output
+was identical and independent runtime import checks passed. No dependencies were
+upgraded for this release. Actual Telegram recommendation receipt/phone behavior
+remains unverified. Friends discovery and playlist generation remain future work.
+
 Read this checkpoint and `docs/STATE.md`, inspect scoped Git diffs, and run the
 affected tests before extending work. Do not restart a poller or deploy implicitly.
 Record actual completed slices and unresolved failures here after each checkpoint.

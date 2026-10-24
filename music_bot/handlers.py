@@ -426,6 +426,10 @@ async def unsupported_submission(message: Message) -> None:
     await message.answer(messages.UNSUPPORTED)
 
 
+from .search_pages import search_page
+router.callback_query.register(search_page, F.data.startswith('p:'))
+
+
 @router.callback_query()
 async def callback(query: CallbackQuery, workflow: Workflow, enrichment: Enrichment, chat_service=None) -> None:
     acknowledgement = messages.STALE
