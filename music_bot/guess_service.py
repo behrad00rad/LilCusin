@@ -229,11 +229,16 @@ class GuessService:
             used_groups, used_aliases = set(), set()
             for answer in correct:
                 langs = language_tags(answer)
-                candidates = [item for item in pool.values() if langs and language_tags(item) == langs and
+                # Missing language metadata may use matched/popular decoys. An
+                # explicit language conflict still excludes the candidate.
+                candidates = [item for item in pool.values() if
+                              (not langs or not language_tags(item) or language_tags(item) == langs) and
                               group(item) not in used_groups and not item.identities & used_aliases]
-                # Similar era/genre tags first; popularity-ordered same-language fallback.
-                candidates.sort(key=lambda item: (item.track_id not in primary_ids,
-                    -len((set(item.tags) & set(answer.tags)) - langs)))
+                # Prefer proven language matches, then genre/era affinity and
+                # recommendation candidates; stable popularity fallback last.
+                candidates.sort(key=lambda item: (not (langs and language_tags(item) == langs),
+                    -len((set(item.tags) & set(answer.tags)) - langs), item.track_id not in primary_ids,
+                    ))
                 decoys = []
                 round_groups, round_aliases = set(used_groups), set(used_aliases)
                 for item in candidates:
