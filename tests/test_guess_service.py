@@ -218,6 +218,14 @@ class GuessServiceTests(unittest.IsolatedAsyncioTestCase):
         async with self.db.sessions() as session:
             self.assertEqual(list(await session.scalars(select(GuessGame))), [])
 
+    async def test_unplayable_shared_songs_do_not_hide_playable_alternatives(self):
+        async with self.db.write() as session:
+            await session.execute(delete(TrackTag).where(TrackTag.track_id <= 5, TrackTag.name == 'english'))
+            session.add_all([Rating(user_id=2, track_id=key, value='love') for key in range(6, 11)])
+        with patch('music_bot.guess_service.RNG.shuffle', side_effect=lambda values: None):
+            start = await self.start()
+        self.assertEqual({row.correct_recording_id for row in await self.rows(start['game_id'])}, set(range(6, 11)))
+
     async def test_unfriend_replay_denied(self):
         start = await self.start(); row = (await self.rows(start['game_id']))[0]
         async with self.db.write() as session: await stop_interactions(session, 1, 2)

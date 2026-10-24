@@ -217,8 +217,6 @@ class GuessService:
             for item in choices:
                 if group(item) not in used_groups and not item.identities & used_aliases:
                     correct.append(item); used_groups.add(group(item)); used_aliases.update(item.identities)
-                if len(correct) == NEED:
-                    break
             if len(correct) < NEED:
                 raise GuessError('not_enough', 409, not_enough={'have': len(correct), 'need': NEED})
             profile = Profile(target, [Seed(item, None) for item in correct], [], set(touched), identities(touched.values()), {})
@@ -228,6 +226,7 @@ class GuessService:
                 item.track_id not in touched and not item.identities & excluded_aliases and group(item) not in excluded_groups}
             primary_ids = {item.track_id for item in primary}
             planned = []
+            used_groups, used_aliases = set(), set()
             for answer in correct:
                 langs = language_tags(answer)
                 candidates = [item for item in pool.values() if langs and language_tags(item) == langs and
@@ -236,16 +235,23 @@ class GuessService:
                 candidates.sort(key=lambda item: (item.track_id not in primary_ids,
                     -len((set(item.tags) & set(answer.tags)) - langs)))
                 decoys = []
+                round_groups, round_aliases = set(used_groups), set(used_aliases)
                 for item in candidates:
-                    if group(item) in used_groups or item.identities & used_aliases:
+                    if group(item) in round_groups or item.identities & round_aliases:
                         continue
-                    decoys.append(item.track_id); used_groups.add(group(item)); used_aliases.update(item.identities)
+                    decoys.append(item.track_id); round_groups.add(group(item)); round_aliases.update(item.identities)
                     if len(decoys) == 3:
                         break
                 if len(decoys) != 3:
-                    raise GuessError('guess_unavailable', 503)
+                    continue
+                used_groups, used_aliases = round_groups, round_aliases
+                used_groups.add(group(answer)); used_aliases.update(answer.identities)
                 options = decoys + [answer.track_id]; RNG.shuffle(options)
                 planned.append((answer.track_id, options))
+                if len(planned) == NEED:
+                    break
+            if len(planned) != NEED:
+                raise GuessError('guess_unavailable', 503)
             game = GuessGame(guesser_id=actor, target_id=target, created_at=now)
             session.add(game); await session.flush()
             rows = [GuessRound(game_id=game.id, idx=idx, correct_recording_id=key, option_ids=options)
