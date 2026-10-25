@@ -30,5 +30,11 @@
     "eye": "5bf90197dd7629cad64a2e48d1186a71559deb6121207d10e3dc5b19ebaffdcf",
     "check": "7f33acc9a77a61659531044525fc008edebe215bf4dcf1c789c8674ad3277db0",
     "x": "4a9cdab38fbb96162e7dace28e33f4ca0e49d8963a6162abc3d4691b7d675117"
+  },
+  "additional_derivatives": {
+    "sparkles": {
+      "source": "https://github.com/lucide-icons/lucide/blob/main/icons/sparkles.svg",
+      "note": "Reduced static path derivative in app.js; same Lucide license, not a byte-identical upstream file. Up/down arrows reuse the existing subset."
+    }
   }
 }

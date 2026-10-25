@@ -24,6 +24,7 @@ class AudioRequest(Base):
     state: Mapped[str] = mapped_column(default='pending')
     message_id: Mapped[int | None]
     status_message_id: Mapped[int | None]
+    canonical_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
     delivered_video_id: Mapped[str | None]
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
 
@@ -37,6 +38,7 @@ class AudioDelivery(Base):
     file_id: Mapped[str]
     message_id: Mapped[int]
     artwork_key: Mapped[str | None]
+    send_args: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
 
 
@@ -59,4 +61,5 @@ class AudioSelection(Base):
     track_id: Mapped[int] = mapped_column(ForeignKey('tracks.id'))
     video_id: Mapped[str | None]
     rejected_ids: Mapped[list] = mapped_column(JSON, default=list)
+    canonical_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)

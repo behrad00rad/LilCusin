@@ -300,3 +300,21 @@ serialization. Reuse the receipt; stop updates before result rendering. Bound wa
 for cancellation-resistant tasks with Busy feedback while retaining the mutation
 lock. Unexpected failures complete the receipt instead of leaving Loading.
 [Evidence and deployment limits](search-ack-2026-10-22.md).
+
+## 2026-10-23 — Guess game data/consent
+
+Use additive private tables and an ordered-pair partial unique index; keep allow_guess independent of Love sharing. Opt-out removes games about the user; unfriend/block purges both directions inside the existing transaction. This prioritizes revocable visibility over retaining scores. Step 1 only, default-off, local tests; gameplay and notification policy pending. [Evidence/rollback](guess-game.md).
+
+## 2026-10-23 — Guess game server privacy boundary
+
+Use the existing opaque friend-relationship token as friend_id. Revalidate current relationship, consent, all five answers and lifetime interaction exclusions before resume/reveal. Candidate-service cached/local metadata and a bounded popular fallback require explicit matching language tags; abstain when safe decoys are unavailable. SQLite writer serialization keeps first picks immutable and resumes free; day limits use Tehran calendar days. Previously dirty consent API/table registration is included narrowly as a prerequisite. [Tradeoffs and evidence](guess-game.md#step-2--server-rules-and-apis-2026-10-23). Local only; UI/notifications pending.
+
+
+## 2026-10-24 ? Guess game screen privacy
+
+Use one modal game state, lock the first pick through network retries, and reuse only server round projections. Sample/cache cover colors during preload; never use mascot art as a cover. Result sharing sends only display names/score and a bot URL; reverse challenge uses the authorized relationship token. No browser visual acceptance yet. [Handoff](guess-game.md#step-3--game-screens-2026-10-24).
+
+
+## 2026-10-24 - Human-triggered game alerts
+
+Use a two-minute finish batch and persistent pair/day attempt cap; retain existing notification permission and add explicit game quiet-hour controls (default 22-08 Tehran). Commit claims before bounded sends, recheck privacy under the writer lock, and never replay uncertain sends. Nudge limits are three days and counts are recalculated before sending. Corrected UTF-8 copy through file-based serialization and added Persian assertions. [Tradeoffs/rollback](guess-game.md).

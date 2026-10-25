@@ -63,6 +63,10 @@ class Database:
         from .social_chat import SwapPrompt
         from . import taste_learning
         from .recommendations.queue import QueuedRecommendation
+        from .feed_history import FeedHistory
+        from . import guess_game  # Additive, dormant Guess their taste persistence.
+        from . import guess_notices  # Additive, default-off notification queue.
+        from .taste_sharing import FriendTasteSharing, GuiltyPleasure
         async with self.engine.begin() as connection:
             await connection.exec_driver_sql("BEGIN IMMEDIATE")
             await connection.run_sync(migrate)

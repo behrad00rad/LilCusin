@@ -4,14 +4,37 @@ import json
 import os
 from pathlib import Path
 import re
+from urllib.parse import urlsplit, parse_qs
 
 import aiohttp
 
 WORKER = 'https://lilcusin-ui.ghazanfaribehrad.workers.dev'
-ROUTES = {'/api/social/unsave':'POST', '/api/social':'GET', '/api/social/compare':'POST', '/api/social/choices':'POST', '/api/social/draft':'POST', '/api/social/action':'POST', '/api/social/settings':'GET', '/api/social/settings/update':'POST', '/api/social/relationship':'POST', '/api/social/get-song':'POST', '/api/artwork':'POST', '/api/channels/songs':'POST', '/api/channels/review':'POST', '/api/preferences':'GET', '/api/preferences/update':'POST', '/api/profile':'GET', '/api/recommendations':'POST', '/api/search':'POST', '/api/rate':'POST',
+ROUTES = {'/api/friend-invites':'POST','/api/friend-invites/revoke':'POST','/api/delivery-request':'POST', '/api/delivery-status':'POST', '/api/social/thread':'POST', '/api/social/unsave':'POST', '/api/social':'GET', '/api/social/compare':'POST', '/api/social/choices':'POST', '/api/social/draft':'POST', '/api/social/action':'POST', '/api/social/settings':'GET', '/api/social/settings/update':'POST', '/api/social/relationship':'POST', '/api/social/get-song':'POST', '/api/artwork':'POST', '/api/channels/songs':'POST', '/api/channels/review':'POST', '/api/preferences':'GET', '/api/preferences/update':'POST', '/api/profile':'GET', '/api/recommendations':'POST', '/api/search':'POST', '/api/rate':'POST',
           '/api/taste-card/image':'POST', '/api/comparison-invitations':'GET', '/api/comparison-invitations/create':'POST', '/api/comparison-invitations/decide':'POST', '/api/taste-card':'GET', '/api/taste-card/update':'POST', '/api/taste-card/share':'POST', '/api/taste-card/view':'POST',
           '/api/similar':'POST', '/api/channels':'GET', '/api/channels/connect':'POST',
           '/api/channels/disconnect':'POST', '/api/taste-setup':'GET', '/api/taste-setup/update':'POST'}
+
+
+def route_method(path, requested_method=None):
+    if not isinstance(path, str) or len(path) > 160:
+        return None
+    try:
+        parsed = urlsplit(path)
+    except ValueError:
+        return None
+    if parsed.scheme or parsed.netloc or parsed.fragment:
+        return None
+    if parsed.path == '/api/guess/status':
+        query = parse_qs(parsed.query, keep_blank_values=True)
+        return 'GET' if (set(query) == {'friend_id'} and len(query['friend_id']) == 1
+            and re.fullmatch(r'[A-Za-z0-9_-]{32}', query['friend_id'][0])) else None
+    if parsed.query:
+        return None
+    if parsed.path in {'/api/taste-sharing','/api/guess/preferences'}:
+        return requested_method if requested_method in {'GET', 'POST'} else 'GET'
+    if parsed.path in {'/api/guess/start','/api/guess/nudge'} or re.fullmatch(r'/api/guess/[A-Za-z0-9_-]{32}/answer', parsed.path):
+        return 'POST'
+    return ROUTES.get(path)
 
 
 async def answer(session, socket, message, capacity):
@@ -21,7 +44,8 @@ async def answer(session, socket, message, capacity):
     path=message.get('path')
     auth=message.get('auth')
     body=message.get('body','')
-    valid=(isinstance(path,str) and path in ROUTES and message.get('method')==ROUTES[path]
+    method=route_method(path, message.get('method'))
+    valid=(method is not None and message.get('method')==method
            and isinstance(auth,str) and len(auth)<=12000 and isinstance(body,str)
            and len(body.encode())<=16384)
     status=400
@@ -29,9 +53,9 @@ async def answer(session, socket, message, capacity):
     if valid:
         try:
             async with capacity:
-                async with session.request(ROUTES[path], 'http://127.0.0.1:8091'+path,
+                async with session.request(method, 'http://127.0.0.1:8091'+path,
                         headers={'X-Telegram-Init-Data':auth,'Content-Type':'application/json'},
-                        data=body if ROUTES[path]=='POST' else None,
+                        data=body if method=='POST' else None,
                         allow_redirects=False, timeout=aiohttp.ClientTimeout(total=40)) as response:
                     status=response.status
                     chunks=[]

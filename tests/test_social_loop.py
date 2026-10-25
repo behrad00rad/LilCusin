@@ -16,6 +16,71 @@ from music_bot.miniapp import create_app
 
 
 class SocialLoopTests(ServiceTestCase):
+    async def test_friendship_survives_card_edits_hide_and_elapsed_invitation(self):
+        async with self.database.write() as session:
+            (await session.get(ComparisonInvitation,self.token)).expires_at=utc_now()-timedelta(days=10)
+        owner=await self.cards.owner(123)
+        await self.cards.update(123,dict(action='edit',revision=owner['revision'],nickname='New private nickname',bio='Private'))
+        other=await self.cards.owner(456)
+        await self.cards.sharing(456,'hide',other['revision'])
+        row=await self.invites.read(123,self.token)
+        self.assertEqual(row['state'],'consented');self.assertTrue(row['friendship']);self.assertIsNone(row['expires_at'])
+        self.assertNotIn('friendship',row['sender'])
+        self.assertEqual((await self.social.compare(456,self.token))['other']['nickname'],'Chosen 123')
+
+    async def test_friend_unfriend_cancels_swaps_and_never_restores_on_unblock(self):
+        swap=await self.send()
+        result=await self.invites.decide(456,self.token,'unfriend')
+        self.assertEqual(result['state'],'revoked')
+        self.assertEqual((await self.invites.decide(456,self.token,'unfriend'))['state'],'revoked')
+        with self.assertRaises(CardError):await self.social.read(123,swap['token'])
+        with self.assertRaises(CardError):await self.social.draft(123,self.token,self.ids[0])
+        async with self.database.sessions() as session:
+            self.assertEqual((await session.get(SongSwap,swap['token'])).state,'cancelled')
+            self.assertEqual(await session.scalar(select(SocialNotice.state)),'cancelled')
+
+    async def test_friend_new_song_requires_owned_fresh_source_grant(self):
+        track=self.ids[5]
+        with self.assertRaises(CardError):await self.social.draft(123,self.token,track)
+        foreign=await self.chat.create_control(789,tracks=[track],kind='miniapp')
+        with self.assertRaises(CardError):await self.social.draft(123,self.token,track,source_token=foreign)
+        grant=await self.chat.create_control(123,tracks=[track],kind='miniapp')
+        draft=await self.social.draft(123,self.token,track,source_token=grant)
+        self.assertEqual(draft['state'],'draft');self.assertEqual(draft['song']['id'],track)
+        from music_bot.models import ChatControl
+        async with self.database.write() as session:(await session.get(ChatControl,grant)).expires_at=utc_now()-timedelta(seconds=1)
+        with self.assertRaises(CardError):await self.social.draft(123,self.token,track,source_token=grant)
+        self.assertEqual(await self.social.inbox(456),[])
+        sent=await self.social.act(123,draft['token'],'send')
+        self.assertEqual(sent['state'],'sent')
+        await self.social.relationship(456,self.token,'block')
+        with self.assertRaises(CardError):await self.social.draft(123,self.token,track,source_token=grant)
+
+    async def test_friend_source_api_and_unfriend_are_actor_bound(self):
+        grant=await self.chat.create_control(123,tracks=[self.ids[5]],kind='miniapp')
+        client=TestClient(TestServer(create_app(TOKEN,self.chat,self.workflow,bot_username='FixtureBot')))
+        await client.start_server()
+        try:
+            payload=dict(invitation=self.token,track_id=self.ids[5],source_token=grant)
+            self.assertEqual((await client.post('/api/social/draft',json=payload,headers={'X-Telegram-Init-Data':signed(789)})).status,404)
+            response=await client.post('/api/social/draft',json=payload,headers={'X-Telegram-Init-Data':signed(123)})
+            self.assertEqual(response.status,200);self.assertEqual((await response.json())['state'],'draft')
+            response=await client.post('/api/comparison-invitations/decide',json=dict(token=self.token,action='unfriend'),headers={'X-Telegram-Init-Data':signed(456)})
+            self.assertEqual(response.status,200);self.assertEqual((await response.json())['state'],'revoked')
+            self.assertEqual((await client.post('/api/social/draft',json=payload,headers={'X-Telegram-Init-Data':signed(123)})).status,404)
+        finally:await client.close()
+
+    async def test_feed_rated_flag_is_only_the_current_actors_rating(self):
+        swap=await self.send()
+        self.assertFalse((await self.social.read(456,swap['token']))['rated'])
+        async with self.database.write() as session:
+            sender=await session.scalar(select(User.id).where(User.telegram_user_id==123))
+            recipient=await session.scalar(select(User.id).where(User.telegram_user_id==456))
+            session.add(Rating(user_id=sender,track_id=swap['song']['id'],value='love'))
+        self.assertFalse((await self.social.read(456,swap['token']))['rated'],'never expose the partner rating')
+        async with self.database.write() as session:session.add(Rating(user_id=recipient,track_id=swap['song']['id'],value='dislike'))
+        self.assertTrue((await self.social.read(456,swap['token']))['rated'])
+
     async def asyncSetUp(self):
         await super().asyncSetUp()
         self.chat=ChatService(self.database,AsyncMock())
@@ -79,6 +144,43 @@ class SocialLoopTests(ServiceTestCase):
         with self.assertRaises(CardError):
             await self.social.read(456, swap['token'])
 
+    async def test_thread_pagination_and_private_recipient_drafts(self):
+        import secrets
+        from datetime import timedelta
+        sent=[]
+        async with self.database.write() as session:
+            actor=await session.scalar(select(User.id).where(User.telegram_user_id==123))
+            recipient=await session.scalar(select(User.id).where(User.telegram_user_id==456))
+            for i in range(41):
+                token=secrets.token_urlsafe(24);sent.append(token)
+                session.add(SongSwap(token=token,invitation=self.token,sender_id=actor,recipient_id=recipient,
+                    track_id=self.ids[0],note='',state='sent',saved=False,loved=False,
+                    created_at=utc_now()-timedelta(minutes=60-i),sent_at=utc_now()-timedelta(minutes=60-i),expires_at=utc_now()+timedelta(days=1)))
+            session.add(SongSwap(token=secrets.token_urlsafe(24),invitation=self.token,sender_id=recipient,recipient_id=actor,
+                track_id=self.ids[0],note='Never expose recipient draft',state='draft',saved=False,loved=False,expires_at=utc_now()+timedelta(days=1)))
+        page=await self.social.thread(123,self.token)
+        self.assertEqual(len(page['swaps']),40)
+        self.assertEqual(page['swaps'][-1]['token'],sent[-1])
+        self.assertNotIn('Never expose',str(page))
+        older=await self.social.thread(123,self.token,page['before'])
+        self.assertEqual([row['token'] for row in older['swaps']],[sent[0]])
+        self.assertIsNone(older['before'])
+        with self.assertRaises(CardError):await self.social.thread(789,self.token)
+        with self.assertRaises(CardError):await self.social.thread(123,self.token,'invalid')
+
+    async def test_signed_thread_rechecks_blocks_and_rejects_actor_fields(self):
+        await self.send()
+        client=TestClient(TestServer(create_app(TOKEN,self.chat,self.workflow)));await client.start_server()
+        try:
+            payload={'invitation':self.token}
+            self.assertEqual((await client.post('/api/social/thread',json=payload)).status,401)
+            response=await client.post('/api/social/thread',json=payload,headers={'X-Telegram-Init-Data':signed(123)})
+            self.assertEqual(response.status,200);self.assertEqual(len((await response.json())['swaps']),1)
+            self.assertEqual((await client.post('/api/social/thread',json={**payload,'user_id':456},headers={'X-Telegram-Init-Data':signed(123)})).status,400)
+            await self.social.relationship(456,self.token,'block')
+            self.assertEqual((await client.post('/api/social/thread',json=payload,headers={'X-Telegram-Init-Data':signed(123)})).status,404)
+        finally:await client.close()
+
     async def test_duplicate_send_save_and_reciprocal_reply(self):
         draft=await self.social.draft(123,self.token,self.ids[1])
         self.assertEqual((await self.social.draft(123,self.token,self.ids[1]))['token'],draft['token'])
@@ -98,6 +200,17 @@ class SocialLoopTests(ServiceTestCase):
         await self.social.act(123,reply['token'],'love')
         async with self.database.sessions() as session:
             self.assertEqual(await session.scalar(select(Rating.value)),'love')
+
+    async def test_report_optional_details_are_actor_bound_and_bounded(self):
+        client=TestClient(TestServer(create_app(TOKEN,self.chat,self.workflow)));await client.start_server()
+        try:
+            payload={'invitation':self.token,'action':'report','reason':'other','details':'Optional report context'}
+            response=await client.post('/api/social/relationship',json=payload,headers={'X-Telegram-Init-Data':signed(123)})
+            self.assertEqual(response.status,200)
+            async with self.database.sessions() as session:self.assertIn('Optional report context',await session.scalar(select(SocialReport.evidence_note)))
+            self.assertEqual((await client.post('/api/social/relationship',json={**payload,'details':'x'*241},headers={'X-Telegram-Init-Data':signed(123)})).status,400)
+            self.assertEqual((await client.post('/api/social/relationship',json=payload,headers={'X-Telegram-Init-Data':signed(789)})).status,404)
+        finally:await client.close()
 
     async def test_owner_roles_and_forged_track_rejected(self):
         swap=await self.send()
@@ -121,7 +234,11 @@ class SocialLoopTests(ServiceTestCase):
         await self.social.relationship(456,settings['blocks'][0]['handle'],'unblock')
         with self.assertRaises(CardError): await self.social.compare(123,self.token)
 
-    async def test_card_revision_stops_sent_swap_and_queued_notice(self):
+    async def test_legacy_card_revision_stops_sent_swap_and_queued_notice(self):
+        async with self.database.write() as session:
+            invite=await session.get(ComparisonInvitation,self.token)
+            invite.sender_snapshot={key:value for key,value in invite.sender_snapshot.items() if key!='friendship'}
+            invite.recipient_snapshot={key:value for key,value in invite.recipient_snapshot.items() if key!='friendship'}
         swap=await self.send()
         owner=await self.cards.owner(123)
         await self.cards.update(123,dict(action='edit',revision=owner['revision'],nickname='Changed',bio=''))
@@ -129,6 +246,20 @@ class SocialLoopTests(ServiceTestCase):
         async with self.database.sessions() as session:
             self.assertEqual(await session.scalar(select(SocialNotice.state)),'cancelled')
             self.assertEqual(await session.scalar(select(SongSwap.state)),'cancelled')
+
+    async def test_activity_contains_real_swaps_and_reactions_only_for_participants(self):
+        from music_bot.social_activity import activity
+        swap=await self.send()
+        incoming=await activity(self.database,456)
+        self.assertEqual([item['event'] for item in incoming],['pick'])
+        self.assertEqual(incoming[0]['swap'],swap['token'])
+        await self.social.act(456,swap['token'],'save')
+        await self.social.act(456,swap['token'],'love')
+        events={item['event'] for item in await activity(self.database,123)}
+        self.assertTrue({'saved','loved'}<=events)
+        self.assertEqual(await activity(self.database,789),[])
+        await self.social.relationship(456,self.token,'block')
+        self.assertEqual(await activity(self.database,123),[])
 
     async def test_opt_in_and_restart_safe_notification_attempt(self):
         bot=SimpleNamespace(send_message=AsyncMock(side_effect=TimeoutError()))

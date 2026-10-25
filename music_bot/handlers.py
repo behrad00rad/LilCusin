@@ -91,6 +91,8 @@ from . import invitation_chat
 router.callback_query.register(invitation_chat.callback, F.data.startswith('ci:'))
 from . import social_chat
 router.callback_query.register(social_chat.callback, F.data.startswith('sc:') | F.data.startswith('ss:'))
+from .guess_notices import callback as guess_callback
+router.callback_query.register(guess_callback, F.data.startswith('gg:'))
 
 
 @router.message(Command('swaps', 'socialsettings', 'socialreports', 'savedsongs'))

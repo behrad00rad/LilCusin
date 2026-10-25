@@ -1,0 +1,20 @@
+﻿import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import {readFileSync} from 'node:fs';
+class El{constructor(tag,text='',cls=''){Object.assign(this,{tag,textContent:text,children:[],className:cls,dataset:{},attributes:{},isConnected:true});this.classList={toggle:(key,on)=>{const set=new Set(this.className.split(' '));on?set.add(key):set.delete(key);this.className=[...set].join(' ');}};}append(...els){this.children.push(...els);}replaceChildren(...els){this.children=els;}setAttribute(k,v){this.attributes[k]=v;}querySelector(q){return this.children.flatMap(el=>[el,...el.flatten()]).find(el=>q==='[data-rating="love"]'?el.dataset.rating==='love':el.className.split(' ').includes(q.slice(1)));}flatten(){return this.children.flatMap(el=>[el,...el.flatten()]);}}
+const node=(...a)=>new El(...a),source=readFileSync(new URL('../music_bot/web/app.js',import.meta.url),'utf8'),css=readFileSync(new URL('../music_bot/web/style.css',import.meta.url),'utf8');
+let calls=[],confirm=true;const toast=node('div'),stored=new Map(),reactions=[];
+const ctx=vm.createContext({node,icon:()=>node('svg'),t:key=>key,generation:1,preview:false,window:{confirm:()=>confirm},document:{createElementNS:(_ns,tag)=>node(tag)},$:()=>toast,notice:()=>toast.replaceChildren(),action:(text,fn,cls)=>Object.assign(node('button',text,cls),{onclick:fn}),rememberVisible(){},telegramCall:fn=>fn(),tg:{HapticFeedback:{impactOccurred:()=>{}}},owlReact:value=>reactions.push(value),storageRead:key=>stored.get(key),storageWrite:(k,v)=>stored.set(k,v),setTimeout(){},api:async(path,payload)=>{calls.push({path,payload});return {guilty:payload.private,visibility:payload.private?'private':'friends'};}});
+vm.runInContext(source.slice(source.indexOf('function ratingPrivacyHint('),source.indexOf('async function rateMusicCard(')),ctx);
+const card=node('article'),heard=node('div','','heard'),love=node('button');love.dataset.rating='love';heard.append(love);card.songData={id:7,token:'owned',rating:'love',guilty:false};card.append(heard);ctx.card=card;card.append(vm.runInContext('makePrivacyLock(card)',ctx));
+await vm.runInContext('setCardPrivacy(card)',ctx);assert.equal(calls.length,1);assert.equal(card.songData.guilty,true);assert.ok(love.className.includes('love-private'));assert.equal(reactions.at(-1),'secret');assert.ok(card.querySelector('.privacy-tip'));assert.equal(toast.children[0].textContent,'privacy_undo');
+confirm=false;await toast.children[0].onclick();assert.equal(calls.length,1,'Undo never shares without confirmation');assert.equal(card.songData.guilty,true);
+confirm=true;await vm.runInContext('setCardPrivacy(card,false)',ctx);assert.equal(calls[1].payload.confirm_shared,true);assert.equal(card.songData.guilty,false);assert.equal(reactions.at(-1),'happy');assert.ok(!love.className.includes('love-private'));
+assert.ok(css.includes('prefers-reduced-motion:reduce'));assert.ok(css.includes('.lockbtn:not(.on) .shackle'));assert.ok(!css.includes('.owl.evil'));assert.ok(css.includes('.owl.secret .wing'));assert.ok(css.includes('.owl.happy .owl-eye'));assert.ok(source.includes("['secret','happy'].includes(value)?1500"));
+console.log('Private Love labels/state, explicit sharing confirmation including Undo, one-time tooltip and secret/happy owl and reduced-motion hooks passed.');
+
+const owl={setAttribute(key,value){this[key]=value;}},speech={},timers=[];
+const stateCtx=vm.createContext({view:'swaps',profilePanel:'preview',$:id=>id==='owl-button'?{querySelector:()=>owl}:speech,t:key=>key,document:{addEventListener(){}},clearTimeout(){},setTimeout:(fn,ms)=>timers.push({fn,ms})});
+vm.runInContext(source.slice(source.indexOf('let owlTimer'),source.indexOf('function ratingPrivacyHint(')),stateCtx);
+for(const value of ['secret','happy']){vm.runInContext(`owlReact('${value}')`,stateCtx);assert.ok(owl.class.includes(value));assert.equal(timers.at(-1).ms,1500);timers.at(-1).fn();assert.equal(owl.class.trim(),'owl');}
+console.log('Secret/happy duration and automatic return to idle passed.');

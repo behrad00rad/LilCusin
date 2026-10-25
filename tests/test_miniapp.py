@@ -42,9 +42,25 @@ class AuthenticationTests(TestCase):
 
 
 class MiniAppTests(ServiceTestCase):
+    async def test_explicit_batch_returns_up_to_five_with_one_provider_call(self):
+        async with self.database.write() as session:
+            rows=[Track(artist='Fixture',title=f'Buffered {i}',metadata_source='fixture') for i in range(6)]
+            session.add_all(rows);await session.flush();ids=[row.id for row in rows]
+        self.chat.recommendations.recommend_for_user.return_value=SimpleNamespace(status='ok',recommendations=[SimpleNamespace(track_id=value,artist='Fixture',title='Song',artwork_url=None,reason='Similar') for value in ids])
+        response=await self.client.post('/api/recommendations',json={'replace':True,'batch':True},headers={'X-Telegram-Init-Data':signed()})
+        self.assertEqual(response.status,200);result=await response.json();self.assertEqual(len(result['tracks']),5)
+        self.chat.recommendations.recommend_for_user.assert_awaited_once_with(123,limit=20)
+        for value in [ids[0],ids[4]]:
+            self.assertEqual((await self.client.post('/api/rate',json={'token':result['token'],'track_id':value,'value':'neutral'},headers={'X-Telegram-Init-Data':signed()})).status,200)
+        for payload in [{'batch':True},{'replace':True,'batch':'yes'}]:
+            self.assertEqual((await self.client.post('/api/recommendations',json=payload,headers={'X-Telegram-Init-Data':signed()})).status,400)
+
     async def asyncSetUp(self):
         await super().asyncSetUp()
         self.chat = ChatService(self.database, AsyncMock())
+        async def queued(user, limit=5, *, feed=False):
+            return await self.chat.recommendations.recommend_for_user(user, limit=limit)
+        self.chat.recommendations.queue.reserve.side_effect = queued
         await self.chat.ensure_user(Submitter(123))
         async with self.database.write() as session:
             track = Track(artist='Test', title='Song', metadata_source='lastfm')

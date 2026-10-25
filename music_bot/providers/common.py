@@ -58,6 +58,8 @@ class TrackCandidate:
     youtube_views: int | None = None  # Observed discovery upload views, not song-wide totals.
     artist_aliases: tuple[str, ...] = ()  # Verified catalogue aliases; search only.
 
+    recording_metadata: dict = field(default_factory=dict)  # Clean display snapshot; raw source fields stay intact.
+
     @property
     def missing_metadata(self) -> tuple[str, ...]:
         # Optional fields indicate coverage, not a failed request.

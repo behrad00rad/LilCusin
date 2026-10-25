@@ -73,7 +73,7 @@ class RecommendationQueue:
                 self.warm(telegram_id)
         task.add_done_callback(completed)
 
-    async def fill(self, telegram_id):
+    async def fill(self, telegram_id, *, feed=False):
         lock = self.locks.setdefault(telegram_id, asyncio.Lock())
         try:
             async with asyncio.timeout(30), lock, self.capacity:
@@ -87,10 +87,18 @@ class RecommendationQueue:
                         QueuedRecommendation.user_id == user_id, QueuedRecommendation.expires_at <= utc_now()))
                     existing = list(await session.scalars(select(QueuedRecommendation.track_id).where(
                         QueuedRecommendation.user_id == user_id)))
+                    feed_excluded = set()
+                    if feed:
+                        from ..feed_history import excluded_ids
+                        feed_excluded = await excluded_ids(session, user_id)
+                        await session.execute(delete(QueuedRecommendation).where(
+                            QueuedRecommendation.user_id == user_id,
+                            QueuedRecommendation.track_id.in_(feed_excluded)))
+                        existing = [track_id for track_id in existing if track_id not in feed_excluded]
                     if len(existing) >= LOW_WATER:
                         return
                 result = await self.service._recommend(telegram_id, QUEUE_TARGET, None, False, None,
-                    exclude_track_ids=existing, seed_offset=cursor)
+                    exclude_track_ids=set(existing) | feed_excluded, seed_offset=cursor)
                 async with self.database.write() as session:
                     state = await session.get(LearningState, user_id)
                     if state is None or state.generation != generation or state.revision != revision or self.closed:
@@ -110,18 +118,22 @@ class RecommendationQueue:
         except Exception:
             logger.warning('Recommendation refill unavailable; details omitted for privacy.')
 
-    async def reserve(self, telegram_id, limit=5):
+    async def reserve(self, telegram_id, limit=5, *, feed=False):
         if type(telegram_id) is not int or telegram_id <= 0:
             raise ValueError('Invalid Telegram user ID')
         if type(limit) is not int or not 1 <= limit <= S.MAX_LIMIT:
             raise ValueError('Invalid batch size')
-        result = await self._reserve(telegram_id, limit)
+        result = await self._reserve(telegram_id, limit, feed=feed)
+        if feed and result.recommendations and len(result.recommendations) < min(5, limit):
+            await self.fill(telegram_id, feed=True)
+            await self.release(telegram_id, result.batch_id)
+            return await self._reserve(telegram_id, limit, feed=True)
         if result.recommendations:
             return result
-        await self.fill(telegram_id)
-        return await self._reserve(telegram_id, limit)
+        await self.fill(telegram_id, feed=feed)
+        return await self._reserve(telegram_id, limit, feed=feed)
 
-    async def _reserve(self, telegram_id, limit):
+    async def _reserve(self, telegram_id, limit, *, feed=False):
         batch = uuid4().hex
         async with self.database.write() as session:
             user_id = await session.scalar(select(User.id).where(User.telegram_user_id == telegram_id))
@@ -134,6 +146,13 @@ class RecommendationQueue:
             rows = list(await session.scalars(select(QueuedRecommendation).where(
                 QueuedRecommendation.user_id == user_id).order_by(QueuedRecommendation.position, QueuedRecommendation.track_id)))
             _, blocked = await load_exclusions(session, user_id)
+            if feed:
+                from ..feed_history import excluded_ids
+                excluded = await excluded_ids(session, user_id)
+                excluded_items = await load_items(session, list(await session.scalars(
+                    select(Track).where(Track.id.in_(excluded)))))
+                for item in excluded_items.values():
+                    blocked.update(item.identities)
             state = await session.get(LearningState, user_id)
             items = await load_items(session, list(await session.scalars(select(Track).where(
                 Track.id.in_([row.track_id for row in rows])))))

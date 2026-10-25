@@ -1,4 +1,4 @@
-"""Read-only, signed delivery receipts; opening the UI never queues audio."""
+"""Signed delivery receipts and explicit queue requests; status reads never queue audio."""
 from datetime import datetime
 from aiohttp import web
 from sqlalchemy import select, or_
@@ -7,23 +7,7 @@ from .fetch_models import AudioRequest, FetchJob
 
 
 def register_delivery_status(app, chat):
-    async def status(request):
-        try:
-            data = await request.json()
-            if not isinstance(data, dict) or set(data) - {'track_id', 'token', 'swap_token', 'after', 'request_id'}:
-                raise ValueError
-            track_id = data.get('track_id')
-            if type(track_id) is not int or track_id <= 0:
-                raise ValueError
-            request_id = data.get('request_id')
-            if request_id is not None and (not isinstance(request_id, str) or not 1 <= len(request_id) <= 80):
-                raise ValueError
-            after = datetime.fromisoformat(data['after']) if 'after' in data else None
-            if after is not None and (after.tzinfo is None or not -30 <= (utc_now() - after).total_seconds() <= 900):
-                raise ValueError
-        except (ValueError, TypeError, KeyError):
-            raise web.HTTPBadRequest(text='Invalid delivery status request.') from None
-        actor = request['user']['id']
+    async def authorize_source(data, actor, track_id):
         if 'swap_token' in data:
             if 'token' in data or not isinstance(data['swap_token'], str):
                 raise web.HTTPBadRequest(text='Choose one song source.')
@@ -44,6 +28,25 @@ def register_delivery_status(app, chat):
                     ChatControl.expires_at > utc_now()))
                 if grant is None or grant.payload.get('kind') != 'miniapp' or track_id not in grant.payload.get('tracks', []):
                     raise web.HTTPForbidden(text='Refresh this song first.')
+
+    async def status(request):
+        try:
+            data = await request.json()
+            if not isinstance(data, dict) or set(data) - {'track_id', 'token', 'swap_token', 'after', 'request_id'}:
+                raise ValueError
+            track_id = data.get('track_id')
+            if type(track_id) is not int or track_id <= 0:
+                raise ValueError
+            request_id = data.get('request_id')
+            if request_id is not None and (not isinstance(request_id, str) or not 1 <= len(request_id) <= 80):
+                raise ValueError
+            after = datetime.fromisoformat(data['after']) if 'after' in data else None
+            if after is not None and (after.tzinfo is None or not -30 <= (utc_now() - after).total_seconds() <= 900):
+                raise ValueError
+        except (ValueError, TypeError, KeyError):
+            raise web.HTTPBadRequest(text='Invalid delivery status request.') from None
+        actor = request['user']['id']
+        await authorize_source(data, actor, track_id)
         marker = after or utc_now()
         async with chat.database.sessions() as session:
             conditions = [User.telegram_user_id == actor, FetchJob.track_id == track_id]
@@ -60,4 +63,28 @@ def register_delivery_status(app, chat):
             if state not in {'waiting', 'pending', 'choice', 'sending', 'done', 'failed', 'cancelled', 'uncertain'}:
                 state = 'uncertain'
         return web.json_response(dict(after=marker.isoformat(), state=state, request_id=row.id if row else None))
+    async def queue(request):
+        try:
+            data = await request.json()
+            if (not isinstance(data, dict) or set(data) - {'track_id', 'token', 'swap_token'}
+                    or type(data.get('track_id')) is not int or data['track_id'] <= 0):
+                raise ValueError
+        except (ValueError, TypeError, KeyError):
+            raise web.HTTPBadRequest(text='Invalid delivery request.') from None
+        actor, track_id = request['user']['id'], data['track_id']
+        await authorize_source(data, actor, track_id)
+        from .get_song import GetSong, FetchSettings
+        from .youtube_fetch import FetchError
+        settings = FetchSettings.environment()
+        if not settings.enabled:
+            raise web.HTTPServiceUnavailable(text='Song delivery is unavailable.')
+        marker = utc_now()
+        # Enqueue only. The existing bot worker owns fetching, choice UI and delivery.
+        service = GetSong(chat.database, None, settings=settings, fetcher=object())
+        try:
+            request_id = await service.request(actor, track_id)
+        except FetchError:
+            raise web.HTTPTooManyRequests(text='Please wait before requesting another song.') from None
+        return web.json_response(dict(after=marker.isoformat(), state='pending', request_id=request_id))
+    app.router.add_post('/api/delivery-request', queue)
     app.router.add_post('/api/delivery-status', status)

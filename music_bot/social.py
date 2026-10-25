@@ -14,7 +14,7 @@ from .comparison_invitations import ComparisonInvitation, invitation_state, publ
 class SocialSettings(Base):
     __tablename__ = 'social_settings'
     user_id: Mapped[int] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
-    notifications: Mapped[bool] = mapped_column(default=False)
+    notifications: Mapped[bool] = mapped_column(default=True)
     suspended: Mapped[bool] = mapped_column(default=False)
 
 
@@ -123,6 +123,8 @@ async def notice(session, swap, user, event):
 
 
 async def stop_interactions(session, first, second=None):
+    from .guess_game import purge_games
+    await purge_games(session, first, second)
     pair = ((SongSwap.sender_id == first) | (SongSwap.recipient_id == first))
     invites = ((ComparisonInvitation.sender_id == first) | (ComparisonInvitation.recipient_id == first))
     if second is not None:
@@ -169,6 +171,9 @@ class Social:
             row = await consent(session, token, actor)
             first = row.sender_snapshot if actor == row.sender_id else row.recipient_snapshot
             second = row.recipient_snapshot if actor == row.sender_id else row.sender_snapshot
+            from .taste_sharing import visible_snapshot
+            first=await visible_snapshot(session,actor,first)
+            second=await visible_snapshot(session,row.recipient_id if actor==row.sender_id else row.sender_id,second)
             return dict(token=token, you=public_snapshot(first), other=public_snapshot(second), **comparison(first, second))
 
     async def choices(self, telegram_id, invitation, reply_to=None):
@@ -182,7 +187,7 @@ class Social:
             snapshot = row.sender_snapshot if actor == row.sender_id else row.recipient_snapshot
             return [dict(id=song['id'], artist=song['artist'], title=song['title']) for song in snapshot['songs']]
 
-    async def draft(self, telegram_id, invitation, track_id, reply_to=None):
+    async def draft(self, telegram_id, invitation, track_id, reply_to=None, source_token=None):
         if type(track_id) is not int or (reply_to is not None and not token_valid(reply_to)):
             raise CardError('social_invalid')
         async with self.database.write() as session:
@@ -190,7 +195,14 @@ class Social:
             row = await consent(session, invitation, actor)
             snapshot = row.sender_snapshot if actor == row.sender_id else row.recipient_snapshot
             if track_id not in {song['id'] for song in snapshot['songs']}:
-                raise CardError('social_unavailable')
+                from .comparison_invitations import is_friendship
+                from .models import ChatControl
+                if not is_friendship(row) or not token_valid(source_token):raise CardError('social_unavailable')
+                grant=await session.get(ChatControl,source_token)
+                if (grant is None or grant.user_id!=actor or grant.expires_at<=utc_now()
+                        or grant.payload.get('kind') not in {'miniapp','tastecard'}
+                        or track_id not in grant.payload.get('tracks',[])):
+                    raise CardError('social_unavailable')
             if reply_to:
                 original = await self._swap(session, actor, reply_to)
                 if original.recipient_id != actor or original.invitation != invitation:
@@ -202,7 +214,7 @@ class Social:
             count = await session.scalar(select(func.count()).select_from(SongSwap).where(SongSwap.sender_id == actor, SongSwap.created_at > utc_now()-timedelta(days=1)))
             if count >= 10: raise CardError('social_limit')
             swap = SongSwap(token=secrets.token_urlsafe(24), invitation=invitation, sender_id=actor, recipient_id=recipient,
-                track_id=track_id, reply_to=reply_to, state='draft', note='', loved=False, saved=False, expires_at=row.expires_at)
+                track_id=track_id, reply_to=reply_to, state='draft', note='', loved=False, saved=False, expires_at=min(row.expires_at,utc_now()+timedelta(days=30)))
             session.add(swap);await session.flush()
             return await self._projection(session, actor, swap)
 
@@ -217,10 +229,11 @@ class Social:
 
     async def _projection(self, session, actor, row):
         track = await session.get(Track, row.track_id)
-        card = await session.get(TasteCard, row.recipient_id if actor == row.sender_id else row.sender_id)
+        invite = await session.get(ComparisonInvitation,row.invitation)
         return dict(token=row.token, invitation=row.invitation, role='sender' if actor == row.sender_id else 'recipient',
             state=row.state, song=song_json(track, owner=True),
-            partner=card.nickname if card else '', note=row.note, saved=row.saved, loved=row.loved,
+            partner=(invite.recipient_snapshot if actor==invite.sender_id else invite.sender_snapshot).get('nickname',''), note=row.note, saved=row.saved, loved=row.loved,
+            rated=await session.scalar(select(Rating.id).where(Rating.user_id == actor, Rating.track_id == row.track_id)) is not None,
             reply_to=row.reply_to, sent_at=row.sent_at.isoformat() if row.sent_at else None,
             expires_at=row.expires_at.isoformat())
 
@@ -251,6 +264,8 @@ class Social:
                 if row.state == 'draft':
                     row.state = 'sent';row.sent_at = utc_now()
                     await notice(session, row, row.recipient_id, 'pick')
+                from .feed_history import record_event
+                await record_event(session, actor, row.track_id, 'engaged')
             elif action == 'save':
                 from .taste_learning import feedback
                 await feedback(session,actor,row.track_id,'save')
@@ -292,6 +307,23 @@ class Social:
                 values.append(await self._projection(session, actor, row))
             return values
 
+    async def thread(self, telegram_id, invitation, before=None):
+        """Bounded participant-only history; every page rechecks current consent."""
+        async with self.database.sessions() as session:
+            actor=await user_id(session,telegram_id)
+            connection=await consent(session,invitation,actor)
+            query=select(SongSwap).where(SongSwap.invitation==invitation,SongSwap.expires_at>utc_now(),
+                (SongSwap.state=='sent')|((SongSwap.state=='draft')&(SongSwap.sender_id==actor)))
+            if before is not None:
+                cursor=await self._swap(session,actor,before,draft=True)
+                if cursor.invitation!=invitation:raise CardError('social_unavailable')
+                query=query.where((SongSwap.created_at<cursor.created_at)|((SongSwap.created_at==cursor.created_at)&(SongSwap.token<cursor.token)))
+            rows=list(await session.scalars(query.order_by(SongSwap.created_at.desc(),SongSwap.token.desc()).limit(41)))
+            page=rows[:40]
+            other=connection.recipient_snapshot if actor==connection.sender_id else connection.sender_snapshot
+            return dict(swaps=[await self._projection(session,actor,row) for row in reversed(page)],
+                before=page[-1].token if len(rows)>40 else None,partner=other.get('nickname',''))
+
     async def remove_save(self,telegram_id,track_id):
         if type(track_id) is not int: raise CardError('social_invalid')
         async with self.database.write() as session:
@@ -305,7 +337,7 @@ class Social:
         async with self.database.write() as session:
             actor = await user_id(session, telegram_id)
             row = await session.get(SocialSettings, actor)
-            if row is None: row=SocialSettings(user_id=actor,notifications=False,suspended=False);session.add(row)
+            if row is None: row=SocialSettings(user_id=actor,notifications=True,suspended=False);session.add(row)
             if notifications is not None:
                 row.notifications = notifications
                 if not notifications:
@@ -317,9 +349,12 @@ class Social:
                 result.append(dict(handle=item.handle,nickname=item.label))
             return dict(notifications=row.notifications, suspended=row.suspended, blocks=result)
 
-    async def relationship(self, telegram_id, invitation, action, reason='spam', swap_token=None):
+    async def relationship(self, telegram_id, invitation, action, reason='spam', swap_token=None, details=''):
         if not isinstance(action,str) or not isinstance(reason,str) or action not in {'block','unblock','report'} or reason not in {'spam','harassment','unsafe','other'}:
             raise CardError('social_invalid')
+        if not isinstance(details,str) or len(details)>240 or (action!='report' and details):raise CardError('social_invalid')
+        from .taste_cards import clean_text
+        details=clean_text(details,240)
         async with self.database.write() as session:
             actor=await user_id(session,telegram_id)
             if action=='unblock':
@@ -342,7 +377,7 @@ class Social:
                 if count>=5: raise CardError('social_limit')
                 duplicate=await session.scalar(select(SocialReport).where(SocialReport.reporter_id==actor,SocialReport.target_id==target,SocialReport.swap_token==swap_token,SocialReport.state=='open'))
                 if duplicate: return dict(state='reported')
-                session.add(SocialReport(token=secrets.token_urlsafe(24),reporter_id=actor,target_id=target,swap_token=swap_token,reason=reason,evidence_note=swap.note if swap_token else ''))
+                session.add(SocialReport(token=secrets.token_urlsafe(24),reporter_id=actor,target_id=target,swap_token=swap_token,reason=reason,evidence_note=(swap.note if swap_token else '')+('\nReporter note: '+details if details else '')))
             return dict(state='reported' if action=='report' else action)
 
     async def moderate(self, telegram_id, moderators, report=None, action=None):
@@ -371,6 +406,8 @@ class Social:
         try:
             async with asyncio.timeout(8):
                 await self._flush_notices(bot)
+                from .social_activity import flush
+                await flush(self.database,bot)
         except TimeoutError:
             pass  # Already claimed attempts remain non-retryable; the inbox still works.
 
@@ -388,11 +425,14 @@ class Social:
                 settings=await session.get(SocialSettings,row.user_id)
                 swap=await session.get(SongSwap,row.swap_token)
                 try:
-                    if settings is None or not settings.notifications or settings.suspended: raise CardError('social_unavailable')
+                    if settings is None:
+                        settings=SocialSettings(user_id=row.user_id,notifications=True,suspended=False);session.add(settings)
+                    if not settings.notifications or settings.suspended: raise CardError('social_unavailable')
                     await self._swap(session,row.user_id,row.swap_token)
                 except CardError:
                     row.state='cancelled';continue
-                count=await session.scalar(select(func.count()).select_from(SocialNotice).where(SocialNotice.user_id==row.user_id,SocialNotice.attempted_at>utc_now()-timedelta(days=1)))
+                from .social_activity import attempts
+                count=await attempts(session,row.user_id)
                 if count>=3: row.state='capped';continue
                 row.state='attempted';row.attempted_at=utc_now()
                 user=await session.get(User,row.user_id)

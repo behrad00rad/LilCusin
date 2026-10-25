@@ -346,3 +346,38 @@ evidence therein, and the relevant [decision history](decisions.md) record
 targeted checks and guarded runtime verification. Physical mobile behavior,
 signed Telegram round trips, and playback are not established by those checks.
 This overview is documentation, not a new runtime release.
+
+## 2026-10-23 — Guess game step 1
+
+Ten scoped SQLite/settings/forgetme cases passed (8 cases in 109.806s, settings in 31.095s, forgetme in 32.816s), with mocked bot and no provider calls. First sandbox fixture setup failed on temporary-directory permissions; reruns outside sandbox passed. JS/Worker syntax, Worker regeneration and scoped whitespace passed. No game UI, visuals, deployment or real Telegram verification. [Files and remaining work](guess-game.md).
+
+## 2026-10-23 — Guess game service/API verification
+
+Eleven initial isolated service/API cases passed in 198.839s; the added concurrent-start/wrong-score/unfinished-history case and affected daily-limit case passed in 141.877s. Twelve unique service/API cases total. Three connector cases and Worker/proxy/bridge checks passed. Signed auth/no-store exercised in-process; providers/bot mocked, no external calls. Existing dirty checkout; unrelated changes excluded from commit. No browser, deployment or real Telegram acceptance. [Step handoff](guess-game.md#step-2--server-rules-and-apis-2026-10-23).
+
+The exact staged database/API registration passed the signed-auth API case again (29.312s); the exact staged Worker passed the guess routing fixture. This checks the selectively staged prerequisites without claiming a wholly clean checkout run.
+
+
+## 2026-10-24 ? Guess game screens
+
+Local UI state fixture, JS syntax and affected signed-auth API case (14.039s) passed. Browser inventory was empty; in-app browser open returned unavailable, so no phone/visual claim. Existing dirty edits preserved. [Evidence/limits](guess-game.md#step-3--game-screens-2026-10-24).
+
+
+## 2026-10-24 - Guess game alerts
+
+The combined 32-case run had one Persian-copy encoding failure. After UTF-8 correction, eight notice cases passed (37.417s), then the quiet-race/batch case passed (18.289s). Thirty-three unique related Python cases passed across scoped runs; UI/Unicode and Worker/bridge fixtures pass. Sends/providers mocked; no browser/live acceptance. [Details and limitations](guess-game.md#step-4---nudges-and-notifications-2026-10-24).
+
+
+Exact staged database/API registration passed the batch/quiet-race and signed-auth API checks (2 cases, 3.983s). Exact staged Worker routes, JS syntax and all Persian game-string Unicode assertions passed.
+
+
+## 2026-10-25 - main and safe-publish integration
+
+Integrated the reviewed safe-publish history with the current GitHub main history
+in an isolated clean worktree. The integration retains main-only Mini App cover
+proxy registration and documentation along with the safe-publish feed, delivery,
+social and Guess Game work. The deployed Loved-sharing and alert defaults are
+represented as on for missing preferences while saved opt-outs and song privacy
+locks remain honored. Updated the README and feature/status documentation.
+Focused checks and final remote ref verification are recorded in the release
+summary; local tests do not establish real-user acceptance.

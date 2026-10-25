@@ -242,3 +242,159 @@ unsigned delivery-status returned 401. Service states/PIDs, Python sources and
 private configuration unchanged; no restart. Initial upload disconnected before
 application; retry succeeded. Supersedes the pending status below. Physical
 Telegram gestures and real delivery remain unverified. No further development.
+
+## Home card and inline owl evidence - 2026-10-20
+
+
+Implementation `f46500d` replaces prior Home/header polish with a square cover,
+over-cover count and up/down arrows, visible radio-group ratings, reason chip,
+one primary Get song action and quieter secondary controls. Whole-card vertical
+swipes and horizontal tab navigation retain their existing handlers. Inline SVG
+owl has CSS blink/bob, bounded RAF pupil tracking, action-only reactions and
+localized tips; language selection moved into More. Quick Guide already has a
+language selector. Header previously showed the brand logo/name, not a user photo.
+Server dominant-color/cache work deferred by user; fixed #1f2024 fallback. Existing
+provider artwork variants use 400px WebP (300px low-data); no backend changes.
+Four scoped Node scripts passed: home/owl, gestures, motion and delivery; syntax,
+Worker generation and whitespace passed. EN/FA checked at actual 360/390px width,
+810px height: no horizontal overflow, >=44px rating targets, secondary actions
+clear navigation. All eight before/after screenshots saved; capture needed retries.
+Cover 360px: ~273x160 -> 283x283; 390px: ~289x148 -> 299x299 (baseline height
+varies with copy). Core UI gzip estimate 112173 -> 115661 bytes, +3488 bytes;
+JS/CSS raw delta +6123 bytes. Excludes unchanged assets and image/network cost.
+Native Telegram touch, audio receipt, live network transfer and reduced-motion
+device rendering not verified. No push or deployment. See the detailed evidence
+and Persian copy review in ux-clarity-2026-10-19.md.
+
+The old CSS colored the first Love button without a stored rating. That rule was
+removed; new tests cover unrated, four stored values, invalid and preview states,
+radio-group/action ordering, fixed-color and selected-state contrast, owl reaction
+reset timing and tip cycling. Existing gesture/motion/delivery regression scripts
+passed. No invented reason or total catalogue size: the pill counts loaded picks.
+The extra Home heading was removed so the card's actions clear the bottom bar.
+All API operations, signatures, consent checks and backend state remain unchanged.
+No portrait, avatar, social, audio or recommendation-algorithm work in this slice.
+The previous brand JPEG block and decorative owl emoji were replaced on Home;
+the user's identity is separate. No animated-image asset or dependency was added.
+
+Screenshots are local preview data, not real user records or Telegram evidence:
+
+| Language / width | Before | After |
+| --- | --- | --- |
+| en / 360px | [Before](screenshots/home-owl-before-en-360.jpg) | [After](screenshots/home-owl-after-en-360.jpg) |
+| en / 390px | [Before](screenshots/home-owl-before-en-390.jpg) | [After](screenshots/home-owl-after-en-390.jpg) |
+| fa / 360px | [Before](screenshots/home-owl-before-fa-360.jpg) | [After](screenshots/home-owl-after-fa-360.jpg) |
+| fa / 390px | [Before](screenshots/home-owl-before-fa-390.jpg) | [After](screenshots/home-owl-after-fa-390.jpg) |
+
+### Persian copy for owner review
+
+Native conversational Persian; owner review is still requested.
+
+| Key | Copy |
+| --- | --- |
+| `home_count` | {n} از {total} |
+| `home_swipe` | کارت را بالا و پایین بکش یا فلش را بزن |
+| `owl_label` | جغد راهنما؛ بزن تا یک نکته بگم |
+| `owl_idle` | بزن تا یه نکته بگم |
+| `owl_love` | یادم می‌مونه؛ بیشتر از اینا پیشنهاد می‌دم. |
+| `owl_like` | انتخاب خوبیه. |
+| `owl_neutral` | باشه، گرفتم. |
+| `owl_dislike` | گرفتم؛ کمتر از اینا پیشنهاد می‌دم. |
+| `owl_tip_0` | خود کارت رو بالا یا پایین بکش تا آهنگ عوض بشه |
+| `owl_tip_1` | به چندتا آهنگ امتیاز بده تا پیشنهادها به سلیقه‌ات نزدیک‌تر بشن |
+| `owl_tip_2` | تا پنج آهنگ محبوبت رو به کارتت اضافه کن؛ بعد پیش‌نمایش بگیر و بفرست |
+
+
+## Home card and owl deployed - 2026-10-20
+
+User-authorized release `eda1f132f83ce635` deployed the tested Home card and inline
+owl from `f46500d`, preserving the existing production locale preload. Four assets
+updated after prior-hash checks, with rollback copies retained. All five public
+HTTPS UI assets returned 200 and exact source hashes; unsigned delivery-status
+returned 401. Live Persian browser preview shows owl, count, radio ratings and
+card actions. Service states/PIDs, Python sources, private configuration and
+social.js unchanged; no restart. Home/owl regression and syntax passed again.
+This supersedes local-only status below. Physical Telegram swipes and actual
+audio receipt remain unverified. No Git push performed in this deployment.
+
+
+## Viewport overflow correction - local, 2026-10-21
+
+User phone screenshot confirms Get song/secondary controls are hidden by navigation.
+The cover now remains square but shrinks to space left after controls, hint,
+Telegram safe areas and viewport height; overlay arrows follow its size. Telegram
+viewport/safe-area changes refit it; active swipes/animations are excluded from
+measurement. No API, palette or gesture changes. Five scoped Node checks passed
+(viewport, gestures, motion, home/owl, delivery), plus JS syntax, Worker generation
+and whitespace. New regression covers short/tall hosts, long content, safe areas,
+repeat-fit stability and drag guards. Rendered/iPhone verification is pending:
+browser access was approval-blocked in the interrupted turn and no browser is
+currently connected. No new screenshots, push or deployment for this correction.
+
+
+## Viewport fix deployed - 2026-10-21
+
+Explicitly authorized asset release `a90f126e622dc9f5` deployed commit `5c50070`'s
+app.js/style.css after prior-hash checks; rollback copies retained. Viewport
+regression passed again. All five public UI assets returned 200 with matching
+hashes; unsigned delivery-status returned 401. Service states/PIDs, Python sources
+and private configuration unchanged; no restart. This supersedes the pending
+status below. Browser rendering and physical iPhone verification remain pending.
+
+
+## Saved feedback, Home swaps and artwork overlay - local, 2026-10-21
+
+Add to my card now changes to Saved/checkmark after acknowledgement or an existing
+stored selection, with a brief reduced-motion-aware icon animation. Failure keeps
+the original action; profile updates invalidate the session cache. Home includes
+up to three received sent-state swaps after the first recommendation, with sender,
+song and note. Swap cards stay out of recommendation grants/rating/history caches;
+opening reloads the authorized inbox and uses only a still-available fresh swap.
+Artwork fills the top edge with a dark lower fade behind title/artist. Existing
+viewport fitting remains; palette, whole-card/tab gestures and APIs unchanged.
+Five scoped Node checks passed (feed polish, delivery, viewport, gestures, social),
+plus syntax, Worker generation and whitespace. Browser inventory is empty; visual
+review/screenshots and phone verification pending. No deployment or push.
+
+Persian copy: `card_saved_button` = ????? ??; `feed_swap_from` = ???????? {name}.
+
+
+## Feed polish deployed - 2026-10-21
+
+Explicit user authorization deployed `b25293c` as release `96b50529b5e1cdcd`:
+Saved/check animation, received swap cards and edge-to-edge artwork/title overlay.
+Four UI assets updated after baseline checks, rollback backups retained. Focused
+feed regression passed again. All five public UI hashes match; unsigned delivery
+returns 401. Service states/PIDs, Python sources, private configuration and index
+unchanged; no restart. This supersedes local-only status below. Browser/phone
+visual verification remains pending; no new screenshots or Git push in this release.
+
+
+## Direct delivery and unseen feed refresh - local, 2026-10-21
+
+Implementation `61150aa`: explicit signed POST /api/delivery-request validates
+actor/source/grant or current swap consent, then enqueues through GetSong.request.
+No second worker, polling process or chat-opening /start fallback. Existing queue
+limits, recording choices, learning and delivery receipts remain. Status POST is
+still read-only. Active requests deduplicate; frontend never claims Sent until a
+receipt confirms an audio message. Worker/connector route allowlists updated.
+Home filters swaps by the current actor's stored rating/Love and immediately
+removes matching swaps after rating a recommendation. No partner rating exposed.
+Pulling down at the first card keeps buffered unseen cards; only exhaustion makes
+one batch request. Opt-in batch response returns up to five picks with normal
+owned grants; legacy replacement still returns one. Seen picks are tracked in
+this Mini App session, with bounded history/DOM and no implicit rating. Delays
+show a skeleton, block underlying controls and keep the owl loading message until
+the request finishes. Failure retains a usable card; navigation guards stale work.
+Thirteen scoped Python API tests and ten Node scripts passed, plus syntax, Worker
+build and whitespace. Initial sandbox temp/SQLite test errors were environmental;
+rerun with workspace disposable databases/loopback permissions passed. Browser
+inventory appeared but browser connections were unavailable; no new screenshots,
+real Telegram delivery or physical swipe verification. No push/deployment.
+RELEASE GATE: reconcile runtime Python changes and run scoped Linux checks; deploy
+backend endpoint/batch/projection before matching UI, restart only the Mini App API
+as documented, preserve the existing bot/audio worker, DB/config and rollback.
+A static-assets-only release is insufficient. Unrelated dirty Mini App cover-proxy
+registration and other backend work remain outside this commit.
+
+Persian review: دارم پیشنهادهای بعدی رو آماده می‌کنم… / دارم آهنگ رو درخواست می‌کنم… / کارت را بالا بکش؛ روی اولین کارت، پایین بکش تا پیشنهادهای ندیده بیاد.

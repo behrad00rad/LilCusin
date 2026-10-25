@@ -25,8 +25,10 @@ export class LilCusinBridge {
       server.serializeAttachment({connectionId:crypto.randomUUID()});
       return new Response(null,{status:101,webSocket:client});
     }
-    if(!routes.has(path))return error('Not found.',404);
-    if(request.method!==routes.get(path))return error('Method not allowed.',405);
+    if(!routeMethod(path,request.method))return error('Not found.',404);
+    if(request.method!==routeMethod(path,request.method))return error('Method not allowed.',405);
+    const query=guessQuery(new URL(request.url));
+    if(query===null)return error('guess_invalid',400);
     const auth=request.headers.get('X-Telegram-Init-Data');
     if(!auth || auth.length>12000)return error('Open Lil Cusin from Telegram.',401);
     const socket=this.state.getWebSockets('connector').find(ws=>ws.readyState===1);
@@ -49,7 +51,7 @@ export class LilCusinBridge {
     return await new Promise(resolve=>{
       const timer=setTimeout(()=>{this.pending.delete(id);resolve(error('Music service timed out. Please try again.',504));},45000);
       this.pending.set(id,{resolve,timer,socket,connectionId:this.connectionId(socket)});
-      try{socket.send(JSON.stringify({kind:'request',id,path,method:request.method,auth,body}));}
+      try{socket.send(JSON.stringify({kind:'request',id,path:path+query,method:request.method,auth,body}));}
       catch{clearTimeout(timer);this.pending.delete(id);resolve(error('Music service is reconnecting.',503));}
     });
   }

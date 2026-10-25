@@ -58,6 +58,8 @@ async def invalidate(session, user_id):
 
 
 async def record_request(session, user_id, track_id, request_key):
+    from .feed_history import record_event
+    await record_event(session, user_id, track_id, 'engaged')
     state = await learning_state(session, user_id)
     await session.execute(delete(TasteRequest).where(TasteRequest.user_id == user_id,
         TasteRequest.created_at <= utc_now() - REQUEST_WINDOW))
@@ -87,6 +89,8 @@ async def feedback(session, user_id, track_id, action):
     before = (saved, row.feedback)
     renewed = False
     if action == 'save':
+        from .feed_history import record_event
+        await record_event(session, user_id, track_id, 'engaged')
         state = await learning_state(session, user_id)
         if saved_row is not None and state.saves_since and saved_row.created_at <= state.saves_since:
             saved_row.created_at = utc_now()

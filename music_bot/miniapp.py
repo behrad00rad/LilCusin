@@ -145,9 +145,11 @@ def create_app(token, chat, workflow, *, bot_username=None):
     async def recommendations(request):
         data = await body(request)
         replace = data.get('replace', False)
+        batch = data.get('batch', False)
         exclude = data.get('exclude', [])
         current = data.get('current', [])
-        if (type(replace) is not bool or not isinstance(exclude, list) or len(exclude) > 20
+        if (type(batch) is not bool or (batch and not replace)
+                or type(replace) is not bool or not isinstance(exclude, list) or len(exclude) > 20
                 or any(type(value) is not int or value <= 0 for value in exclude)
                 or not isinstance(current, list) or len(current) > 20 or (current and not replace)
                 or any(not isinstance(item, dict) or type(item.get('id')) is not int
@@ -168,9 +170,33 @@ def create_app(token, chat, workflow, *, bot_username=None):
                     visible.append(item['id'])
                     expected_token = grant.token
         async with capacity:
-            result = await chat.recommendations.recommend_for_user(request['user']['id'], limit=20 if replace else 5)
-        rows = [track_json(row, row.reason) for row in result.recommendations if row.track_id not in exclude]
-        return await bundle(request['user']['id'], rows[:1] if replace else rows, result.status, visible, expected_token)
+            result = await chat.recommendations.queue.reserve(request['user']['id'], limit=20 if replace else 5, feed=True)
+        # Recheck stored ratings at the response boundary, including catalogue aliases.
+        from .models import Rating
+        from .recommendations.repository import load_items, aliases
+        from .providers.common import TrackCandidate
+        async with chat.database.sessions() as session:
+            rated_tracks = list(await session.scalars(select(Track).join(Rating).join(User)
+                .where(User.telegram_user_id == request['user']['id'])))
+            rated_items = await load_items(session, rated_tracks)
+        rated_ids = set(rated_items)
+        rated_aliases = set().union(*(item.identities for item in rated_items.values())) if rated_items else set()
+        rows = [track_json(row, row.reason) for row in result.recommendations
+                if row.track_id not in exclude and row.track_id not in rated_ids
+                and not aliases(TrackCandidate(title=row.title, artist=row.artist,
+                    source='recommendation', external_ids=getattr(row, 'external_ids', {}))) & rated_aliases]
+        from .friend_recommendations import mix_friend_songs
+        rows = await mix_friend_songs(chat.database, request['user']['id'], rows,
+            limit=(5 if batch else 1) if replace else 5, exclude=exclude)
+        from .feed_history import filter_rows
+        rows = await filter_rows(chat.database, request['user']['id'], rows, exclude)
+        try:
+            return await bundle(request['user']['id'], rows, 'ok' if rows else (
+                'insufficient_preferences' if result.status == 'insufficient_preferences' else 'caught_up'), visible, expected_token)
+        finally:
+            # Grants authorize actions; prefetching never consumes a queue item.
+            if getattr(result, 'batch_id', None):
+                await chat.recommendations.queue.release(request['user']['id'], result.batch_id)
 
     async def search(request):
         data = await body(request)
@@ -266,6 +292,10 @@ def create_app(token, chat, workflow, *, bot_username=None):
     app = web.Application(middlewares=[security], client_max_size=16384)
     from .cover_proxy import register_cover_proxy
     register_cover_proxy(app)
+    from .guess_api import register_guess_api
+    register_guess_api(app, chat, body, bot_username=bot_username)
+    from .taste_sharing import register_taste_sharing
+    register_taste_sharing(app, chat, body)
     app.on_cleanup.append(lambda app: artwork.close())
     app.router.add_get('/', asset)
     app.router.add_get('/{name:index.html|app.js|social.js|style.css|locales.json|bot-logo.jpg|vazirmatn.woff2|Vazirmatn-OFL.txt}', asset)
@@ -283,6 +313,8 @@ def create_app(token, chat, workflow, *, bot_username=None):
     app.router.add_post('/api/channels/connect', channel_connect)
     app.router.add_post('/api/channels/disconnect', channel_disconnect)
     register_channel_api(app,chat,workflow,body,bundle,track_json,capacity)
+    from .feed_api import register_feed_api
+    register_feed_api(app, chat, body)
     register_taste_card_api(app, chat, body, bot_username=bot_username)
     from .social_api import register_social_api
     register_social_api(app, chat, body, bot_username=bot_username)

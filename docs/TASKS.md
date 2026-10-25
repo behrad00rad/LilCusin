@@ -6,6 +6,10 @@ Unchecked means outstanding, not authorized for automatic implementation.
 
 | Priority | Action | Acceptance / evidence |
 | --- | --- | --- |
+| Local tested | Direct Mini App audio, rated-swap removal, unseen refresh and skeleton/owl loading, 2026-10-21 | `61150aa`; 13 API cases and 10 Node scripts passed. Coordinated backend-first deployment/API restart required; browser and live Telegram validation pending. |
+| Deployed | Saved feedback, received swaps in Home and artwork overlay, 2026-10-21 | Five focused checks passed; release `96b50529b5e1cdcd` public hashes/auth verified. Browser/phone visual review pending. Uses existing consented inbox and separates swap cards from recommendation grants. |
+| Deployed | Correct Home overflow in Telegram, 2026-10-21 | Responsive square-cover sizing reserves real controls/navigation; viewport/safe-area changes refit. Five scoped checks passed. Release `a90f126e622dc9f5` deployed: public hashes/auth verified, no restart. Browser/iPhone visual check pending. |
+| Deployed | Home card and inline owl, 2026-10-20 | `f46500d`: whole-card swipes retained, up/down arrows, square covers, honest ratings and lightweight mascot. Four scoped checks and EN/FA 360/390px layouts passed; eight screenshots in `docs/screenshots/`. Release `eda1f132f83ce635`: public hashes, auth and live Persian browser verified; no restart. Dominant-color server work deferred; real Telegram phone verification pending. Supersedes earlier Home/header polish. |
 | Deployed | Search More correction, 2026-10-20 | `8b779c1`: deeper same-query discovery after cached results, five unseen songs per extension, duplicate exclusion, bounded 60-song pool and explicit exhaustion. Seven tests local/Linux; live public probe found 37 distinct songs versus initial 12. Hashes/polling verified; physical Telegram taps unverified. Supersedes cached-pool-only limitation below. |
 | Deployed | Terminal 3 Telegram search and music UX, 2026-10-20 | Search More/Previous shipped first (`1108497`), then direct card ratings/Get audio (`edf6e51`). Four search tests local/Linux; 17 local UX/chat cases covered including corrected layout expectations; three focused Linux checks. Hashes/polling verified; native 320/390px visual/tap checks remain. Existing reasons retained; fetched-pool paging only, not unlimited artist browsing. |
 | Local complete | Recommendation loop items 1-3, explicitly requested 2026-10-19 | [Contract and 185 affected tests](recommendation-loop-2026-10-19.md): private taste signals, durable queue/refill and owner-bound feedback; final 16-case chat rerun passed. Release preparation tracked in STATE; deployment requires approval. Friends' discovery, playlists and unsolicited delivery excluded. |
@@ -44,3 +48,11 @@ Remaining: confirm the user-reported songs and signed Telegram/mobile experience
 Early receipt, bounded cancellation wait, status handover and visible failures are
 deployed; [45-case evidence](search-ack-2026-10-22.md). Remaining: user confirmation
 of the previously silent Telegram query and unrelated catalogue parity maintenance.
+
+Home card step 1: local/tested, undeployed. Steps 2/3 pending. See STATE for scoped commit limitations, verification and Persian copy.
+
+
+Exchanges cleanup (2026-10-22): steps 1-3 implemented locally (layout/icon controls, friend menus/report/thread wording, secret/happy owl). Evidence in STATE; not deployed. Step 4 durable skipped-card persistence/cooldowns/resume remains pending; stopped at usage-limit boundary.
+
+
+Home persistence step 4 (2026-10-22): implemented locally with private views/skips/hides, cooldowns, action exclusions, queue-backed resume/refill and exhausted state. Scoped evidence/migration requirements in STATE. Deployment and real-phone/offline/EN-FA phone-layout checks remain; optional artist skip ranking deferred.

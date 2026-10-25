@@ -149,6 +149,8 @@ class TasteCards:
                             raise CardError('card_stale')
                         position = next(i for i in range(5) if i not in {song.position for song in songs})
                         session.add(SignatureSong(user_id=card.user_id, position=position, track_id=track_id))
+                    from .feed_history import record_event
+                    await record_event(session, card.user_id, track_id, 'engaged')
                 elif action == 'remove':
                     if track_id not in ids:
                         raise CardError('card_stale')

@@ -1,7 +1,11 @@
 // The binding is pinned to the bot's loopback HTTP service, never a caller URL.
 export const routes = new Map([
-  ['/api/delivery-status','POST'],
-  ['/api/social/unsave','POST'],
+  ['/api/guess/status','GET'], ['/api/guess/start','POST'],
+  ['/api/guess/nudge','POST'],
+  ['/api/friend-invites','POST'], ['/api/friend-invites/revoke','POST'],
+  ['/api/delivery-status','POST'], ['/api/delivery-request','POST'],
+  ['/api/music','POST'], ['/api/music/grant','POST'], ['/api/music/change','POST'], ['/api/music/undo','POST'], ['/api/feed/events','POST'], ['/api/feed/swaps','GET'],
+  ['/api/social/thread','POST'], ['/api/social/unsave','POST'],
   ['/api/social','GET'], ['/api/social/compare','POST'], ['/api/social/choices','POST'], ['/api/social/draft','POST'], ['/api/social/action','POST'], ['/api/social/settings','GET'], ['/api/social/settings/update','POST'], ['/api/social/relationship','POST'], ['/api/social/get-song','POST'],
   ['/api/taste-card/image','POST'], ['/api/comparison-invitations','GET'], ['/api/comparison-invitations/create','POST'], ['/api/comparison-invitations/decide','POST'], ['/api/taste-card','GET'], ['/api/taste-card/update','POST'], ['/api/taste-card/share','POST'], ['/api/taste-card/view','POST'],
   ['/api/taste-setup','GET'], ['/api/taste-setup/update','POST'],
@@ -9,6 +13,16 @@ export const routes = new Map([
   ['/api/search', 'POST'], ['/api/rate', 'POST'], ['/api/similar', 'POST'],
   ['/api/artwork', 'POST'], ['/api/channels/songs', 'POST'], ['/api/channels/review', 'POST'], ['/api/channels', 'GET'], ['/api/channels/connect', 'POST'], ['/api/channels/disconnect', 'POST'],
 ]);
+export function routeMethod(path, requestedMethod) {
+  if(['/api/taste-sharing','/api/guess/preferences'].includes(path)) return ['GET','POST'].includes(requestedMethod) ? requestedMethod : 'GET';
+  return /^\/api\/guess\/[A-Za-z0-9_-]{32}\/answer$/.test(path) ? 'POST' : routes.get(path);
+}
+export function guessQuery(url) {
+  if(url.pathname!=='/api/guess/status') return '';
+  const values=url.searchParams.getAll('friend_id');
+  if(values.length!==1 || [...url.searchParams.keys()].length!==1 || !/^[A-Za-z0-9_-]{32}$/.test(values[0])) return null;
+  return '?friend_id='+encodeURIComponent(values[0]);
+}
 export const headers = {
   'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow',
   'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer',
@@ -19,16 +33,18 @@ export function error(message, status) {
 }
 export async function proxy(request, env) {
   const url = new URL(request.url);
-  if (!routes.has(url.pathname)) return error('Not found.',404);
-  if (request.method !== routes.get(url.pathname)) return error('Method not allowed.',405);
+  if (!routeMethod(url.pathname, request.method)) return error('Not found.',404);
+  if (request.method !== routeMethod(url.pathname, request.method)) return error('Method not allowed.',405);
+  const query=guessQuery(url);
+  if(query===null) return error('guess_invalid',400);
   const auth = request.headers.get('X-Telegram-Init-Data');
   if (!auth || auth.length > 12000) return error('Open Lil Cusin from Telegram.',401);
   const backend = env.BOT_BRIDGE ? env.BOT_BRIDGE.get(env.BOT_BRIDGE.idFromName('lilcusin')) : env.LILCUSIN_API;
   if (!backend) return error('The music service is being connected. Please try again shortly.',503);
   if (Number(request.headers.get('Content-Length')) > 16384) return error('Request too large.',413);
-  // Queries, cookies, destination headers and redirects are never forwarded.
+  // Only the validated guess-status query is forwarded; destinations stay fixed.
   try {
-    const response = await backend.fetch(new Request(`http://127.0.0.1:8091${url.pathname}`, {
+    const response = await backend.fetch(new Request(`http://127.0.0.1:8091${url.pathname}${query}`, {
       method: request.method, headers:{'Content-Type':'application/json','X-Telegram-Init-Data':auth},
       body: request.method==='POST' ? request.body : undefined, redirect:'manual', duplex:'half',
     }));
