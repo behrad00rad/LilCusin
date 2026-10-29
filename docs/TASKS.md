@@ -6,6 +6,7 @@ Unchecked means outstanding, not authorized for automatic implementation.
 
 | Priority | Action | Acceptance / evidence |
 | --- | --- | --- |
+| Deployed; preview user-confirmed | Daily three-song picks and monthly invitation | Three varied picks with grounded reasons; daily rating encouragement; no-history invitation capped at 30 days. Combined preview confirmed by user. Scheduled/provider acceptance remains separate. See [evidence](evidence.md#2026-10-29---monthly-invitation-and-daily-rating-reminder). |
 | Local tested | Direct Mini App audio, rated-swap removal, unseen refresh and skeleton/owl loading, 2026-10-21 | `61150aa`; 13 API cases and 10 Node scripts passed. Coordinated backend-first deployment/API restart required; browser and live Telegram validation pending. |
 | Deployed | Saved feedback, received swaps in Home and artwork overlay, 2026-10-21 | Five focused checks passed; release `96b50529b5e1cdcd` public hashes/auth verified. Browser/phone visual review pending. Uses existing consented inbox and separates swap cards from recommendation grants. |
 | Deployed | Correct Home overflow in Telegram, 2026-10-21 | Responsive square-cover sizing reserves real controls/navigation; viewport/safe-area changes refit. Five scoped checks passed. Release `a90f126e622dc9f5` deployed: public hashes/auth verified, no restart. Browser/iPhone visual check pending. |

@@ -617,6 +617,7 @@ class Workflow:
             if flow.state != 'candidates':
                 raise FlowError('stale')
             flow.prompt_message_id = message_id
+            flow.expires_at = utc_now() + timedelta(days=1)
 
     async def close_candidates(self, submission_id, user_id, revision, message_id):
         async with self.database.write() as session:

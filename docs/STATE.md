@@ -1,5 +1,120 @@
 # Current handoff
 
+## Monthly invitation and daily rating reminder deployed - 2026-10-29
+
+User confirmed the authorized monthly-plus-three-song preview as “perfect.”
+Live presentation is user-confirmed; unattended scheduled/fresh-source delivery
+and retention impact remain unverified.
+
+
+`ed4489f150a08894` adds one EN/FA rating encouragement to the daily chef intro.
+Users with recorded taste history keep the three daily picks; users without it
+receive an invitation at most once every 30 days during the same evening window.
+The pitch describes search, original-link recognition, lyrics, favourites and
+/rate; buttons open search, the configured Mini App when available, and opt out.
+It does not invent inactivity or claim a failed song search when none occurred.
+
+History includes ratings, explicit requests/signals, track preferences, saved
+songs, identified submissions and artist/style/mood setup. Users with history but
+no eligible candidates stay on the existing empty-pool path rather than being
+mislabelled. Daily opt-outs, suspension, blocked bots and disabled social notices
+suppress invitations. Durable 30-day attempt claims reuse private ChatControl
+storage, survive restart and are erased by /forgetme. Ambiguous sends are not
+retried within the cooldown. No new table, background poller or engagement metric.
+
+24 exact Linux cases/imports passed, including monthly cooldown, history/opt-out,
+ambiguous-send/deletion and existing daily/caption regressions. Four installed
+hashes, protected code/config, unchanged schema, initialized stable bot/one poller,
+unchanged Mini App/nginx/connector and public home/auth verified. No commit/push;
+monthly/daily preview presentation is user-confirmed; unattended delivery remains unverified. Broader retention
+campaigns and inactivity backoff are not implemented.
+
+## Three daily picks deployed - 2026-10-29
+
+Release `5f0ef9e9b04e44ba` is installed and read-back verified: three slightly
+varied candidate picks, favoring different artists and supported exploration,
+with existing recommendation reasons appended to each audio caption. One chef
+intro per day; the three feedback buttons and icon links remain. Existing source
+availability, queue quotas and /daily off still apply; sparse pools are not padded.
+Requests are queued sequentially through the existing worker without taste-learning
+signals. Test sends marked `test` no longer consume the scheduled daily state;
+the earlier October 28 manual test had counted as that day's delivery.
+
+Ten exact staged caption/variety/audio checks, runtime imports and a separate
+three-request queue integration probe passed. Four installed hashes, release
+receipt, protected sources/config, unchanged schema, stable bot/API/one poller
+and public home/auth were verified. Actual scheduled delivery of three files is
+not yet confirmed; a restart during a batch can leave fewer files delivered.
+No commit/push. This release preceded the monthly invitation/history routing
+follow-up above; broader engagement work remains discussion only.
+
+## Link recognition, longer-lived searches and recording recovery - 2026-10-28
+
+Deployed `954741c9af055267` as seven reconciled runtime files and five focused
+test files, with no commit/push. Pasted public links now offer Recognize music
+beside Video/Audio/Pictures: it submits the original owner-bound link to existing
+recognition after releasing admission, without delivering the original post as
+a prerequisite. Existing sampling, consent notice, limits and /cancel apply.
+
+Final single-line music caption is `⭐ rate  📝 lyrics  🦉 lilcusin`; the sentence
+and circles were removed at user request. Three song/bot deep links retain correct
+UTF-16 offsets. Extracted audio gets only the owl bot link.
+
+New bound song results and browsing/rating/list controls last 24 hours; browsing
+retention increases from 20 to 100 controls per user. Artist/album/query menus
+also expire after 24 hours, but remain a bounded 100-menu process cache and can
+reset on restart/eviction. Confirmation controls keep their original 30-minute TTL.
+
+Get Song now attempts one bounded broader recording lookup after strict source
+failure. Its top result automatically queues when artist, normalized title and
+edition agree, with duration tolerance up to max(45 seconds, 25%). Music-video
+packaging alone does not block it. Rejected sources, changed selections and
+explicit Other versions stay guarded; conflicting results go directly to choices.
+No additional request/quota slot or rating is created; daily metadata is preserved.
+
+24 exact-production Linux cases and startup imports passed. Local caption/link,
+search/recovery and existing manual-fallback checks passed. Private code backup,
+installed/protected source/config hashes, unchanged schema, initialized/stable bot,
+one poller, unchanged Mini App/nginx/connector and public home/auth verified.
+No live provider/new-link/phone or specific-song acceptance is claimed.
+[Evidence](evidence.md#2026-10-28---link-recognition-search-lifetime-and-recording-recovery).
+
+## Daily chef picks deployed - 2026-10-28 (Asia/Tehran)
+
+Current layout supersedes the initial recommendation card: wait for a ready
+music file, send the short EN/FA chef introduction, then audio with exactly
+Already know it / Not for me / More like this. No Get song, rating grid or stop
+button on the daily file. `/daily on|off` remains available. Chef emoji restored
+at user request: “👨‍🍳 Your personal chef’s choice for today!”
+
+Known-song captions have tappable circle labels for rate/lyrics and an owl bot
+link; extracted audio also has the owl link without inventing a song identity.
+Latest user direction replaces warm copy/circles with the minimal single-line
+`⭐ rate  📝 lyrics  🦉 lilcusin`. Hidden URLs retain
+the existing song-specific deep links; the brand link opens the bot. Typed
+`/lilcusin` also opens the private welcome flow.
+
+Audio layout release `16b4948428fec88d` passed 16 exact-production Linux checks
+and caption smoke checks. A recipient-owned cached-file layout test was Telegram
+acknowledged; the user confirmed it was “working perfectly.” This confirms the
+presentation, not a fresh recommendation source search or automatic scheduled run.
+Chef-copy follow-up `f0b0e64188a71930` passed two EN/FA layout checks; caption/link
+release `121f3365655e919b` passed eight staged tests and startup imports. Normal
+caption tests and audio-only link-download tests also passed locally. Installed
+hashes, protected sources/config, unchanged schema, stable bot/one poller and
+public home/auth verified; latest two updates kept the Mini App process running.
+Final copy release `fc199e0f751fcfd3` passed seven exact staged caption/layout
+checks and imports, plus three existing local caption tests. Scoped deployment
+and bot-only readiness verified; schema and Mini App process unchanged.
+
+Schedule remains 18:00 Tehran with checks until 22:00; durable daily claims avoid
+duplicate attempts and automated requests never become positive taste feedback.
+Failed/unconfident sources stay quiet; no empty card, error or recording-choice
+prompt is sent. Audio may therefore be skipped when a trustworthy file is absent.
+No commit/push; existing work preserved. Retention and future scheduled delivery
+are unmeasured. [Evidence](evidence.md#2026-10-28---daily-chef-picks).
+
+
 ## Project introduction documentation - 2026-10-24
 
 Added [a product feature overview](introducing-lilcusin.md) and README links to

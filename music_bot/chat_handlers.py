@@ -115,7 +115,9 @@ async def callback(query, chat_service, get_song=None, workflow=None):
         elif action == 'details':
             await show_card(query.message, chat_service, query.from_user.id, track, payload['seed'])
         elif action in {'save', 'unsave', 'known', 'notforme'}:
-            if payload.get('kind') == 'card':
+            if payload.get('daily'):
+                pass  # Keep the compact audio controls after feedback.
+            elif payload.get('kind') == 'card':
                 await query.message.edit_reply_markup(reply_markup=card_keyboard(token,
                     submitted=payload.get('submitted', False), saved=payload.get('saved', False)))
             chat_service.recommendations.queue.warm(query.from_user.id)

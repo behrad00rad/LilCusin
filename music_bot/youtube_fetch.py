@@ -11,14 +11,14 @@ from types import SimpleNamespace
 from .matching import match_text
 
 VIDEO = re.compile(r'[A-Za-z0-9_-]{11}\Z')
-SOURCE_POLICIES = {'catalogue-original-v1', 'explicit-alternative-v1'}
+SOURCE_POLICIES = {'catalogue-original-v1', 'catalogue-music-v1', 'automatic-first-v1', 'explicit-alternative-v1', 'explicit-discovery-v1'}
 
 
 def approved_source(row, *, alternatives=False):
     if not isinstance(row, dict):
         return False
-    return (row.get('source_policy') == 'catalogue-original-v1'
-            or alternatives and row.get('source_policy') == 'explicit-alternative-v1')
+    return (row.get('source_policy') in {'catalogue-original-v1', 'catalogue-music-v1', 'automatic-first-v1'}
+            or alternatives and row.get('source_policy') in {'explicit-alternative-v1', 'explicit-discovery-v1'})
 
 VERSIONS = {'live', 'cover', 'remix', 'karaoke', 'instrumental', 'acoustic', 'sped', 'slowed', 'remaster',
             'extended', 'nightcore', 'reverb', '8d', '432hz', 'edit'}

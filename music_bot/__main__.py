@@ -93,7 +93,10 @@ async def main() -> None:
             stack.push_async_callback(get_song.close)
             enrichment = Enrichment(database, providers)
             stack.push_async_callback(enrichment.close)
-            workflow = Workflow(database, providers, LyricsSearch(provider_session, providers, lyrics_settings))
+            from .recording_search import RecordingSearch
+            workflow = Workflow(database, providers, LyricsSearch(provider_session, providers, lyrics_settings),
+                                recording_search=getattr(get_song.fetcher, 'recording_search', None)
+                                or RecordingSearch(max_duration=fetch_settings.max_duration))
             stack.push_async_callback(workflow.close)
             channels = ChannelService(database, workflow)
             await channels.initialize()
@@ -115,11 +118,16 @@ async def main() -> None:
             dispatcher.include_router(guidance_router)
             dispatcher.include_router(channel_router)
             dispatcher.include_router(taste_router)
+            from .daily_pick import router as daily_router, DailyPicks
+            dispatcher.include_router(daily_router)
             dispatcher.include_router(router)
             chat_service = ChatService(database, RecommendationService(database, providers))
             stack.push_async_callback(chat_service.recommendations.close)
             get_song.recommendations = chat_service.recommendations
             chat_service.social_bot = bot
+            daily_picks = DailyPicks(chat_service, bot, get_song)
+            daily_picks.start()
+            stack.push_async_callback(daily_picks.close)
             if config.miniapp_url:
                 miniapp = await start_server(config.telegram_bot_token, chat_service, workflow,
                                             config.miniapp_host, config.miniapp_port,

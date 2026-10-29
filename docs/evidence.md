@@ -1,5 +1,280 @@
 # Recognition and search evidence
 
+## 2026-10-29 - Scoped Git publication preparation
+
+Reconciled published main history with the local committed history in an isolated
+checkout. Prepared session features, required delivery/metadata/search support and
+only session-authored documentation sections; unrelated dirty Mini App, admin
+console and game work in the original checkout were not staged. Newer remote
+source-validation guards were retained and extended for the explicitly approved
+automatic-first and owner-selected discovery policies. Initial clean-checkout
+validation found a missing bilingual recovery key; supporting keys were added
+before final validation. Publication does not redeploy this reconciled candidate.
+
+Publication validation: monthly/daily, lifetime and varied-pick cases passed
+in the isolated checkout. Recovery/caption/link regressions passed through scoped
+reruns after adding missing edition copy and photo-link/cancellation prerequisites;
+the final 13-case link suite passed. Four existing original-source rejection
+cases, two owner-bound saved-rating recall cases, startup imports, explicit-policy
+checks and whitespace checks passed. No full-suite or redeployment claim. The
+original checkout's unrelated uncommitted files are preserved.
+
+
+
+## 2026-10-29 - Monthly invitation and daily rating reminder
+
+User subsequently confirmed the combined monthly invitation and three-song
+preview as “perfect.” The preview used recipient-owned cached audio and did not
+consume scheduled daily eligibility or the monthly cooldown. This confirms the
+message/file presentation, not fresh-source or unattended scheduled delivery.
+
+
+At the user's subsequent request, the verified private recipient received one
+monthly-template preview and three acknowledged audio presentation tests with
+one chef greeting, rating encouragement, per-file test explanations and the
+existing feedback controls. Only recipient-owned previously delivered tracks were
+used, explicitly labelled as a preview rather than new personal recommendations.
+The durable test receipt verified all three audio sends and unchanged scheduled
+daily state; no monthly cooldown marker was created. No second poller or live
+source fetch. User playback/button/phone acceptance is not inferred from receipts.
+
+User explicitly authorized the monthly pitch after asking for a gentle rating
+reminder in daily recommendations. Release `ed4489f150a08894` changes the daily
+module and its existing fixture, adds `monthly_pitch.py` and focused monthly tests.
+One reminder appears in the chef intro, not repeatedly under three songs:
+“Rate a song or two—it helps me get to know your taste better 🎧”; natural Persian
+copy explains the same music-taste benefit.
+
+Before reserving recommendations, the daily loop checks recorded ratings, signals,
+requests, track preferences, saves, identified submissions and artist/style/mood
+setup. No history routes to the invitation; history with an empty pool does not.
+No last-activity inference is made. Pitch copy describes available music search,
+recognition, lyrics, favourites and /rate, with Search and opt-out actions plus
+the real configured WebApp button when obtainable. No fabricated app URL.
+
+A private `monthly_pitch` ChatControl row claims the 30-day window before sending.
+The existing writer transaction serializes duplicate claims. Expiry survives
+restarts and generic browsing cleanup; account removal explicitly deletes it.
+Opt-out/history/suspension are rechecked before send. Telegram forbidden disables
+future daily outreach; uncertain sends retain the cooldown instead of replaying.
+Daily opt-out and social notification opt-out suppress the pitch. No schema change
+or new timer; the existing 18:00–22:00 Tehran daily loop performs eligibility checks.
+
+Exact staged Linux artifact passed 24 cases (27.590s) and poller imports: 30-day
+boundary, repeated attempts, setup history/opt-out, ambiguous send, /forgetme,
+EN/FA copy, all existing daily delivery/feedback/lifecycle cases, five caption-link
+cases and three varied-pick/reason cases. Scoped syntax/whitespace passed.
+Deployment preserved all protected source/config hashes, unchanged schema and
+Mini App/nginx/connector. Four installed hashes, initialized/stable bot, exactly
+one poller, public home 200 and unsigned auth 401 verified; private code rollback
+retained. No commit/push, live test message or phone/provider/retention claim.
+
+## 2026-10-29 - Three daily chef picks
+
+User explicitly requested deploying three daily music picks before any monthly
+invitation or broader engagement system. Release `5f0ef9e9b04e44ba` changes only
+the daily module, its audio-caption integration and focused tests. Select up to
+three from five eligible queue rows: retain the close first pick, favor different
+artists next, then supported exploration. Explanations use the actual recommender
+reason/localization; no invented mood or music attributes. Captions retain the
+icon link row and append the reason. One durable daily intro claim avoids repeating
+the chef message for each file. Automated requests do not learn positive intent.
+Sequential bounded waiting uses the existing media worker and queue quotas.
+
+Read-only investigation found the requested recipient's October 28 state was
+`sent`, with an acknowledged completed manual test request. That test consumed
+the scheduled day. Future presentation tests carry `test: true` and do not update
+the scheduled daily state. The test helper no longer sets the recipient's day.
+
+Exact staged release: ten caption/variety/EN/FA audio checks passed (4.418s),
+poller imports passed, and a separate mock integration verified three distinct
+numbered requests, no taste learning and lease release. Private code backup,
+four installed hashes, protected sources/config, unchanged schema, initialized
+stable bot, one poller, unchanged Mini App/nginx/connector and home 200/auth 401
+verified. Deployment completion and receipt/hashes/services were read back again
+at the user's explicit deploy request. No commit/push or live test messages.
+Source/provider failures, sparse pools, quotas and restart mid-batch can yield
+fewer than three deliveries; real scheduled three-file acceptance remains open.
+Monthly invitations, inactive-user pitches and new eligibility rules are not live.
+
+## 2026-10-28 - Link recognition, search lifetime and recording recovery
+
+User requested recognition directly from pasted links, minimal icon-only captions,
+longer-lived result buttons, and automatic delivery of the first suitable recording
+instead of the failed-match -> Select recording -> first result sequence.
+
+`954741c9af055267` reconciles seven installed runtime files: `link_download.py`,
+`rating_links.py`, `workflow.py`, `chat_service.py`, `album_search.py`, `get_song.py`
+and `recording_fallback.py`, plus five focused test files. Existing dirty user work
+was present and preserved; deployment was assembled from fetched production files
+and only scoped functions/snippets, not wholesale source-checkout synchronization.
+No commit/push, configuration, dependencies, schema or Mini App assets changed.
+
+The new link action retains original owner/message/15-minute-choice checks and
+one-use per action. It releases the shared admission lock before calling real
+Recognition.submit; tests exercise that path to prevent re-entrant deadlock.
+No original video/audio/media delivery is required. Recognition still privately
+fetches bounded audio to fingerprint and retains its existing source/provider
+limits and identified-song delivery behavior. EN/FA action copy uses the current
+language context. Video/audio/picture download choices remain separate.
+
+Song result binding and safe card/list/rating controls now use 24-hour expiry;
+control retention is capped at 100 per user. Artist/album/query controls use 24h
+but still live in the existing bounded 100-entry in-process cache: restart or
+capacity eviction can invalidate them earlier. Short confirmation/control kinds
+keep 30 minutes. Owner, message, revision, cancellation and account checks remain.
+
+On eligible strict-source failures, one 12-second broader lookup considers the
+first playable non-rejected result. Auto delivery requires a nonempty/non-label
+artist match, exact normalized title, compatible edition and duration difference
+within max(45 seconds, 25%). Music-video packaging is permitted; known cover/live/
+other artist or large-duration conflicts retain direct recording choices. This
+deliberately relaxes the earlier strict duration/original-upload gate per the
+user's friction report; it is not new proof of an official/original upload.
+Source metadata is tagged `automatic-first-v1`; canonical selection snapshots
+and daily presentation metadata are retained. No new request, positive feedback,
+quota bypass or extra media worker is created. Explicit Other versions is not
+auto-selected. Cancellation/new source rejection is rechecked after lookup.
+Metadata outages/empty results keep the existing recoverable failure path.
+
+Verification: exact staged Linux artifact passed 24 cases (20.814s) and poller
+imports. Includes the real recognition-admission path, wrong owner/message/expiry,
+no prerequisite media sends, Unicode icon links, EN/FA daily audio, 24h expiry and
+short confirmations, retention past 20 cards, top-result auto delivery after
+strict no-match, cancellation, late rejection, outage/one-attempt bounds, edition/
+artist/duration conflicts, daily metadata, cache delivery and quota/correction
+regressions. Local checks: 21 caption/link cases, 10 lifetime/initial-auto cases,
+then nine existing manual-fallback/strict-resolver regressions passed. The added
+late-rejection case passed in the final Linux artifact. Mock tagging warnings
+were emitted without failed checks. Scoped syntax/whitespace passed; no full suite.
+
+Both deployment locks, original/staged/installed hashes and protected config/code
+guards passed. Code rollback copies retained; only the bot restarted. Initialized
+polling, stable service/PID/restart counts, one poller, unchanged Mini App/nginx/
+connector/schema, public home 200 and unsigned delivery-status 401 verified.
+Real pasted-link/Shazam/provider, specific-song or phone acceptance remains open.
+An attempted in-place update of the earlier authorized test song could not be
+completed: Telegram returned “message to edit not found.” No new test audio or
+recognition message was sent, and this is not counted as live caption success
+for this release. New sends use the tested minimal icon caption.
+
+## 2026-10-28 - Daily chef picks
+
+### Approved audio layout and caption follow-ups
+
+The user rejected the initial card/button density and requested a chef intro,
+the actual music file, `/rate /lyrics` and only Already know it / Not for me /
+More like this. Release `16b4948428fec88d` moved presentation to the existing
+durable audio-send boundary, tagged automated requests without positive taste
+intent, and bound compact controls/history to the acknowledged audio receipt.
+Source search/download produces no chef message. Daily source failures and
+unconfident recording choices stay quiet. Existing normal delivery is preserved.
+Invalid cached references can retry without repeating the intro; ambiguous sends
+are not automatically replayed. An audio-send network failure after the intro
+can still leave the intro alone; this is not an atomic Telegram message pair.
+
+Exact staged artifact: 16 Linux tests passed (11.895s), normal/compact caption
+smoke checks and poller imports passed. The initial Linux selection referenced
+an absent caption test module; the final suite used the available four existing
+delivery checks and 12 new daily cases. Initial Windows daily run had one test
+fixture error assigning to frozen FetchSettings; the corrected fixture passed
+in that Linux artifact. Three existing local caption tests and syntax/whitespace
+checks passed. Five scoped files deployed with consistent stopped-writer backup,
+preserved source/config hashes, unchanged schema and stable bot/API/one poller.
+Public home 200 and unsigned delivery-status 401 verified.
+
+The authorized recipient's Telegram identity was verified with getChat. The live
+layout test reused only that recipient's own previously delivered audio, created
+no poller/media worker and received an acknowledged audio message. It verifies
+file/caption/button delivery, not a new source search or new recommendation.
+The user explicitly confirmed “working perfectly.” No explicit rating or playback
+measurement is inferred. The test counts as today's pick for that recipient.
+
+User then preferred the earlier chef-emoji introduction. Copy-only release
+`f0b0e64188a71930` restored EN/FA emoji copy, passed two exact layout tests and
+imports, and restarted only the bot. Installed/protected hashes, unchanged schema,
+unchanged Mini App/nginx/connector and public/auth health verified; no DB operation.
+
+At the user's next request, caption release `121f3365655e919b` adds owl bot links
+to known-song and extracted-audio captions and a typed `/lilcusin` welcome alias.
+The final requested visible labels use `○` circles rather than slashes. Entities
+use UTF-16 offsets so both owl emoji and Persian text keep accurate tap targets.
+Known tracks retain song-specific rate/lyrics deep links; branding links only to
+the bot, without recipient identifiers or an expiring owner token. Extracted audio
+gets branding alone. Five caption/alias cases, two actual daily audio layout
+cases and one existing delivery case passed on the exact Linux artifact (2.899s);
+poller imports passed. Eight local caption cases and the existing audio-only link
+download case passed. An earlier staged alias fixture lacked the bot argument;
+it was corrected before release. A dropped staging connection was reconciled by
+reading the remote result and verifying unchanged production hashes before retry.
+Five scoped files deployed with private code backup, unchanged schema, protected
+source/config hashes, stable bot/one poller, unchanged Mini App/nginx/connector
+and public home 200/auth 401. No commit/push or full-suite claim.
+The already-authorized test audio's caption was then edited in place, without
+sending another song. Telegram returned the exact circle-style text, all three
+expected text-link URLs and the existing one-row/three-button keyboard. This
+verifies caption/entity installation, not a forwarded-message click on a device.
+
+User clarified the intended circle as filled `●`, requested all links on the
+same line and warmer copy. Final release `fc199e0f751fcfd3` uses
+“A little treat for your ears 🎧  ● rate  ● lyrics  🦉 ● lilcusin” and natural
+Persian “اینم برای تو، با عشق 🎧” before the same link row. No forced newlines;
+Unicode link offsets include the greeting's headphone emoji. Seven exact staged
+caption/EN/FA audio-layout tests passed (2.214s), poller imports passed and three
+existing local caption tests passed. Three scoped files deployed with code backup,
+protected source/config hashes, unchanged schema/Mini App/nginx/connector,
+initialized/stable bot and one poller, public home 200/auth 401. The intermediate
+filled-symbol-only artifact was staged, never deployed. No additional song send.
+
+### Initial implementation and first test (superseded layout)
+
+Implemented and deployed `5360607dd36a585b`: new `daily_pick.py`, scoped integration
+into poller startup/cleanup, database registration, command menu and `GetSong.request`
+(`learn=False` only for automatic delivery). Existing dirty work was present before
+this session and was preserved. Production's four integration files were fetched
+and patched independently; the release also contains the new module and its tests.
+No commit or push. No Mini App asset or private configuration changes.
+
+Eight isolated Windows cases passed (52.235s); exact Linux staged artifact passed
+12 cases (18.700s) and poller imports. Coverage: concurrent/restart daily cap,
+next day, opt-out/on, EN/FA, empty pool, ambiguous send, Telegram block, cascading
+account deletion, actual authorized rating persistence, scheduling/cancellation,
+automatic versus explicit taste requests, cached delivery, deduplicated jobs,
+quotas/cancel and wrong-recording limits. Restricted Windows sockets initially
+blocked testing; successful rerun used the normal host environment. First Linux
+selection included a nonexistent production test name; final 12-case run passed.
+Mock audio tagging warnings did not fail existing delivery checks.
+
+Two established deployment locks and source/config hashes guarded the release.
+Both writers stopped for a private SQLite backup (`quick_check=ok`). The first
+attempt's early schema check found no new table and rolled code back; original
+hashes, service health and public endpoints were verified. A separate second
+attempt retained the identical tested files and waited up to 90 seconds for
+migration. It verified all six installed hashes, protected sources/config,
+existing schema unchanged plus only `daily_pick_state`, stable bot/API, exactly
+one poller, public home 200 and unsigned delivery-status 401. Private receipts and
+code/database recovery copies retained; no old database restored.
+
+Default sends start at 18:00 Tehran; scheduler checks every five minutes until
+22:00, processes sequentially at one user per second, skips opted-out/suspended
+users and disables future sends on Telegram forbidden errors. Missing candidates
+produce no reminder. Durable claims favor missed sends over duplicate sends on
+network ambiguity. Existing provider confidence, delivery choices/quotas and
+source availability still apply; audio may fail or need a recording choice.
+Daily controls last up to two days subject to the existing 20-control cap.
+Supported chef copy is English/Persian; other languages fall back to English.
+Real-user daily audio/rating journey and retention impact remain unverified.
+
+User-authorized single-recipient live test: Telegram `getChat` verified the
+requested existing private recipient before sending. Daily chef message and
+rating controls were acknowledged as sent; the production audio worker accepted
+the automatic request but failed during source search, with zero candidates and
+no delivered audio message. No second poller/media worker was started. The test
+counts as that recipient's daily attempt; it will not send another evening pick.
+No playback or explicit rating was confirmed. Default/English/Persian `/daily`
+registration was independently verified through Telegram `getMyCommands`.
+
+
 ## 2026-10-20 - Recommendation loop deployed
 
 Release `4835ec7d93767fb4`, code `cbad204`, deployed after explicit approval.

@@ -294,3 +294,13 @@ def telegram_fields(metadata):
     if metadata.artist and not label_credit(metadata.artist):
         fields['performer'] = metadata.artist
     return fields
+
+
+def edition_label(versions, locale='en'):
+    labels = {'live':'اجرای زنده','acoustic':'آکوستیک','remix':'ریمیکس',
+        'instrumental':'بی‌کلام','cover':'کاور','karaoke':'کارائوکه','remaster':'ریمستر',
+        'slowed':'آهسته','sped':'تند','music_video':'موزیک ویدیو',
+        'extended':'نسخهٔ طولانی','explicit':'بدون سانسور','clean':'نسخهٔ پاک'}
+    order = {'music_video':-1,'live':0,'instrumental':1,'cover':2,'remix':3}
+    return ', '.join(labels.get(value,value) if locale == 'fa' else value.replace('_', ' ').title()
+                     for value in sorted(set(versions), key=lambda v:(order.get(v,10),v)))

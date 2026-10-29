@@ -1,5 +1,55 @@
 # From unknown recordings to playable songs
 
+### A gentle invitation to build taste - 2026-10-29
+
+The user confirmed the combined invitation and cached-file daily preview was
+working as intended. This acceptance covers the presentation, not retention gains.
+
+
+Daily picks now remind listeners that rating a song or two helps personalize
+future music. Users without taste history instead receive a friendly invitation
+to try search, recognition, lyrics and LilCusin, at most once every 30 days.
+The copy avoids confusing a new taste profile with inactivity. Saved cooldowns,
+opt-out and account deletion keep the feature bounded. Twenty-four exact-artifact
+checks and production release checks passed; real-user reception is unverified.
+
+### Three daily chef picks - 2026-10-29
+
+Daily recommendations now select up to three slightly varied songs and explain
+each using its actual recommendation reason. Artist variation and supported
+exploration add variety without inventing musical attributes. One chef intro and
+the existing simple controls keep delivery compact. Exact-artifact tests and live
+release checks passed; scheduled delivery of all three remains unconfirmed.
+The monthly invitation was added in a subsequent release; broader retention
+campaigns remain a separate discussion.
+
+### A simpler path from links to music - 2026-10-28
+
+Pasted links now offer music recognition before any post download into chat.
+Search controls stay usable for up to a day, and song captions are reduced to
+rate, lyrics and the owl bot link. When strict Get Song matching fails, one broader
+lookup can send the first matching artist/title/edition recording automatically,
+instead of requiring a recovery click and another selection. Conflicting versions
+still offer a choice. Twenty-four exact-artifact tests and production hash/service
+checks passed; real new-link/source acceptance remains unverified. Artist/album
+menus are still process-cached and can reset on restart or eviction.
+[Evidence](evidence.md#2026-10-28---link-recognition-search-lifetime-and-recording-recovery).
+
+### A daily personal chef pick - 2026-10-28
+
+The bot now offers a daily personal chef choice as an actual music file. A short
+English/Persian chef introduction precedes audio with three controls: Already
+know it, Not for me and More like this. Minimal single-line icon captions open rating,
+lyrics and the bot itself; the owl branding also appears on extracted audio.
+The user confirmed the corrected cached-file presentation worked perfectly and
+preferred the chef emoji. Daily off/on remains available through `/daily`.
+Durable claims prevent duplicate attempts after restarts, failed or unconfident
+sources stay quiet, and automatic delivery does not become positive taste intent.
+Exact-artifact tests, acknowledged live file delivery, protected source/config
+checks and service health support these claims. Scheduled fresh-source delivery
+and retention gains remain unmeasured. [Evidence](evidence.md#2026-10-28---daily-chef-picks).
+
+
 ### Recommendation loop in production - 2026-10-20
 
 Deployed private request/save learning and persistent For You refill as release

@@ -37,11 +37,11 @@ class ChatService:
                 raise FlowError("stale")
             await session.execute(delete(ChatControl).where(ChatControl.expires_at <= utc_now() - timedelta(days=1)))
             # Keep at most twenty active controls per user, with no unbounded UI state.
-            old = select(ChatControl.token).where(ChatControl.user_id == internal).order_by(ChatControl.expires_at.desc()).offset(19)
+            old = select(ChatControl.token).where(ChatControl.user_id == internal).order_by(ChatControl.expires_at.desc()).offset(99)
             await session.execute(delete(ChatControl).where(ChatControl.token.in_(old)))
             session.add(ChatControl(token=token, user_id=internal,
                 payload={"tracks": list(tracks), "seed": seed, "kind": kind, "used": [], "submitted": submitted, "links": list(links)},
-                expires_at=utc_now() + CONTROL_TTL))
+                expires_at=utc_now() + (timedelta(days=1) if kind in {'list', 'card', 'rating'} else CONTROL_TTL)))
         return token
 
     async def bind_control(self, token, message_id):
@@ -131,6 +131,12 @@ class ChatService:
     async def track(self, track_id):
         async with self.database.sessions() as session:
             return await session.get(Track, track_id)
+
+    async def current_rating(self, user_id, track_id):
+        async with self.database.sessions() as session:
+            return await session.scalar(select(Rating.value).join(User, User.id == Rating.user_id)
+                .where(User.telegram_user_id == user_id, Rating.track_id == track_id))
+
 
     async def is_saved(self, user_id, track_id):
         from .social import SavedSong

@@ -25,6 +25,7 @@ logger = logging.getLogger("music_bot")
 
 
 @router.message(CommandStart())
+@router.message(Command('lilcusin'))
 async def start(message: Message, chat_service=None, get_song=None) -> None:
     if message.chat.type != "private" or submitter(message) is None:
         await message.answer(messages.PRIVATE_ONLY)
@@ -32,6 +33,24 @@ async def start(message: Message, chat_service=None, get_song=None) -> None:
     if chat_service is not None:
         await chat_service.ensure_user(submitter(message))
         parts = (message.text or '').split(maxsplit=1)
+        if len(parts) == 2 and parts[1].startswith('lyrics_'):
+            from .song_lyrics import show as show_lyrics
+            await show_lyrics(message, chat_service, parts[1])
+            try:
+                async with asyncio.timeout(2):
+                    await message.delete()
+            except Exception:
+                pass
+            return
+        if len(parts) == 2 and parts[1].startswith('rate_'):
+            from .rating_links import open_rating
+            await open_rating(message, chat_service, parts[1])
+            try:
+                async with asyncio.timeout(2):
+                    await message.delete()
+            except Exception:
+                pass  # Link-command cleanup must not break the displayed rating panel.
+            return
         if len(parts) == 2 and parts[1].startswith('swap_'):
             from .social_chat import show
             from .social import Social
@@ -269,6 +288,59 @@ def submitter(message: Message) -> Submitter | None:
     return Submitter(user.id, user.username, user.full_name, user.language_code)
 
 
+@router.callback_query(F.data.startswith('linkmode:'))
+async def link_mode_callback(query: CallbackQuery, recognition=None):
+    from .link_download import choose
+    await choose(query, recognition)
+
+
+@router.callback_query(F.data.startswith('recmedia:'))
+async def recognize_download_callback(query: CallbackQuery, recognition=None):
+    from .link_download import recognize_download
+    await recognize_download(query, recognition)
+
+
+@router.callback_query(F.data.startswith('pickreq:'))
+async def choose_recording_search(query: CallbackQuery, get_song=None):
+    import re
+    from .recording_fallback import start
+    from .youtube_fetch import FetchError
+    match = re.fullmatch(r'pickreq:([a-f0-9]{32})',query.data or '')
+    if (not match or get_song is None or not isinstance(query.message,Message)
+            or query.message.chat.type != 'private' or query.message.chat.id != query.from_user.id
+            or query.from_user.is_bot):
+        await query.answer(messages.STALE)
+        return
+    await query.answer(copy('recordings_searching'))
+    try:
+        await start(get_song,query.from_user.id,match[1],query.message.message_id)
+    except FlowError:
+        # The acknowledged callback never authorizes another owner's or an expired request.
+        return
+    except FetchError:
+        await query.message.answer(copy('busy'))
+
+
+@router.callback_query(F.data.startswith('sm:') | F.data.startswith('am:') | F.data.startswith('artist:') | F.data.startswith('mp:'))
+async def search_mode_callback(query: CallbackQuery, workflow: Workflow, submissions: SubmissionService, enrichment: Enrichment, chat_service=None, get_song=None):
+    from .search_modes import callback
+    await callback(query, workflow, submissions, enrichment, chat_service, get_song)
+
+
+@router.message(Command('album', 'albums'))
+async def album_search_command(message: Message, get_song=None, chat_service=None):
+    if chat_service is not None and message.chat.type == 'private' and submitter(message) is not None:
+        await chat_service.ensure_user(submitter(message))
+    from .album_search import search
+    await search(message, get_song)
+
+
+@router.callback_query(F.data.startswith('album:'))
+async def album_callback(query: CallbackQuery, get_song=None):
+    from .album_search import callback
+    await callback(query, get_song)
+
+
 @router.message(Command('recognize'))
 async def recognize_command(message: Message, recognition=None):
     if recognition is not None:
@@ -378,7 +450,8 @@ async def text_submission(message: Message, submissions: SubmissionService,
         workflow.schedule_cleanup(message)
     from .recognition import recognition_link
     if recognition is not None and (recognition_link(message.text) or message.text.strip().lower().startswith(('https://', 'http://'))):
-        await recognition.submit(message)
+        from .link_download import submit as download_link
+        await download_link(recognition, message)
         return
     pending = None
     try:

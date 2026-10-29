@@ -1,5 +1,82 @@
 # Recognition and discovery decisions
 
+## 2026-10-29 - Monthly invitation approved
+
+The user subsequently authorized implementing the monthly pitch, superseding the
+earlier hold on this specific feature. Route users by actual taste history, not
+last activity, and describe the absence of known taste honestly. Reuse the daily
+window and existing owner-bound private storage for a 30-day attempt cap; do not
+add another scheduler or infer engagement from receiving messages. Respect opt-out,
+suspension and notification settings; preserve the cooldown on ambiguous sends.
+Add one friendly rating reminder to the daily greeting. Broader retention
+campaigns, weekly backoff and engagement measurement remain outside this change.
+
+## 2026-10-29 - Three daily picks before engagement expansion
+
+User requested three slightly varied daily songs with reasons, then explicitly
+prioritized deploying that feature before discussing or implementing a broader
+engagement system. Reuse queue ranking and real explanation text, prefer artist
+variation and supported exploration, and keep source confidence/quotas intact.
+Presentation tests must not consume scheduled daily eligibility. Do not implement
+the proposed monthly pitch or new taste-history routing until that discussion.
+
+## 2026-10-28 - Recognize before download and reduce repeated choices
+
+The user wants to recognize music from a pasted post without first downloading
+the post into chat. Reuse the existing recognition service from a separate action
+in the owner-bound link prompt; release shared admission before calling it.
+Recognition still needs a bounded private audio fetch/fingerprint and preserves
+its existing notices/limits. No parallel recognition implementation is introduced.
+
+The user reported that failed Get Song matching is usually followed by a correct
+first discovery result. Supersede explicit-only fallback with one bounded lookup
+before exposing failure. Auto-send the first compatible artist/title/edition result
+with a wider duration tolerance; do not claim this verifies an original upload.
+Retain explicit selection for conflicts and Other versions, late rejection checks,
+existing quotas/cancellation, selected metadata and recovery when discovery fails.
+This chooses reduced friction while limiting known wrong-artist/version matches.
+
+User also preferred removing the caption sentence and using minimal meaningful
+icons: `⭐ rate  📝 lyrics  🦉 lilcusin`, all on one line with accurate text links.
+Search/browsing controls last 24 hours, with a larger bounded per-user retention;
+short confirmations remain short. Artist/album cache durability is not redesigned:
+restart/capacity eviction remains an explicit limitation.
+
+## 2026-10-28 - Daily personal chef recommendation
+
+Final user direction supersedes the initial daily card: send a short chef intro
+only when the file is ready, then audio with three feedback/discovery controls.
+Keep rating and lyrics as caption links instead of a rating grid/Get song button.
+The user confirmed the recipient-owned cached-file layout test worked perfectly,
+preferred the prior chef emoji, then requested an owl link back to the bot in
+song captions and visible circles instead of slashes, later clarifying filled
+`●`, a single line and warm English/Persian copy. Circle text uses ordinary
+Telegram text-link entities; underlying song deep links and typed slash commands
+remain valid. Branding is also added to extracted audio without assigning an
+unverified song identity. `/daily on|off` remains the notification control.
+Failed/unconfident daily sources skip notification rather than producing empty
+cards or source-choice/error prompts. This trades daily coverage for a quiet,
+file-first experience; a trustworthy file is still required.
+
+The user requested daily personal music and a rating prompt to encourage return
+visits and explicitly permitted SSH deployment. Reuse the current durable
+recommendation queue with feed exclusions, authorized chat rating controls and
+audio delivery rather than introducing a second recommender or poller. Default
+on for private users; `/daily on|off` gives independent notification control.
+Chosen session default is 18:00 Tehran with a four-hour recovery window;
+the user did not choose a time. EN/FA copy describes the chef choice and rating.
+
+Claim each user/day before network work and avoid retrying ambiguous sends, even
+when that means a missed day. Empty pools stay empty. Background audio uses
+`learn=False` to avoid manufacturing positive taste intent; only explicit ratings
+update ratings. Persist settings/last attempt in one additive cascading table.
+One bot-owned cancellable loop avoids duplicate scheduling from the separate API.
+Existing provider confidence and limits remain effective; daily requests abstain
+when a recording choice would be required. Deployed and scoped checks passed;
+the corrected cached-file presentation is user-confirmed. Fresh-source scheduled
+delivery and retention remain unverified.
+
+
 ## 2026-10-19 - Continuous private recommendation loop
 
 User approved implementation of taste signals, replenishing recommendations and

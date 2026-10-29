@@ -145,6 +145,7 @@ def card_keyboard(token, selected=None, submitted=False, expanded=False, rating_
 
 
 async def show_card(message, service, user_id, track, seed=None, rating=None, submitted=False, edit_existing=False, rating_mode=False):
+    rating = await service.current_rating(user_id, track.id)
     saved = await service.is_saved(user_id, track.id)
     token = await service.create_control(user_id, tracks=[track.id], seed=seed, kind='rating' if rating_mode else 'card', submitted=submitted)
     text = copy('song', artist=clean(track.display_artist or track.artist), title=clean(track.display_title or track.title))

@@ -107,6 +107,7 @@ async def configure_commands(bot):
         context=language.set(code)
         try:
             commands=[BotCommand(command=name,description=tr(key)[:100]) for name,key in keys.items()]
+            commands.append(BotCommand(command='daily',description='پیشنهاد روزانه' if code == 'fa' else 'Daily chef picks: on / off'))
             commands.append(BotCommand(command='version',description='Bot build'))
             await bot.set_my_commands(commands,scope=BotCommandScopeAllPrivateChats(),language_code=code)
             if code=='en':await bot.set_my_commands(commands,scope=BotCommandScopeAllPrivateChats())

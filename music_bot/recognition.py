@@ -80,7 +80,7 @@ def social_url(value):
             return None
         host, path = (url.hostname or '').lower(), url.path
         rules = [
-            ({'www.tiktok.com', 'tiktok.com', 'm.tiktok.com'}, r'/(?:@[^/]+/video/\d+|t/[A-Za-z0-9]+)/?'),
+            ({'www.tiktok.com', 'tiktok.com', 'm.tiktok.com'}, r'/(?:@[^/]+/(?:video|photo)/\d+|t/[A-Za-z0-9]+)/?'),
             ({'vm.tiktok.com', 'vt.tiktok.com'}, r'/[A-Za-z0-9]+/?'),
             ({'www.instagram.com', 'instagram.com'}, r'/(?:reel|reels|p|tv)/[A-Za-z0-9_-]+/?'),
             ({'www.pinterest.com', 'pinterest.com', 'www.pinterest.co.uk', 'pinterest.co.uk'}, r'/pin/\d+/?'),
@@ -231,8 +231,11 @@ class Recognition:
         await asyncio.gather(*(self.cancel(user) for user in list(self.jobs)))
         self.cache.clear()
         self.recent.clear()
+        getattr(self, 'link_choices', {}).clear()
 
     async def cancel(self, user_id):
+        for token, entry in list(getattr(self, 'link_choices', {}).items()):
+            if entry['owner'] == user_id:self.link_choices.pop(token, None)
         task = self.jobs.get(user_id)
         if task:
             task.cancel()

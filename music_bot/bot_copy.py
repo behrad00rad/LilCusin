@@ -2,6 +2,18 @@
 from .i18n import language
 
 COPY = {
+    'failed_choice': ('Couldn’t show the recording choices. Retry or choose another version.', 'نمایش گزینه\u200cهای آهنگ انجام نشد. دوباره تلاش کن یا نسخهٔ دیگه\u200cای انتخاب کن.'),
+    'choose_recording': ('Choose a recording', 'انتخاب نسخهٔ آهنگ'),
+    'recordings_searching': ('Looking for recordings you can choose. Nothing downloads until you select one.', 'دارم نسخه\u200cهای آهنگ رو پیدا می\u200cکنم. تا خودت انتخاب نکنی، فایلی دانلود نمی\u200cشه.'),
+    'choice_unverified': ('I couldn’t verify an automatic match. Check these recordings and choose one to download.', 'نتونستم نسخه\u200cای رو خودکار تأیید کنم. این گزینه\u200cها رو بررسی کن و برای دریافت، یکی رو انتخاب کن.'),
+    'recordings_empty': ('No recordings were found for you to choose. Try another search or retry later.', 'نسخه\u200cای برای انتخاب پیدا نشد. جست\u200cوجوی دیگه\u200cای امتحان کن یا کمی بعد دوباره تلاش کن.'),
+    'recordings_unavailable': ('Recording search is temporarily unavailable. No audio was downloaded; please try again.', 'جست\u200cوجوی نسخه\u200cها فعلاً در دسترس نیست. فایلی دانلود نشده؛ دوباره تلاش کن.'),
+    'failed_no_match': ('Couldn’t verify a matching recording. Choose another version or search by artist and song title.', 'نسخهٔ مطمئنی برای این آهنگ پیدا نشد. نسخه\u200cهای دیگه رو ببین یا نام خواننده و آهنگ رو جست\u200cوجو کن.'),
+    'failed_search': ('The recording search service is unavailable. Please try again later.', 'سرویس جست\u200cوجوی فایل فعلاً در دسترس نیست. کمی بعد دوباره تلاش کن.'),
+    'failed_download': ('The audio source could not be downloaded. Retry or choose another version.', 'فایل از منبع دانلود نشد. دوباره تلاش کن یا نسخهٔ دیگه\u200cای انتخاب کن.'),
+    'failed_prepare': ('The audio could not be prepared for Telegram. Try another version.', 'آماده\u200cسازی فایل برای تلگرام انجام نشد. نسخهٔ دیگه\u200cای انتخاب کن.'),
+    'failed_send': ('Telegram could not accept this audio. Retry or choose another version.', 'تلگرام این فایل رو نپذیرفت. دوباره تلاش کن یا نسخهٔ دیگه\u200cای انتخاب کن.'),
+
     'original_unverified': ('Could not verify an original recording. Try again or use Find other versions to choose an alternative.', 'نتونستم نسخهٔ اصلی رو تأیید کنم. دوباره تلاش کن یا با «نسخه‌های دیگر» یک نسخهٔ جایگزین انتخاب کن.'),
     'save': ('Save', 'ذخیره'),
     'saved_songs': ('Saved songs', 'آهنگ‌های ذخیره‌شده'),
