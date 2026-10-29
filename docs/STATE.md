@@ -1,5 +1,61 @@
 # Current handoff
 
+## Project introduction documentation - 2026-10-24
+
+Added [a product feature overview](introducing-lilcusin.md) and README links to
+it and the recent update record. This is documentation only. GitHub was
+unreachable during the update; remote contents and publication remain
+unverified. See [evidence](evidence.md#2026-10-24---project-overview-and-recent-updates).
+
+## Early text-search acknowledgement deployed - 2026-10-22
+
+Artifact `a5f28398fa68d32c` sends an EN/FA receipt before database setup or
+old-request waits, reuses it for results, and makes failures/cancellation visible.
+Uncooperative cancellation returns Busy after two seconds without releasing the
+mutation lock. 45 distinct scoped staging cases pass cumulatively. Bot polling and
+four target hashes verified; API PID, Nginx, connector and configuration unchanged.
+Existing non-English catalogue parity failure remains; signed Telegram round-trip
+unverified. Runtime-based patch preserves dirty local delivery work; this checkout
+is not full source/runtime parity. [Evidence](search-ack-2026-10-22.md).
+Code/evidence commit `bb57933` is local; push is blocked by GitHub authentication.
+Remote `0fc8493` (the earlier search/cover recovery) was verified. Runtime fix is deployed.
+
+
+## Search/artwork recovery deployed - 2026-10-21
+
+Artifact `ab739eac183fff74` fixes swallowed source timeouts and unbounded cover
+fallback. Get song now updates its existing EN/FA status after roughly 6/16s with
+Cancel retained. 83 isolated runtime Python cases and local Node cover lifecycle
+checks pass. Bot polling/API health, all six runtime hashes and public gzip/cache
+checks verified; first readiness-check rollback is documented. Current dirty
+delivery work is preserved via a runtime-based patch. Signed Telegram/physical
+mobile verification remains open. [Evidence](search-cover-recovery-2026-10-21.md).
+
+## Stricter Get song source policy ready locally - 2026-10-20
+
+The Vigen alias fix below did not prevent an unlabelled instrumental/personal
+upload being offered as an uncertain original. Normal Get song now requires
+catalogue-attributed Topic/verified-artist sources; other uploads require explicit
+Find other versions. Cache, preference and stale-choice guards enforce the same
+rule. All 78 affected cases passed across runs, and the candidate found catalogue
+releases for Dele Divaneh and Sogand using live VPS metadata. Three-file patch
+passed production git apply --check; not applied. Uncommitted, not deployed;
+audio fingerprint, vocals and playback are not verified. This supersedes the
+earlier local-only cache workaround after deployment. See
+[source policy, patch and evidence](strict-original-get-song-2026-10-20.md).
+
+## Vigen Get song fix deployed - 2026-10-20
+
+Artist evidence is now required; verified recording aliases recover Vigen/Viguen,
+and broader discovery precedes duration relaxation. All 24 focused tests passed.
+The candidate found the 288-second Sogand Topic recording using live VPS metadata.
+User-approved one-file deployment completed with matching SHA-256 and the expected
+bot process active/running; configuration and adjacent protected sources unchanged.
+Later SSH timeouts prevented post-restart polling/live-lookup verification.
+Uncommitted; existing saved wrong choices require Wrong recording. No audio or
+Telegram receipt/playback verification.
+See [cause, verification and limits](vigen-get-song-fix-2026-10-20.md).
+
 ## Guess game nudges/notifications - 2026-10-24
 
 Local/default off. UI step committed separately; signed nudges, durable batched finish alerts, pair/day limits, quiet hours, mute/stop, current privacy checks, cleanup and worker lifecycle implemented. Across scoped runs 33 related Python cases passed; initial Persian encoding failure fixed and Unicode assertions added. UI and Worker/bridge fixtures pass. No deployment/push/live send/audio change. Browser unavailable, so requested EN/FA 360/390 visuals and real Telegram acceptance remain unverified. [Handoff/rollback](guess-game.md), [all Persian strings](guess-game-persian.md).
@@ -323,6 +379,18 @@ the deployed module. The identical candidate retrieved/validated actual audio.
 Telegram receipt/playback remains unverified; Mini App unchanged.
 [Deployment evidence](navan-medley-fix-2026-10-19.md).
 
+## A2/A3 performance deployed - 2026-10-20
+
+Terminal 1 A1 is integrated. Scoped artwork sizing/WebP, static gzip/ETag
+revalidation, locale preload and demand-loaded font are implemented. English
+static body budget 576,346 -> 146,999 bytes; Persian 258,151 bytes. Fourteen
+local and fourteen isolated runtime HTTP/API tests plus 13 Node checks pass.
+EN/FA 320/390px DOM/accessibility checks and preview song actions pass; screenshot
+capture timed out. Commit `dafc654` is pushed and artifact `dbd57299600da7b3` deployed. All seven
+public assets match hashes and revalidate with 304; sized WebP caches immutably.
+API restarted/healthy; bot, connector, Nginx and configuration unchanged. Preserve
+concurrent delivery fixes. See [measurements and limitations](performance-2026-10-20.md).
+
 ## Home card stability - step 1 - 2026-10-21
 
 Implemented locally; not deployed. Get song uses fixed-size in-button Requesting/Try again/Sent states, with an off-layout aria-live region and no delivery-triggered deck fitting. Cover arrows are grouped as three 44px counter zones; the first previous control stays disabled. Artwork has a minimum 4:3 shape, metadata clamps at two lines, the redundant bottom hint is removed and a one-time owl tip replaces it. EN/FA owl lines shortened. Friend send becomes a 44px cover action alongside the existing privacy lock in the current working-tree integration. Whole-card vertical swipes/tab gestures and rating/delivery APIs preserved.
@@ -382,3 +450,14 @@ Migration/release requirement: before any real-data startup, retain private code
 Persian for review: فعلاً همه رو دیدی / آهنگ‌های تازه در راهن. ذخیره‌ها و کارتت هنوز توی «من» هستن. / بازم از آهنگ‌های محبوبم بیار / گزینه‌های آهنگ / فعلاً نه · ۳۰ روز نشون نده / علاقه ندارم · دیگه نشون نده
 
 Additional evidence: the nine-case in-process API/queue rerun passed (94.972s). The commit includes the previously local, verified recommendation response rating/alias filter and friend composition prerequisite; unrelated dirty Mini App edits remain unstaged. Existing untracked friend-recommendation fixtures were adapted locally without committing their pre-existing contents.
+
+
+## Loved and Persian chat defaults deployed - 2026-10-25
+
+The deployed bot now defaults unlocked Love discovery and new/missing social alert
+settings to on. Explicit saved opt-outs and per-song privacy locks remain in
+effect; Like, Neutral and Dislike remain private. Chat privacy and Get song
+errors have English and Persian copy, and the Persian wording was reviewed for
+natural, clear phrasing. VPS service state and deployed file hashes were checked
+after the prior release; this documentation update and branch integration do not
+constitute a new deployment. See [recent evidence](evidence.md).

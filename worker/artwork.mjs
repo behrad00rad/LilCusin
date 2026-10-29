@@ -16,7 +16,8 @@ export async function cover(request) {
     if (!response.ok || !['image/jpeg','image/png','image/webp','image/avif'].includes(type) || Number(response.headers.get('Content-Length'))>2097152) return new Response(null,{status:404});
     const bytes=await response.arrayBuffer();
     if (bytes.byteLength>2097152) return new Response(null,{status:413});
-    return new Response(request.method==='HEAD'?null:bytes,{headers:{'Content-Type':type,'Cache-Control':'public, max-age=86400','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'}});
+    const immutable=/^\/i\/u\/(174s|300x300|600x600)\/[a-f0-9]{32}\.(png|jpe?g|webp)$/.test(url.pathname);
+    return new Response(request.method==='HEAD'?null:bytes,{headers:{'Content-Type':type,'Cache-Control':immutable?'public, max-age=31536000, immutable':'public, max-age=86400','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'}});
   } catch { return new Response(null,{status:502}); }
   finally { clearTimeout(timeout); }
 }

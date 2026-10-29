@@ -29,6 +29,26 @@ read its linked contract plus affected source/tests, and stop at that scope.
 Update priority or acceptance here only when it changes materially; current
 verification/blockers belong in [STATE](STATE.md), rationale in [decisions](decisions.md).
 
+## A2/A3 scoped performance release - 2026-10-20
+
+Implementation, isolated checks, guarded publication/deployment and public cache
+verification complete (`dafc654`, artifact `dbd57299600da7b3`).
+[Measurements](performance-2026-10-20.md): context-specific existing CDN artwork,
+bounded public caching/compression and startup resource overlap. Physical mobile
+network and signed Telegram first-open timing remain unverified. Stop at A2/A3.
+
+## Search/artwork incident recovery - 2026-10-21
+
+Timeout classification, cancellable slow-search status and bounded visible-image
+fallback are deployed with scoped checks. [Evidence and replayable patch](search-cover-recovery-2026-10-21.md).
+Remaining: confirm the user-reported songs and signed Telegram/mobile experience.
+
+## Silent text-search recovery - 2026-10-22
+
+Early receipt, bounded cancellation wait, status handover and visible failures are
+deployed; [45-case evidence](search-ack-2026-10-22.md). Remaining: user confirmation
+of the previously silent Telegram query and unrelated catalogue parity maintenance.
+
 Home card step 1: local/tested, undeployed. Steps 2/3 pending. See STATE for scoped commit limitations, verification and Persian copy.
 
 

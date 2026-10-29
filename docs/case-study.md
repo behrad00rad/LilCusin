@@ -217,6 +217,60 @@ Telegram receipt/playback remains unverified; Mini App unchanged.
 
 The music-identity release now joins consented taste cards, explainable comparisons and reciprocal song exchange across chat and Mini App. It is committed and deployed, with measured staging and runtime evidence; public connectivity and real two-account delivery remain explicit validation gaps. See [release evidence](deployment-2026-10-19.md).
 
+## 2026-10-20 - Recovering the requested Persian recording
+
+A correct Vigen recommendation led to an unrelated source because title matching
+could compensate for a missing artist match. Requiring artist evidence and using
+verified Vigen/Viguen aliases recovered the full-length Topic recording. Local
+regressions and live metadata support the fix. The user-approved one-file release
+has matching deployed source and an active bot process; SSH timeouts prevented
+post-restart polling verification, and playback remains unverified.
+[Evidence](vigen-get-song-fix-2026-10-20.md).
+
+The subsequent Dele Divaneh instrumental report exposed the deeper distinction
+between finding related uploads and establishing a recording's source. A stricter
+local policy now requires catalogue attribution for normal retrieval and enforces
+it across caches; alternatives require a separate deliberate action. Both songs
+have live metadata matches, with 78 affected cases passing across runs. Deployment
+and playback remain pending, and catalogue attribution is not acoustic proof.
+[Follow-up evidence](strict-original-get-song-2026-10-20.md).
+
+## 2026-10-20 - Lower Mini App transfer costs
+
+A fresh baseline found uncompressed public code/translations and non-reusable
+artwork responses on direct VPS hosting. Existing CDN sizes/WebP and HTTP gzip
+plus validators reduce the English static budget from 576 KB to 147 KB without
+a new image service or localization architecture. Scoped tests and bilingual
+phone geometry support the release; [measured evidence](performance-2026-10-20.md)
+keeps local latency samples separate from physical mobile experience. Pushed/deployed as `dafc654` / `dbd57299600da7b3`; public asset/hash/cache checks
+pass and the separate bot service remained unchanged.
+
+## 2026-10-21 - Make waiting bounded and understandable
+
+Runtime inspection separated source-search failures from server overload.
+Recovery now distinguishes outages from no-match, communicates ongoing source
+checks in EN/FA and ends stalled cover attempts with a lightweight placeholder.
+[83-case staging and guarded deployment evidence](search-cover-recovery-2026-10-21.md)
+retains the gap between passing checks and actual signed Telegram/mobile use.
+
+## 2026-10-22 - Remove silent waits before search acknowledgement
+
+An early middleware receipt makes database setup and cancellation waits visible.
+The same message becomes results or a clear failure; progress cannot overwrite
+finished results. [45 scoped checks and guarded deployment](search-ack-2026-10-22.md)
+retain concurrency protections and distinguish tests from a real Telegram journey.
+
+# 2026-10-24 - Make the product easier to introduce
+
+LilCusin's documented feature set had grown across search, recognition, Get
+song, personalized recommendations, social taste sharing and its Telegram Mini
+App. A single introduction now gathers those user-facing capabilities and links
+to the setup guides, while the README points readers to that overview and the
+recent evidence record. The summary keeps deployed reliability improvements
+separate from the local-only stricter original-source policy. This is a
+documentation change only; no application behavior changed. GitHub publication
+and real-user product verification remain unconfirmed.
+
 ## 2026-10-23 — Revocable friend-game persistence
 
 The first Guess their taste step stores game state separately from Love sharing, enforces one open game per ordered pair, and removes persisted answers when consent is withdrawn or the relationship ends. Ten isolated cases verify the data/settings foundation; gameplay and notifications remain pending. Local only and default off. [Evidence](guess-game.md).

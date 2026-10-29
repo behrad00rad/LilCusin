@@ -2,6 +2,7 @@
 from .i18n import language
 
 COPY = {
+    'original_unverified': ('Could not verify an original recording. Try again or use Find other versions to choose an alternative.', 'نتونستم نسخهٔ اصلی رو تأیید کنم. دوباره تلاش کن یا با «نسخه‌های دیگر» یک نسخهٔ جایگزین انتخاب کن.'),
     'save': ('Save', 'ذخیره'),
     'saved_songs': ('Saved songs', 'آهنگ‌های ذخیره‌شده'),
     'saved_help': ('Your 10 most recent private saves. Choose a song to get it or remove its save.', '۱۰ آهنگ آخری که خصوصی ذخیره کردی. برای دریافت آهنگ یا حذف از ذخیره‌ها، انتخابش کن.'),

@@ -11,7 +11,7 @@ from .models import Base, Rating, Track, User, UTCDateTime, utc_now
 class FriendTasteSharing(Base):
     __tablename__ = 'friend_taste_sharing'
     user_id: Mapped[int] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
-    enabled: Mapped[bool] = mapped_column(default=False)
+    enabled: Mapped[bool] = mapped_column(default=True)
 
 
 class GuiltyPleasure(Base):
@@ -31,8 +31,11 @@ async def save_privacy(session, user_id, track_id, rating, guilty=None):
     return bool(await session.get(GuiltyPleasure, (user_id, track_id), populate_existing=True))
 
 
+def sharing_enabled(setting):
+    # Missing preference uses the product default; saved opt-outs remain respected.
+    return setting is None or bool(setting.enabled)
+
 def rating_visibility(rating, private, sharing):
-    # Visibility is derived from the existing persisted opt-in and song lock.
     return 'friends' if rating == 'love' and sharing and not private else 'private'
 
 async def visible_snapshot(session, owner, snapshot):
@@ -58,7 +61,7 @@ async def own_rating_states(database, telegram_id, tracks):
             GuiltyPleasure.user_id == actor, GuiltyPleasure.track_id.in_(ids))))
         sharing=await session.get(FriendTasteSharing,actor)
         for row in tracks:
-            row['visibility']=rating_visibility(ratings.get(row['id']),row['id'] in private,bool(sharing and sharing.enabled))
+            row['visibility']=rating_visibility(ratings.get(row['id']),row['id'] in private,sharing_enabled(sharing))
             row['rating'] = ratings.get(row['id'])
             row['guilty'] = row['id'] in private
 
@@ -85,7 +88,7 @@ def register_taste_sharing(app, chat, body):
                     session.add(row)
                 else:
                     row.enabled = enabled
-            result = {'enabled': bool(row and row.enabled), 'guess_game': guess_enabled()}
+            result = {'enabled': sharing_enabled(row), 'guess_game': guess_enabled()}
             if result['guess_game']:
                 result['allow_guess'] = await allow_guess(session, actor, guess_value)
             return web.json_response(result)
@@ -122,7 +125,7 @@ def register_taste_sharing(app, chat, body):
             guilty = await save_privacy(session, grant.user_id, data['track_id'], None, data['private'])
             rating=await session.scalar(select(Rating.value).where(Rating.user_id==grant.user_id,Rating.track_id==data['track_id']))
             sharing=await session.get(FriendTasteSharing,grant.user_id)
-            visibility=rating_visibility(rating,guilty,bool(sharing and sharing.enabled))
+            visibility=rating_visibility(rating,guilty,sharing_enabled(sharing))
         return web.json_response({'guilty': guilty,'visibility':visibility})
 
     app.router.add_post('/api/rating-privacy', privacy)

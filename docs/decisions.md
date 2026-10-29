@@ -256,6 +256,51 @@ Telegram receipt/playback remains unverified; Mini App unchanged.
 
 Deploy the frozen, tested snapshot using explicit Git blobs and runtime hashes, preserving concurrent recording-search edits. Keep private configuration and persistent data; use a consistent backup and rollback guard. Longer cold-start readiness succeeded after a safe rollback. See [release evidence](deployment-2026-10-19.md).
 
+## 2026-10-20 - Get song artist evidence and verified aliases
+
+Require artist evidence even for exact song titles. Recover alternate spellings
+from an unambiguous, exactly credited MusicBrainz recording instead of fuzzy
+artist guesses; broaden search before relaxing duration. This excludes the
+observed Sam H substitute while finding Vigen/Viguen. The tradeoff is a bounded
+external lookup on initially unsuccessful strict searches. User-approved one-file
+deployment verified source hash and active service; post-restart polling check
+was blocked by SSH timeouts. [Evidence and limits](vigen-get-song-fix-2026-10-20.md).
+
+### 2026-10-20 - Superseding uncertain original choices
+
+The instrumental report showed that artist text and explicit candidate selection
+still did not establish the requested recording. Normal Get song will require
+catalogue source attribution across fresh search and cache reuse; unverified
+uploads require the separate alternatives action. Lower coverage and occasional
+abstention are accepted over presenting unrelated uploads as the normal song.
+Implemented/tested locally; not deployed. Attribution remains metadata evidence,
+not waveform/vocal verification. [Contract and evidence](strict-original-get-song-2026-10-20.md).
+
+## 2026-10-20 - Reuse artwork variants and compress public Mini App assets
+
+Measured direct-host JS/CSS/catalogue transfers were uncompressed/no-store; a
+300px PNG cover was 184,467 bytes versus 10,056 bytes for 174px WebP. Reuse
+Last.fm sizes and browser caching, with gzip/validators for public static assets.
+Keep all locale data, fonts and existing fallback behavior; defer hidden-cover
+lookups. This avoids image-service cost, disk growth and localization splitting.
+API data stays no-store; stable static URLs revalidate. [Evidence and limits](performance-2026-10-20.md).
+
+## 2026-10-21 - Distinguish source outages and bound artwork waiting
+
+A timed-out fallback must not become a clean no-match. Retain original-recording
+identity gates; give bounded source/detail searches a usable budget and update
+the existing cancellable status at 6/16s in EN/FA. Cover retries remain on the
+allowlisted proxy and expire after 10s of visibility, leaving a placeholder.
+Hidden lazy images must not expire before selection. [Evidence](search-cover-recovery-2026-10-21.md).
+
+## 2026-10-22 - Acknowledge searches before setup and queue waits
+
+Move plain private text acknowledgement outside language/database setup and action
+serialization. Reuse the receipt; stop updates before result rendering. Bound waits
+for cancellation-resistant tasks with Busy feedback while retaining the mutation
+lock. Unexpected failures complete the receipt instead of leaving Loading.
+[Evidence and deployment limits](search-ack-2026-10-22.md).
+
 ## 2026-10-23 — Guess game data/consent
 
 Use additive private tables and an ordered-pair partial unique index; keep allow_guess independent of Love sharing. Opt-out removes games about the user; unfriend/block purges both directions inside the existing transaction. This prioritizes revocable visibility over retaining scores. Step 1 only, default-off, local tests; gameplay and notification policy pending. [Evidence/rollback](guess-game.md).

@@ -1,4 +1,4 @@
-"""Five-round friend game. Persisted answers never cross the round projection."""
+﻿"""Five-round friend game. Persisted answers never cross the round projection."""
 import re
 import secrets
 from datetime import timedelta, timezone
@@ -9,7 +9,7 @@ from .guess_game import GuessGame, GuessRound, allow_guess, enabled
 from .models import Rating, Track, User, SongSubmission, UserTrackSignal, utc_now
 from .comparison_invitations import ComparisonInvitation, is_friendship, invitation_state
 from .taste_cards import SignatureSong
-from .taste_sharing import FriendTasteSharing, GuiltyPleasure
+from .taste_sharing import FriendTasteSharing, sharing_enabled, GuiltyPleasure
 from .social import SavedSong, SongSwap, blocked, token_valid
 from .taste_learning import TasteRequest, TrackPreference
 from .feed_history import FeedHistory
@@ -33,7 +33,7 @@ class GuessError(ValueError):
 def base_title(title):
     # A game groups by title across performers, conservatively excluding covers.
     title = re.sub(r'\([^)]*\)|\[[^]]*\]', ' ', title)
-    title = re.split(r'\s[-–—]\s', title, maxsplit=1)[0]
+    title = re.split(r'\s[-â€“â€”]\s', title, maxsplit=1)[0]
     title = re.sub(r'\b(?:live|acoustic|instrumental|remix|remastered|remaster|radio edit|cover|version)\b.*$', '', title, flags=re.I)
     return comparison_text(title)
 
@@ -72,7 +72,7 @@ async def interactions(session, target):
 
 async def answers(session, target):
     sharing = await session.get(FriendTasteSharing, target)
-    love_rows = list(await session.scalars(select(Rating).where(Rating.user_id == target, Rating.value == 'love'))) if sharing and sharing.enabled else []
+    love_rows = list(await session.scalars(select(Rating).where(Rating.user_id == target, Rating.value == 'love'))) if sharing_enabled(sharing) else []
     selected = set(await session.scalars(select(SignatureSong.track_id).where(SignatureSong.user_id == target)))
     ids = selected | {row.track_id for row in love_rows}
     items = await load_items(session, list(await session.scalars(select(Track).where(Track.id.in_(ids)))))

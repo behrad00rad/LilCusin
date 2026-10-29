@@ -14,7 +14,7 @@ from .comparison_invitations import ComparisonInvitation, invitation_state, publ
 class SocialSettings(Base):
     __tablename__ = 'social_settings'
     user_id: Mapped[int] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
-    notifications: Mapped[bool] = mapped_column(default=False)
+    notifications: Mapped[bool] = mapped_column(default=True)
     suspended: Mapped[bool] = mapped_column(default=False)
 
 
@@ -337,7 +337,7 @@ class Social:
         async with self.database.write() as session:
             actor = await user_id(session, telegram_id)
             row = await session.get(SocialSettings, actor)
-            if row is None: row=SocialSettings(user_id=actor,notifications=False,suspended=False);session.add(row)
+            if row is None: row=SocialSettings(user_id=actor,notifications=True,suspended=False);session.add(row)
             if notifications is not None:
                 row.notifications = notifications
                 if not notifications:
@@ -425,7 +425,9 @@ class Social:
                 settings=await session.get(SocialSettings,row.user_id)
                 swap=await session.get(SongSwap,row.swap_token)
                 try:
-                    if settings is None or not settings.notifications or settings.suspended: raise CardError('social_unavailable')
+                    if settings is None:
+                        settings=SocialSettings(user_id=row.user_id,notifications=True,suspended=False);session.add(settings)
+                    if not settings.notifications or settings.suspended: raise CardError('social_unavailable')
                     await self._swap(session,row.user_id,row.swap_token)
                 except CardError:
                     row.state='cancelled';continue

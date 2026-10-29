@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 
 const source=readFileSync(new URL('../music_bot/web/app.js',import.meta.url),'utf8').replace(/\nboot\(\);\s*$/,'\n');
 class Element {
-  children=[];hidden=true;disabled=false;value='';textContent='';open=false;
+  children=[];hidden=true;disabled=false;value='';textContent='';open=false;dataset={};
   classList={add(){},remove(){}};
   append(...children){this.children.push(...children);}
   replaceChildren(...children){this.children=children;}
@@ -20,7 +20,7 @@ function fixture(){
   const elements=new Map(),events={};const get=id=>{if(!elements.has(id))elements.set(id,new Element());return elements.get(id);};
   const context=vm.createContext({
     window:{Telegram:{WebApp:{initData:'unit-test-fixture',initDataUnsafe:{user:{language_code:'en'}}}},scrollY:15,scrollTo(){throw new Error('Unavailable');},addEventListener:(name,fn)=>events[name]=fn},
-    document:{getElementById:get,createElement:()=>new Element(),createTextNode:text=>text,documentElement:{style:{setProperty(){}},classList:{add(){},remove(){}}},querySelectorAll:()=>[],addEventListener:(name,fn)=>events[name]=fn},
+    document:{getElementById:get,createElement:()=>new Element(),createElementNS:()=>new Element(),createTextNode:text=>text,documentElement:{style:{setProperty(){}},classList:{add(){},remove(){}}},querySelectorAll:()=>[],addEventListener:(name,fn)=>events[name]=fn},
     navigator:{language:'en'},location:{hash:'',search:'',reload(){}},
     localStorage:{getItem(){throw new Error('Storage disabled');},setItem(){throw new Error('Storage disabled');}},
     matchMedia:()=>({matches:false}),requestAnimationFrame(){throw new Error('Frames are paused');},
@@ -68,7 +68,7 @@ function fixture(){
   vm.runInContext("fetch=async()=>({ok:true,json:async()=>catalogue});api=async()=>{throw new Error('Timeout');};",context);
   await vm.runInContext('boot()',context);
   assert.equal(get('status').textContent,'Could not connect');
-  assert.equal(get('content').children[0].textContent,'Retry');
+  assert.equal(get('content').children[0].children.at(-1).textContent,'Retry');
   assert.equal(get('language').disabled,false);
   assert.equal(get('language-curtain').hidden,true);
 }

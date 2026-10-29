@@ -1,4 +1,4 @@
-"""Feed discovery from currently consented friend shares, never private taste."""
+﻿"""Feed discovery from currently consented friend shares, never private taste."""
 from datetime import timedelta
 
 from sqlalchemy import select
@@ -10,7 +10,7 @@ from .models import Rating, RecommendationHistory, Track, User, utc_now
 from .recommendations.repository import load_items
 from .social import SavedSong, SongSwap
 from .taste_learning import TasteRequest, TrackPreference
-from .taste_sharing import FriendTasteSharing, GuiltyPleasure
+from .taste_sharing import FriendTasteSharing, sharing_enabled, GuiltyPleasure
 
 
 async def mix_friend_songs(database, telegram_id, rows, *, limit=5, exclude=()):
@@ -31,7 +31,7 @@ async def mix_friend_songs(database, telegram_id, rows, *, limit=5, exclude=()):
             snapshot = invitation.recipient_snapshot if invitation.sender_id == actor else invitation.sender_snapshot
             name = ' '.join(str(snapshot.get('nickname') or '').split())[:60]
             if not name:
-                name = 'دوستت' if language.get() == 'fa' else 'your friend'
+                name = 'Ø¯ÙˆØ³ØªØª' if language.get() == 'fa' else 'your friend'
             friend_id = invitation.recipient_id if invitation.sender_id == actor else invitation.sender_id
             hidden_tracks = list(await session.scalars(select(Track).join(GuiltyPleasure).where(
                 GuiltyPleasure.user_id == friend_id)))
@@ -48,7 +48,7 @@ async def mix_friend_songs(database, telegram_id, rows, *, limit=5, exclude=()):
             for track_id in swaps:
                 candidates.setdefault(track_id, 'shared')
             sharing = await session.get(FriendTasteSharing, friend_id)
-            if sharing is not None and sharing.enabled:
+            if sharing_enabled(sharing):
                 positives = await session.execute(select(Rating.track_id, Rating.value).where(
                     Rating.user_id == friend_id, Rating.value == 'love')
                     .order_by(Rating.updated_at.desc(), Rating.track_id).limit(30))
@@ -80,11 +80,11 @@ async def mix_friend_songs(database, telegram_id, rows, *, limit=5, exclude=()):
                 continue
             track = await session.get(Track, track_id)
             from .miniapp import track_json
-            reason = f'اشتراک‌گذاشته‌شده توسط {name}' if language.get() == 'fa' else f'Shared by {name}'
+            reason = f'Ø§Ø´ØªØ±Ø§Ú©â€ŒÚ¯Ø°Ø§Ø´ØªÙ‡â€ŒØ´Ø¯Ù‡ ØªÙˆØ³Ø· {name}' if language.get() == 'fa' else f'Shared by {name}'
             if value == 'love':
-                reason = f'از آهنگ‌های محبوب {name}' if language.get() == 'fa' else f'{name} loved this song'
+                reason = f'Ø§Ø² Ø¢Ù‡Ù†Ú¯â€ŒÙ‡Ø§ÛŒ Ù…Ø­Ø¨ÙˆØ¨ {name}' if language.get() == 'fa' else f'{name} loved this song'
             elif value == 'like':
-                reason = f'پسندیده‌شده توسط {name}' if language.get() == 'fa' else f'Liked by {name}'
+                reason = f'Ù¾Ø³Ù†Ø¯ÛŒØ¯Ù‡â€ŒØ´Ø¯Ù‡ ØªÙˆØ³Ø· {name}' if language.get() == 'fa' else f'Liked by {name}'
             friend = track_json(track, reason)
             identity = identity_key(friend['artist'], friend['title'])
             personal = [row for row in rows if row['id'] != track_id
